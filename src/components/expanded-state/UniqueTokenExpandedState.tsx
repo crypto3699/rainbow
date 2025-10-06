@@ -1,28 +1,5 @@
-import { BlurView } from '@react-native-community/blur';
-import { useFocusEffect } from '@react-navigation/native';
-import c from 'chroma-js';
-import lang from 'i18n-js';
-import React, { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
-import { InteractionManager, Linking, Share, View } from 'react-native';
-import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from 'react-native-reanimated';
-import URL from 'url-parse';
-import useWallets from '../../hooks/useWallets';
-import L2Disclaimer from '../L2Disclaimer';
-import Link from '../Link';
-import { ButtonPressAnimation } from '../animations';
-import ImagePreviewOverlay from '../images/ImagePreviewOverlay';
-import ImgixImage from '../images/ImgixImage';
-import { SendActionButton, SheetActionButton, SheetHandle, SlackSheet } from '../sheet';
-import { Toast, ToastPositionContainer, ToggleStateToast } from '../toasts';
-import { UniqueTokenAttributes, UniqueTokenImage } from '../unique-token';
-import { CardSize } from '../unique-token/CardSize';
-import ConfigurationSection from './ens/ConfigurationSection';
-import ProfileInfoSection from './ens/ProfileInfoSection';
-import { UniqueTokenExpandedStateContent, UniqueTokenExpandedStateHeader } from './unique-token';
-import ENSBriefTokenInfoRow from './unique-token/ENSBriefTokenInfoRow';
-import NFTBriefTokenInfoRow from './unique-token/NFTBriefTokenInfoRow';
+import { analytics } from '@/analytics';
 import { PROFILES, useExperimentalFlag } from '@/config';
-import partyLogo from '../../assets/partyLogo.png';
 import {
   AccentColorProvider,
   Bleed,
@@ -41,35 +18,54 @@ import {
   Text,
   TextProps,
 } from '@/design-system';
-import { UniqueAsset } from '@/entities';
-import { Network } from '@/helpers';
-import { buildUniqueTokenName } from '@/helpers/assets';
+import { AssetType, UniqueAsset } from '@/entities';
+import { IS_ANDROID, IS_IOS } from '@/env';
 import { ENS_RECORDS, REGISTRATION_MODES } from '@/helpers/ens';
-import {
-  useAccountProfile,
-  useBooleanState,
-  useCollectible,
-  useDimensions,
-  useENSProfile,
-  useENSRegistration,
-  useHiddenTokens,
-  useShowcaseTokens,
-} from '@/hooks';
+import isHttpUrl from '@/helpers/isHttpUrl';
+import { convertAmountToNativeDisplay } from '@/helpers/utilities';
+import { useBooleanState, useDimensions, useENSProfile, useENSRegistration, useHiddenTokens, useShowcaseTokens } from '@/hooks';
+import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import { useTimeoutEffect } from '@/hooks/useTimeout';
 import { useNavigation, useUntrustedUrlOpener } from '@/navigation';
 import Routes from '@/navigation/routesNames';
+import { useNFTOffers } from '@/resources/reservoir/nftOffersQuery';
+import { ChainId } from '@/state/backendNetworks/types';
+import { useAccountAddress, useIsReadOnlyWallet } from '@/state/wallets/walletsStore';
 import styled from '@/styled-thing';
 import { lightModeThemeColors, position } from '@/styles';
 import { useTheme } from '@/theme';
-import { getUniqueTokenType, magicMemo, safeAreaInsetValues } from '@/utils';
-import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import { magicMemo, safeAreaInsetValues, isLowerCaseMatch } from '@/utils';
 import { buildRainbowUrl } from '@/utils/buildRainbowUrl';
-import isHttpUrl from '@/helpers/isHttpUrl';
-import { useNFTOffers } from '@/resources/reservoir/nftOffersQuery';
-import { convertAmountToNativeDisplay } from '@/helpers/utilities';
+import { getAddressAndChainIdFromUniqueId } from '@/utils/ethereumUtils';
+import { openInBrowser } from '@/utils/openInBrowser';
+import { useFocusEffect } from '@react-navigation/native';
+import c from 'chroma-js';
+import * as i18n from '@/languages';
+import React, { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { InteractionManager, Share, View } from 'react-native';
+import { BlurView } from 'react-native-blur-view';
+import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import URL from 'url-parse';
+import partyLogo from '../../assets/partyLogo.png';
+import L2Disclaimer from '../L2Disclaimer';
+import Link from '../Link';
+import { ButtonPressAnimation } from '../animations';
+import ImagePreviewOverlay from '../images/ImagePreviewOverlay';
+import ImgixImage from '../images/ImgixImage';
+import { SendActionButton, SheetActionButton, SheetHandle, SlackSheet } from '../sheet';
+import { Toast, ToastPositionContainer, ToggleStateToast } from '../toasts';
+import { UniqueTokenAttributes, UniqueTokenImage } from '../unique-token';
+import ConfigurationSection from './ens/ConfigurationSection';
+import ProfileInfoSection from './ens/ProfileInfoSection';
+import { UniqueTokenExpandedStateContent, UniqueTokenExpandedStateHeader } from './unique-token';
+import ENSBriefTokenInfoRow from './unique-token/ENSBriefTokenInfoRow';
+import NFTBriefTokenInfoRow from './unique-token/NFTBriefTokenInfoRow';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { buildUniqueTokenName } from '@/helpers/assets';
 
 const BackgroundBlur = styled(BlurView).attrs({
-  blurAmount: 100,
-  blurType: 'light',
+  blurIntensity: 100,
+  blurStyle: 'light',
 })({
   ...position.coverAsObject,
 });
@@ -93,7 +89,7 @@ const BlurWrapper = styled(View).attrs({
   overflow: 'hidden',
   position: 'absolute',
   width: ({ width }: BlurWrapperProps) => width,
-  ...(android ? { borderTopLeftRadius: 30, borderTopRightRadius: 30 } : {}),
+  ...(IS_ANDROID ? { borderTopLeftRadius: 30, borderTopRightRadius: 30 } : {}),
 });
 
 const Spacer = styled(View)({
@@ -102,12 +98,14 @@ const Spacer = styled(View)({
 
 const TextButton = ({
   onPress,
+  disabled,
   children,
   align,
   size = '16px / 22px (Deprecated)',
   weight = 'heavy',
 }: {
   onPress: () => void;
+  disabled?: boolean;
   children: ReactNode;
   align?: TextProps['align'];
   size?: TextProps['size'];
@@ -117,7 +115,7 @@ const TextButton = ({
 
   return (
     <Bleed space={hitSlop}>
-      <ButtonPressAnimation onPress={onPress} scaleTo={0.88}>
+      <ButtonPressAnimation disabled={disabled} onPress={onPress} scaleTo={0.88}>
         <Inset space={hitSlop}>
           <Text align={align} color="accent" size={size} weight={weight}>
             {children}
@@ -171,7 +169,7 @@ const Section = ({
               <Heading
                 containsEmoji
                 color="primary (Deprecated)"
-                size={ios ? '23px / 27px (Deprecated)' : '20px / 22px (Deprecated)'}
+                size={IS_IOS ? '23px / 27px (Deprecated)' : '20px / 22px (Deprecated)'}
                 weight="heavy"
               >
                 {titleEmoji}
@@ -211,30 +209,30 @@ interface UniqueTokenExpandedStateProps {
 }
 
 // TODO(RNBW-4552): renable polygon once remote allowlist is updated on web.
-const getIsSupportedOnRainbowWeb = (network: Network) => {
-  switch (network) {
-    case Network.mainnet:
+const getIsSupportedOnRainbowWeb = (chainId: ChainId) => {
+  switch (chainId) {
+    case ChainId.mainnet:
       return true;
     default:
       return false;
   }
 };
 
-const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenExpandedStateProps) => {
-  const { accountAddress } = useAccountProfile();
+const UniqueTokenExpandedState = ({ asset, external }: UniqueTokenExpandedStateProps) => {
+  const accountAddress = useAccountAddress();
   const { height: deviceHeight, width: deviceWidth } = useDimensions();
   const { navigate, setOptions } = useNavigation();
   const { colors, isDarkMode } = useTheme();
-  const { isReadOnlyWallet } = useWallets();
-  const collecible = useCollectible(passedAsset?.uniqueId);
-  const asset = external ? passedAsset : collecible;
+  const isReadOnlyWallet = useIsReadOnlyWallet();
+  const { top: topInset } = useSafeAreaInsets();
+
   const {
     data: { nftOffers },
   } = useNFTOffers({
     walletAddress: accountAddress,
   });
 
-  const offer = useMemo(() => nftOffers?.find(offer => offer.nft.uniqueId === asset.fullUniqueId), [asset.fullUniqueId, nftOffers]);
+  const offer = useMemo(() => nftOffers?.find(offer => isLowerCaseMatch(offer.nft.uniqueId, asset.uniqueId)), [asset.uniqueId, nftOffers]);
   const offerValue = useMemo(
     () =>
       offer
@@ -251,7 +249,7 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
     [offer]
   );
 
-  const isSupportedOnRainbowWeb = getIsSupportedOnRainbowWeb(asset.network);
+  const isSupportedOnRainbowWeb = getIsSupportedOnRainbowWeb(asset.chainId);
 
   const [isRefreshMetadataToastActive, setIsRefreshMetadataToastActive] = useState(false);
   const [isReportSpamToastActive, setIsReportSpamToastActive] = useState(false);
@@ -274,42 +272,28 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
     }
   }, [isReportSpamToastActive]);
 
-  const {
-    collection: { description: familyDescription, external_url: familyLink, slug },
-    description,
-    familyImage,
-    familyName,
-    isSendable,
-    marketplaceName,
-    traits,
-    uniqueId,
-    fullUniqueId,
-  } = asset;
-
-  const filteredTraits = traits.filter(
+  const filteredTraits = asset.traits.filter(
     trait => trait.value !== undefined && trait.value !== null && trait.value !== '' && trait.trait_type && !isHttpUrl(trait.value)
   );
 
-  const uniqueTokenType = getUniqueTokenType(asset);
-
   // Create deterministic boolean flags from the `uniqueTokenType` (for easier readability).
-  const isPoap = uniqueTokenType === 'POAP';
-  const isENS = uniqueTokenType === 'ENS';
-  const isNFT = uniqueTokenType === 'NFT';
+  const isPoap = asset.type === AssetType.poap;
+  const isENS = asset.type === AssetType.ens;
+  const isNFT = asset.type === AssetType.nft;
 
   // Fetch the ENS profile if the unique token is an ENS name.
-  const cleanENSName = isENS ? (uniqueId ? uniqueId?.split(' ')?.[0] : uniqueId) : '';
+  const cleanENSName = isENS ? asset.name.trim() : '';
   const ensProfile = useENSProfile(cleanENSName, {
-    enabled: isENS,
+    enabled: isENS && !!cleanENSName,
   });
   const ensData = ensProfile.data;
 
   useFocusEffect(
     useCallback(() => {
-      if (uniqueTokenType === 'ENS') {
+      if (isENS) {
         setOptions({ limitActiveModals: false });
       }
-    }, [setOptions, uniqueTokenType])
+    }, [setOptions, isENS])
   );
 
   const profileInfoSectionAvailable = useMemo(() => {
@@ -318,7 +302,7 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
   }, [ensData?.records]);
 
   const { addShowcaseToken, removeShowcaseToken, showcaseTokens } = useShowcaseTokens();
-  const { hiddenTokens, removeHiddenToken } = useHiddenTokens();
+  const { removeHiddenToken, hiddenTokens } = useHiddenTokens();
 
   const [contentFocused, handleContentFocus, handleContentBlur] = useBooleanState();
   const animationProgress = useSharedValue(0);
@@ -338,16 +322,22 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
 
   const handleL2DisclaimerPress = useCallback(() => {
     navigate(Routes.EXPLAIN_SHEET, {
-      type: asset.network,
+      type: 'network',
+      chainId: asset.chainId,
     });
-  }, [asset.network, navigate]);
+  }, [asset.chainId, navigate]);
 
-  const isHiddenAsset = useMemo(() => hiddenTokens.includes(fullUniqueId) as boolean, [hiddenTokens, fullUniqueId]);
-  const isShowcaseAsset = useMemo(() => showcaseTokens.includes(uniqueId) as boolean, [showcaseTokens, uniqueId]);
+  const isHiddenAsset = useMemo(
+    () => !!hiddenTokens.find(token => isLowerCaseMatch(asset.uniqueId, token)),
+    [hiddenTokens, asset.uniqueId]
+  );
+  const isShowcaseAsset = useMemo(() => {
+    return !!showcaseTokens.find(token => isLowerCaseMatch(asset.uniqueId, token));
+  }, [showcaseTokens, asset.uniqueId]);
 
   const rainbowWebUrl = buildRainbowUrl(asset, cleanENSName, accountAddress);
 
-  const imageColor = usePersistentDominantColorFromImage(asset.lowResUrl) ?? colors.paleBlue;
+  const imageColor = usePersistentDominantColorFromImage(asset.images.lowResUrl) ?? colors.paleBlue;
 
   const textColor = useMemo(() => {
     const contrastWithWhite = c.contrast(imageColor, colors.whiteLabel);
@@ -359,8 +349,8 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
     }
   }, [colors.whiteLabel, imageColor]);
 
-  const handlePressMarketplaceName = useCallback(() => Linking.openURL(asset.permalink), [asset.permalink]);
-  const handlePressParty = useCallback(() => Linking.openURL(asset.external_link!), [asset.external_link]);
+  const handlePressMarketplaceName = useCallback(() => openInBrowser(asset.marketplaceUrl), [asset.marketplaceUrl]);
+  const handlePressParty = useCallback(() => openInBrowser(asset.websiteUrl), [asset.websiteUrl]);
 
   const handlePressShowcase = useCallback(() => {
     if (isShowcaseAsset) {
@@ -372,14 +362,22 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
         removeHiddenToken(asset);
       }
     }
-  }, [addShowcaseToken, isHiddenAsset, isShowcaseAsset, removeHiddenToken, removeShowcaseToken, asset]);
+  }, [isShowcaseAsset, removeShowcaseToken, asset, addShowcaseToken, isHiddenAsset, removeHiddenToken]);
 
   const handlePressShare = useCallback(() => {
-    const shareUrl = isSupportedOnRainbowWeb ? rainbowWebUrl : asset.permalink;
+    const shareUrl = isSupportedOnRainbowWeb ? rainbowWebUrl : asset.marketplaceUrl;
+    if (!shareUrl) {
+      return;
+    }
 
     Share.share({
-      message: android ? shareUrl : undefined,
-      title: `Share ${buildUniqueTokenName(asset)} Info`,
+      message: IS_ANDROID ? shareUrl : undefined,
+      title: `Share ${buildUniqueTokenName({
+        collectionName: asset.collectionName ?? '',
+        tokenId: asset.tokenId,
+        name: asset.name ?? '',
+        uniqueId: asset.uniqueId,
+      })} Info`,
       url: shareUrl,
     });
   }, [asset, isSupportedOnRainbowWeb, rainbowWebUrl]);
@@ -388,46 +386,70 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
   const handlePressEdit = useCallback(() => {
     if (isENS) {
       InteractionManager.runAfterInteractions(() => {
-        startRegistration(uniqueId, REGISTRATION_MODES.EDIT);
+        startRegistration(asset.name, REGISTRATION_MODES.EDIT);
         navigate(Routes.REGISTER_ENS_NAVIGATOR, {
-          ensName: uniqueId,
-          externalAvatarUrl: asset?.lowResUrl,
+          ensName: asset.name,
+          externalAvatarUrl: asset.images.lowResUrl,
           mode: REGISTRATION_MODES.EDIT,
         });
       });
     }
-  }, [isENS, navigate, startRegistration, uniqueId, asset?.lowResUrl]);
+  }, [isENS, navigate, startRegistration, asset.name, asset.images.lowResUrl]);
 
-  const sheetRef = useRef();
+  const sheetRef = useRef(undefined);
   const yPosition = useSharedValue(0);
 
   const profilesEnabled = useExperimentalFlag(PROFILES);
   const isActionsEnabled = !external && !isReadOnlyWallet;
-  const hasSendButton = isSendable;
-  const isParty = asset?.external_link?.includes('party.app');
+  const hasSendButton = asset.isSendable;
+  const isParty = asset?.websiteUrl?.includes('party.app');
 
   const hasEditButton = isActionsEnabled && profilesEnabled && isENS && ensProfile.isOwner;
   const hasExtendDurationButton = !isReadOnlyWallet && profilesEnabled && isENS;
 
-  const familyLinkDisplay = useMemo(() => (familyLink ? new URL(familyLink).hostname.replace(/^www\./, '') : null), [familyLink]);
+  const familyLinkDisplay = useMemo(
+    () => (asset.websiteUrl ? new URL(asset.websiteUrl).hostname.replace(/^www\./, '') : null),
+    [asset.websiteUrl]
+  );
 
-  const hideNftMarketplaceAction = isPoap || !slug;
+  const hideNftMarketplaceAction = isPoap || !asset.marketplaceUrl;
+
+  useTimeoutEffect(
+    ({ elapsedTime }) => {
+      const { address, chainId } = getAddressAndChainIdFromUniqueId(asset.uniqueId);
+      const { name, description, images } = asset;
+      analytics.track(analytics.event.tokenDetailsNFT, {
+        eventSentAfterMs: elapsedTime,
+        token: { isPoap, isParty: !!isParty, isENS, address, chainId, name, image_url: images.lowResUrl },
+        available_data: { description: !!description, image_url: !!images.lowResUrl, floorPrice: !!offer?.floorPrice },
+      });
+    },
+    { timeout: 5 * 1000 }
+  );
 
   return (
     <>
-      {ios && (
+      {IS_IOS && (
         <BlurWrapper height={deviceHeight} width={deviceWidth}>
           <BackgroundImage>
-            <UniqueTokenImage backgroundColor={asset.background || imageColor} imageUrl={asset.lowResUrl} item={asset} size={CardSize} />
+            <UniqueTokenImage
+              collectionName={asset.collectionName ?? ''}
+              name={asset.name}
+              backgroundColor={asset.backgroundColor || imageColor}
+              imageUrl={asset.images.highResUrl}
+              lowResImageUrl={asset.images.lowResUrl}
+              uniqueId={asset.uniqueId}
+              id={asset.uniqueId}
+            />
             <BackgroundBlur />
           </BackgroundImage>
         </BlurWrapper>
       )}
       <SlackSheet
-        backgroundColor={isDarkMode ? `rgba(22, 22, 22, ${ios ? 0.4 : 1})` : `rgba(26, 26, 26, ${ios ? 0.4 : 1})`}
+        backgroundColor={isDarkMode ? `rgba(22, 22, 22, ${IS_IOS ? 0.4 : 1})` : `rgba(26, 26, 26, ${IS_IOS ? 0.4 : 1})`}
         bottomInset={42}
         hideHandle
-        {...(ios ? { height: '100%' } : { additionalTopPadding: true, contentHeight: deviceHeight })}
+        {...(IS_IOS ? { height: '100%' } : { additionalTopPadding: true, contentHeight: deviceHeight })}
         ref={sheetRef}
         scrollEnabled
         showsVerticalScrollIndicator={!contentFocused}
@@ -436,8 +458,8 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
       >
         <ColorModeProvider value="darkTinted">
           <AccentColorProvider color={imageColor}>
-            <ImagePreviewOverlay enableZoom={ios} opacity={ensCoverOpacity} yPosition={yPosition}>
-              <Inset bottom={sectionSpace} top={{ custom: 33 }}>
+            <ImagePreviewOverlay enableZoom={IS_IOS} opacity={ensCoverOpacity} yPosition={yPosition}>
+              <Inset bottom={sectionSpace} top={{ custom: topInset }}>
                 <Stack alignHorizontal="center">
                   <Animated.View style={sheetHandleStyle}>
                     <SheetHandle color={colors.alpha(colors.whiteLabel, 0.24)} />
@@ -452,10 +474,7 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                 onContentBlur={handleContentBlur}
                 onContentFocus={handleContentFocus}
                 opacity={contentOpacity}
-                // @ts-expect-error JavaScript component
-                sheetRef={sheetRef}
                 textColor={textColor}
-                uniqueId={asset.uniqueId}
                 yPosition={yPosition}
               />
               <Animated.View style={opacityStyle}>
@@ -466,15 +485,15 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                         {isActionsEnabled ? (
                           <TextButton onPress={handlePressShowcase}>
                             {isShowcaseAsset
-                              ? `􀁏 ${lang.t('expanded_state.unique_expanded.in_showcase')}`
-                              : `􀁍 ${lang.t('expanded_state.unique_expanded.showcase')}`}
+                              ? `􀁏 ${i18n.t(i18n.l.expanded_state.unique_expanded.in_showcase)}`
+                              : `􀁍 ${i18n.t(i18n.l.expanded_state.unique_expanded.showcase)}`}
                           </TextButton>
                         ) : (
                           <View />
                         )}
-                        {isSupportedOnRainbowWeb || asset.permalink ? (
+                        {isSupportedOnRainbowWeb || asset.marketplaceUrl ? (
                           <TextButton align="right" onPress={handlePressShare}>
-                            􀈂 {lang.t('button.share')}
+                            􀈂 {i18n.t(i18n.l.button.share)}
                           </TextButton>
                         ) : null}
                       </Inline>
@@ -494,7 +513,7 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                           {hasEditButton ? (
                             <SheetActionButton
                               color={imageColor}
-                              label={`􀉮 ${lang.t('expanded_state.unique_expanded.edit')}`}
+                              label={`􀉮 ${i18n.t(i18n.l.expanded_state.unique_expanded.edit)}`}
                               nftShadows
                               onPress={handlePressEdit}
                               testID="edit"
@@ -515,14 +534,14 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                                 Party
                               </Text>
                             </SheetActionButton>
-                          ) : asset.permalink ? (
+                          ) : asset.marketplaceUrl && asset.marketplaceName ? (
                             <SheetActionButton
                               color={imageColor}
                               label={
                                 hasSendButton
-                                  ? `􀮶 ${marketplaceName}`
-                                  : `􀮶 ${lang.t('expanded_state.unique_expanded.view_on_marketplace_name', {
-                                      marketplaceName,
+                                  ? `􀮶 ${asset.marketplaceName}`
+                                  : `􀮶 ${i18n.t(i18n.l.expanded_state.unique_expanded.view_on_marketplace_name, {
+                                      marketplaceName: asset.marketplaceName,
                                     })}`
                               }
                               nftShadows
@@ -538,8 +557,8 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                       {!!offer && (
                         <SheetActionButton
                           color={imageColor}
-                          label={`􀋡 ${lang.t('expanded_state.unique_expanded.sell_for_x', {
-                            price: offerValue,
+                          label={`􀋡 ${i18n.t(i18n.l.expanded_state.unique_expanded.sell_for_x, {
+                            price: offerValue as string,
                           })}`}
                           nftShadows
                           onPress={() => navigate(Routes.NFT_SINGLE_OFFER_SHEET, { offer })}
@@ -548,10 +567,10 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                         />
                       )}
                     </Stack>
-                    {asset.network !== Network.mainnet ? (
+                    {asset.chainId !== ChainId.mainnet ? (
                       // @ts-expect-error JavaScript component
                       <L2Disclaimer
-                        network={asset.network}
+                        chainId={asset.chainId}
                         colors={colors}
                         hideDivider
                         isNft
@@ -559,22 +578,21 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                         marginHorizontal={0}
                         onPress={handleL2DisclaimerPress}
                         symbol="NFT"
-                        forceDarkMode
                       />
                     ) : null}
                     <Stack separator={<Separator color="divider20 (Deprecated)" />} space={sectionSpace}>
                       {isNFT || isENS ? (
                         <Bleed // Manually crop surrounding space until TokenInfoItem uses design system components
-                          bottom={android ? '15px (Deprecated)' : '6px'}
-                          top={android ? '10px' : '4px'}
+                          bottom={IS_ANDROID ? '15px (Deprecated)' : '6px'}
+                          top={IS_ANDROID ? '10px' : '4px'}
                         >
                           {isNFT && <NFTBriefTokenInfoRow asset={asset} />}
                           {isENS && (
                             <ENSBriefTokenInfoRow
                               color={imageColor}
-                              ensName={uniqueId}
+                              ensName={asset.name}
                               expiryDate={ensData?.registration?.expiryDate}
-                              externalAvatarUrl={asset?.lowResUrl}
+                              externalAvatarUrl={asset.images.lowResUrl}
                               registrationDate={ensData?.registration?.registrationDate}
                               showExtendDuration={hasExtendDurationButton}
                             />
@@ -583,18 +601,18 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                       ) : null}
                       {(isNFT || isPoap) && (
                         <>
-                          {description ? (
-                            <Section title={`${lang.t('expanded_state.unique_expanded.description')}`} titleEmoji="📖">
-                              <Markdown>{description}</Markdown>
+                          {asset.description ? (
+                            <Section title={`${i18n.t(i18n.l.expanded_state.unique_expanded.description)}`} titleEmoji="📖">
+                              <Markdown>{asset.description}</Markdown>
                             </Section>
                           ) : null}
                           {filteredTraits.length ? (
-                            <Section title={`${lang.t('expanded_state.unique_expanded.properties')}`} titleEmoji="🎨">
+                            <Section title={`${i18n.t(i18n.l.expanded_state.unique_expanded.properties)}`} titleEmoji="🎨">
                               <UniqueTokenAttributes
                                 {...asset}
                                 color={imageColor}
                                 hideNftMarketplaceAction={hideNftMarketplaceAction}
-                                slug={slug}
+                                slug={asset.marketplaceUrl ?? ''}
                               />
                             </Section>
                           ) : null}
@@ -607,18 +625,18 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                               addonComponent={
                                 hasEditButton && (
                                   <TextButton align="right" onPress={handlePressEdit} size="18px / 27px (Deprecated)" weight="bold">
-                                    {lang.t('expanded_state.unique_expanded.edit')}
+                                    {i18n.t(i18n.l.expanded_state.unique_expanded.edit)}
                                   </TextButton>
                                 )
                               }
                               paragraphSpace={{ custom: 22 }}
-                              title={`${lang.t('expanded_state.unique_expanded.profile_info')}`}
+                              title={`${i18n.t(i18n.l.expanded_state.unique_expanded.profile_info)}`}
                               titleEmoji="🤿"
                             >
                               <ProfileInfoSection
                                 allowEdit={hasEditButton}
                                 coinAddresses={ensData?.coinAddresses}
-                                ensName={uniqueId}
+                                ensName={asset.name}
                                 images={ensData?.images}
                                 isLoading={ensProfile.isLoading}
                                 records={ensData?.records}
@@ -627,11 +645,11 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                           )}
                           <Section
                             paragraphSpace={{ custom: 22 }}
-                            title={`${lang.t('expanded_state.unique_expanded.configuration')}`}
+                            title={`${i18n.t(i18n.l.expanded_state.unique_expanded.configuration)}`}
                             titleEmoji="⚙️"
                           >
                             <ConfigurationSection
-                              externalAvatarUrl={asset?.lowResUrl}
+                              externalAvatarUrl={asset.images.lowResUrl}
                               isExternal={external}
                               isLoading={ensProfile.isLoading}
                               isOwner={ensProfile?.isOwner}
@@ -646,21 +664,21 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
                           </Section>
                         </>
                       )}
-                      {familyDescription ? (
+                      {asset.collectionDescription ? (
                         <Section
                           paragraphSpace={{ custom: 26 }}
-                          title={`${lang.t('expanded_state.unique_expanded.about', { assetFamilyName: familyName })}`}
-                          titleImageUrl={familyImage}
+                          title={`${i18n.t(i18n.l.expanded_state.unique_expanded.about, { assetFamilyName: asset.collectionName as string })}`}
+                          titleImageUrl={asset.collectionImageUrl}
                         >
                           <Stack space={sectionSpace}>
-                            <Markdown>{familyDescription}</Markdown>
-                            {familyLink ? (
+                            <Markdown>{asset.collectionDescription}</Markdown>
+                            {asset.collectionUrl ? (
                               <Bleed // Manually crop surrounding space until Link uses design system components
-                                bottom={android ? '15px (Deprecated)' : undefined}
+                                bottom={IS_ANDROID ? '15px (Deprecated)' : undefined}
                                 top="15px (Deprecated)"
                               >
                                 {/* @ts-expect-error JavaScript component */}
-                                <Link color={imageColor} display={familyLinkDisplay} url={familyLink} weight="bold" />
+                                <Link color={imageColor} display={familyLinkDisplay} url={asset.collectionUrl} weight="bold" />
                               </Bleed>
                             ) : null}
                           </Stack>
@@ -677,12 +695,12 @@ const UniqueTokenExpandedState = ({ asset: passedAsset, external }: UniqueTokenE
       </SlackSheet>
       <ToastPositionContainer>
         <ToggleStateToast
-          addCopy={lang.t('expanded_state.unique_expanded.toast_added_to_showcase')}
+          addCopy={i18n.t(i18n.l.expanded_state.unique_expanded.toast_added_to_showcase)}
           isAdded={isShowcaseAsset}
-          removeCopy={lang.t('expanded_state.unique_expanded.toast_removed_from_showcase')}
+          removeCopy={i18n.t(i18n.l.expanded_state.unique_expanded.toast_removed_from_showcase)}
         />
-        <Toast isVisible={isRefreshMetadataToastActive} text={lang.t('expanded_state.unique_expanded.refreshing')} />
-        <Toast isVisible={isReportSpamToastActive} text={lang.t('expanded_state.unique_expanded.reported')} />
+        <Toast isVisible={isRefreshMetadataToastActive} text={i18n.t(i18n.l.expanded_state.unique_expanded.refreshing)} />
+        <Toast isVisible={isReportSpamToastActive} text={i18n.t(i18n.l.expanded_state.unique_expanded.reported)} />
       </ToastPositionContainer>
     </>
   );

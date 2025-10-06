@@ -1,28 +1,28 @@
-import React, { useState } from 'react';
+import { analytics } from '@/analytics';
 import { AnimatePresence } from '@/components/animations/AnimatePresence';
-import Paragraph from '../../components/Paragraph';
-import Line from '../../components/Line';
-import { AnimatedText } from '../../components/AnimatedText';
-import { RainbowPointsFlowSteps, textColors } from '../../constants';
-import * as i18n from '@/languages';
-import { useAccountProfile, useDimensions } from '@/hooks';
-import { abbreviateEnsForDisplay, address as formatAddress } from '@/utils/abbreviations';
-import { usePointsProfileContext } from '../../contexts/PointsProfileContext';
-import { NeonButton } from '../../components/NeonButton';
-import LineBreak from '../../components/LineBreak';
 import { Bleed, Box, Inline, Stack } from '@/design-system';
-import { Linking } from 'react-native';
-import { metadataPOSTClient } from '@/graphql';
-import { analyticsV2 } from '@/analytics';
+import { useDimensions } from '@/hooks';
+import * as i18n from '@/languages';
+import { useAccountProfileInfo } from '@/state/wallets/walletsStore';
+import { abbreviateEnsForDisplay, address as formatAddress } from '@/utils/abbreviations';
+import { openInBrowser } from '@/utils/openInBrowser';
+import React, { useState } from 'react';
+import { AnimatedText } from '../../components/AnimatedText';
+import { Line } from '../../components/Line';
+import { LineBreak } from '../../components/LineBreak';
+import { NeonButton } from '../../components/NeonButton';
+import { Paragraph } from '../../components/Paragraph';
+import { RainbowPointsFlowSteps, textColors } from '../../constants';
+import { usePointsProfileContext } from '../../contexts/PointsProfileContext';
 
 export const Share = () => {
   const { intent, setAnimationKey, setStep } = usePointsProfileContext();
-  const { accountENS, accountAddress } = useAccountProfile();
+  const { accountENS, accountAddress } = useAccountProfileInfo();
   const { width: deviceWidth } = useDimensions();
 
   const [showShareButtons, setShowShareButtons] = useState(false);
 
-  const accountName = (abbreviateEnsForDisplay(accountENS, 10) || formatAddress(accountAddress, 4, 5)) as string;
+  const accountName = abbreviateEnsForDisplay(accountENS, 10) || (accountAddress ? formatAddress(accountAddress, 4, 5) : '');
 
   return (
     <Box height="full" justifyContent="space-between">
@@ -42,12 +42,6 @@ export const Share = () => {
         <AnimatedText
           color={textColors.account}
           delayStart={1000}
-          multiline
-          textContent={i18n.t(i18n.l.points.console.referral_link_bonus_text)}
-        />
-        <AnimatedText
-          color={textColors.account}
-          delayStart={1000}
           onComplete={() => {
             const complete = setTimeout(() => {
               setShowShareButtons(true);
@@ -55,7 +49,7 @@ export const Share = () => {
             return () => clearTimeout(complete);
           }}
           multiline
-          textContent={i18n.t(i18n.l.points.console.referral_link_bonus_text_extended)}
+          textContent={i18n.t(i18n.l.points.console.referral_link_bonus_text)}
         />
       </Stack>
       <AnimatePresence condition={showShareButtons && !!intent?.length} duration={300}>
@@ -65,7 +59,7 @@ export const Share = () => {
               color="#F5F8FF8F"
               label={i18n.t(i18n.l.points.console.skip_referral)}
               onPress={() => {
-                analyticsV2.track(analyticsV2.event.pointsOnboardingScreenPressedSkipShareToXButton);
+                analytics.track(analytics.event.pointsOnboardingScreenPressedSkipShareToXButton);
                 const beginNextPhase = setTimeout(() => {
                   setAnimationKey(prevKey => prevKey + 1);
                   setStep(RainbowPointsFlowSteps.Review);
@@ -78,14 +72,10 @@ export const Share = () => {
               color="#FEC101"
               label={i18n.t(i18n.l.points.console.share_to_x)}
               onPress={() => {
-                analyticsV2.track(analyticsV2.event.pointsOnboardingScreenPressedShareToXButton);
+                analytics.track(analytics.event.pointsOnboardingScreenPressedShareToXButton);
                 const beginNextPhase = setTimeout(async () => {
                   if (intent) {
-                    Linking.openURL(intent);
-                    await metadataPOSTClient.redeemCodeForPoints({
-                      address: accountAddress,
-                      redemptionCode: 'TWITTERSHARED',
-                    });
+                    openInBrowser(intent, false);
                   }
                   setAnimationKey(prevKey => prevKey + 1);
                   setStep(RainbowPointsFlowSteps.Review);

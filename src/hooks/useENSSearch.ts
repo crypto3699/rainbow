@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAccountSettings, useENSLocalTransactions } from '.';
+import useENSLocalTransactions from './useENSLocalTransactions';
 import { fetchRegistrationDate } from '@/handlers/ens';
 import { ENS_DOMAIN, formatRentPrice, getAvailable, getENSRegistrarControllerContract, getNameExpires, getRentPrice } from '@/helpers/ens';
-import { Network } from '@/helpers/networkTypes';
 import { timeUnits } from '@/references';
 import { ethereumUtils, validateENS } from '@/utils';
+import { ChainId } from '@/state/backendNetworks/types';
+import { useAccountAddress } from '@/state/wallets/walletsStore';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
 
-const formatTime = (timestamp: string, abbreviated: boolean = true) => {
+const formatTime = (timestamp: string, abbreviated = true) => {
   const style = abbreviated ? 'MMM d, y' : 'MMMM d, y';
   return format(new Date(Number(timestamp) * 1000), style);
 };
@@ -27,7 +29,8 @@ export default function useENSSearch({ yearsDuration = 1, name: inputName }: { y
   }, [contract, setContract]);
 
   const name = inputName.replace(ENS_DOMAIN, '');
-  const { nativeCurrency } = useAccountSettings();
+  const accountAddress = useAccountAddress();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
 
   const { commitTransactionHash, confirmedRegistrationTransaction, pendingRegistrationTransaction } = useENSLocalTransactions({
     name: `${name}${ENS_DOMAIN}`,
@@ -51,7 +54,7 @@ export default function useENSSearch({ yearsDuration = 1, name: inputName }: { y
     }
 
     const [isAvailable, rentPrice] = await Promise.all([getAvailable(name, contract), getRentPrice(name, duration, contract)]);
-    const nativeAssetPrice = ethereumUtils.getPriceOfNativeAssetForNetwork(Network.mainnet);
+    const nativeAssetPrice = ethereumUtils.getPriceOfNativeAssetForNetwork({ chainId: ChainId.mainnet });
     const formattedRentPrice = formatRentPrice(rentPrice, yearsDuration, nativeCurrency, nativeAssetPrice);
 
     if (isAvailable) {

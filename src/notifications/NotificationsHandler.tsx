@@ -1,29 +1,8 @@
-import { PropsWithChildren, useCallback, useEffect, useRef } from 'react';
-import { usePrevious, useWallets } from '@/hooks';
-import { setupAndroidChannels } from '@/notifications/setupAndroidChannels';
-import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
-import {
-  FixedRemoteMessage,
-  MarketingNotificationData,
-  MinimalNotification,
-  NotificationTypes,
-  TransactionNotificationData,
-} from '@/notifications/types';
-import { handleShowingForegroundNotification } from '@/notifications/foregroundHandler';
-import { registerTokenRefreshListener, saveFCMToken } from '@/notifications/tokens';
-import { WALLETCONNECT_SYNC_DELAY } from '@/notifications/constants';
-import { useDispatch } from 'react-redux';
-import { requestsForTopic } from '@/redux/requests';
-import { ThunkDispatch } from 'redux-thunk';
-import store, { AppState } from '@/redux/store';
-import { AnyAction } from 'redux';
-import { NotificationStorage } from '@/notifications/deferredNotificationStorage';
-import { Navigation } from '@/navigation';
-import Routes from '@rainbow-me/routes';
-import { AppState as ApplicationState, AppStateStatus, NativeEventSubscription } from 'react-native';
-import notifee, { Event as NotifeeEvent, EventType } from '@notifee/react-native';
-import { ethereumUtils, isLowerCaseMatch } from '@/utils';
+import { useRainbowToastEnabled } from '@/components/rainbow-toast/useRainbowToastEnabled';
 import walletTypes from '@/helpers/walletTypes';
+import { usePrevious } from '@/hooks';
+import { logger } from '@/logger';
+import { Navigation } from '@/navigation';
 import {
   NotificationSubscriptionChangesListener,
   registerNotificationSubscriptionChangesListener,
@@ -31,64 +10,62 @@ import {
   trackTappedPushNotification,
   trackWalletsSubscribedForNotifications,
 } from '@/notifications/analytics';
+import { NotificationStorage } from '@/notifications/deferredNotificationStorage';
+import { handleShowingForegroundNotification } from '@/notifications/foregroundHandler';
 import { AddressWithRelationship, WalletNotificationRelationship } from '@/notifications/settings';
+import { initializeNotificationSettingsForAllAddresses } from '@/notifications/settings/initialization';
+import { setupAndroidChannels } from '@/notifications/setupAndroidChannels';
+import { registerTokenRefreshListener, saveFCMToken } from '@/notifications/tokens';
 import {
-  initializeGlobalNotificationSettings,
-  initializeNotificationSettingsForAllAddressesAndCleanupSettingsForRemovedWallets,
-} from '@/notifications/settings/initialization';
-import { logger } from '@/logger';
-import { transactionFetchQuery } from '@/resources/transactions/transaction';
+  FixedRemoteMessage,
+  MarketingNotificationData,
+  MinimalNotification,
+  NotificationTypes,
+  TransactionNotificationData,
+} from '@/notifications/types';
+import store, { AppState } from '@/redux/store';
+import { fetchCachedTransaction } from '@/resources/transactions/transaction';
+import { switchWallet } from '@/state/wallets/switchWallet';
+import { getAccountAddress, getWalletReady, useWallets, useWalletsStore } from '@/state/wallets/walletsStore';
+import { isLowerCaseMatch } from '@/utils';
+import notifee, { EventType, Event as NotifeeEvent } from '@notifee/react-native';
+import Routes from '@rainbow-me/routes';
+import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
+import { useCallback, useEffect, useRef } from 'react';
+import { AppState as ApplicationState, AppStateStatus, NativeEventSubscription } from 'react-native';
+import { useDispatch } from 'react-redux';
+import { AnyAction } from 'redux';
+import { ThunkDispatch } from 'redux-thunk';
 
 type Callback = () => void;
 
-type Props = PropsWithChildren<{ walletReady: boolean }>;
-
-export const NotificationsHandler = ({ walletReady }: Props) => {
+export const NotificationsHandler = () => {
+  const rainbowToastsEnabled = useRainbowToastEnabled();
   const wallets = useWallets();
   const dispatch: ThunkDispatch<AppState, unknown, AnyAction> = useDispatch();
-  const walletsRef = useRef(wallets);
-  const prevWalletReady = usePrevious(walletReady);
-  const subscriptionChangesListener = useRef<NotificationSubscriptionChangesListener>();
-  const onTokenRefreshListener = useRef<Callback>();
-  const foregroundNotificationListener = useRef<Callback>();
-  const notificationOpenedListener = useRef<Callback>();
-  const appStateListener = useRef<NativeEventSubscription>();
+  const subscriptionChangesListener = useRef<NotificationSubscriptionChangesListener>(undefined);
+  const onTokenRefreshListener = useRef<Callback>(undefined);
+  const foregroundNotificationListener = useRef<Callback>(undefined);
+  const notificationOpenedListener = useRef<Callback>(undefined);
+  const appStateListener = useRef<NativeEventSubscription>(undefined);
   const appState = useRef<AppStateStatus>(null);
-  const notifeeForegroundEventListener = useRef<Callback>();
+  const notifeeForegroundEventListener = useRef<Callback>(undefined);
   const alreadyRanInitialization = useRef(false);
 
-  /*
-  We need to save wallets property to a ref in order to have an up-to-date value
-  inside the event listener callbacks closure
-   */
-  walletsRef.current = wallets;
+  const walletReady = useWalletsStore(state => state.walletReady);
+  const prevWalletReady = usePrevious(walletReady);
 
   const onForegroundRemoteNotification = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
     const type = remoteMessage?.data?.type;
-    if (type === NotificationTypes.walletConnect) {
-      handleWalletConnectNotification(remoteMessage);
-    } else if (remoteMessage?.notification !== undefined) {
+
+    if (rainbowToastsEnabled && type === NotificationTypes.transaction) {
+      // avoid showing transaction notifications, handled by RainbowToast
+      return;
+    }
+
+    if (type !== NotificationTypes.walletConnect && remoteMessage?.notification !== undefined) {
       handleShowingForegroundNotification(remoteMessage as FixedRemoteMessage);
     }
-  };
-
-  const onBackgroundRemoteNotification = async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
-    const type = remoteMessage?.data?.type;
-    if (type === NotificationTypes.walletConnect) {
-      handleWalletConnectNotification(remoteMessage);
-    }
-  };
-
-  const handleWalletConnectNotification = (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
-    const topic = remoteMessage?.data?.topic;
-
-    setTimeout(() => {
-      const requests = dispatch(requestsForTopic(topic as string));
-      if (requests) {
-        // WC requests will open automatically
-        return false;
-      }
-    }, WALLETCONNECT_SYNC_DELAY);
   };
 
   const handleDeferredNotificationIfNeeded = useCallback(async () => {
@@ -100,21 +77,17 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
     }
   }, []);
 
-  const handleAppOpenedWithNotification = (remoteMessage: FirebaseMessagingTypes.RemoteMessage | null) => {
-    if (!remoteMessage) {
-      return;
-    }
-    const notification: MinimalNotification = {
-      title: remoteMessage.notification?.title,
-      body: remoteMessage.notification?.body,
-      data: remoteMessage.data,
-    };
-    handleOpenedNotification(notification);
-  };
-
   const handleNotificationPressed = (event: NotifeeEvent) => {
     if (event.type === EventType.PRESS) {
-      handleOpenedNotification(event.detail.notification);
+      const notification = event.detail.notification;
+      if (notification) {
+        const minimalNotification: MinimalNotification = {
+          title: notification.title,
+          body: notification.body,
+          data: notification.data as { [key: string]: string | object },
+        };
+        handleOpenedNotification(minimalNotification);
+      }
     }
   };
 
@@ -125,7 +98,7 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
     trackTappedPushNotification(notification);
     // Need to call getState() directly, because the event handler
     // has the old value reference in its closure
-    if (!store.getState().appState.walletReady) {
+    if (!getWalletReady()) {
       NotificationStorage.deferNotification(notification);
       return;
     }
@@ -144,22 +117,23 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
       // casting data payload to type that was agreed on with backend
       const data = notification.data as unknown as TransactionNotificationData;
 
-      const wallets = walletsRef.current;
-      const { accountAddress, nativeCurrency } = store.getState().settings;
+      const { nativeCurrency } = store.getState().settings;
+      const accountAddress = getAccountAddress();
 
       let walletAddress: string | null | undefined = accountAddress;
       if (!isLowerCaseMatch(accountAddress, data.address)) {
-        walletAddress = await wallets.switchToWalletWithAddress(data.address);
+        walletAddress = await switchWallet(data.address);
       }
       if (!walletAddress) {
         return;
       }
-      Navigation.handleAction(Routes.PROFILE_SCREEN, {});
+      Navigation.handleAction(Routes.PROFILE_SCREEN);
 
-      const network = ethereumUtils.getNetworkFromChainId(parseInt(data.chain, 10));
-      const transaction = await transactionFetchQuery({
+      const chainId = parseInt(data.chain, 10);
+
+      const transaction = await fetchCachedTransaction({
         hash: data.hash,
-        network: network,
+        chainId,
         address: walletAddress,
         currency: nativeCurrency,
       });
@@ -172,9 +146,9 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
         transaction,
       });
     } else if (type === NotificationTypes.walletConnect) {
-      logger.info(`NotificationsHandler: handling wallet connect notification`, { notification });
+      logger.debug(`[NotificationsHandler]: handling wallet connect notification`, { notification });
     } else if (type === NotificationTypes.marketing) {
-      logger.info(`NotificationsHandler: handling marketing notification`, {
+      logger.debug(`[NotificationsHandler]: handling marketing notification`, {
         notification,
       });
       const data = notification.data as unknown as MarketingNotificationData;
@@ -185,20 +159,31 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
         });
       }
     } else {
-      logger.warn(`NotificationsHandler: received unknown notification`, {
+      logger.warn(`[NotificationsHandler]: received unknown notification`, {
         notification,
       });
     }
   };
 
   useEffect(() => {
+    const handleAppOpenedWithNotification = (remoteMessage: FirebaseMessagingTypes.RemoteMessage | null) => {
+      if (!remoteMessage) {
+        return;
+      }
+      const notification: MinimalNotification = {
+        title: remoteMessage.notification?.title,
+        body: remoteMessage.notification?.body,
+        data: remoteMessage.data,
+      };
+      handleOpenedNotification(notification);
+    };
+
     setupAndroidChannels();
     saveFCMToken();
     trackWalletsSubscribedForNotifications();
     subscriptionChangesListener.current = registerNotificationSubscriptionChangesListener();
     onTokenRefreshListener.current = registerTokenRefreshListener();
     foregroundNotificationListener.current = messaging().onMessage(onForegroundRemoteNotification);
-    messaging().setBackgroundMessageHandler(onBackgroundRemoteNotification);
     messaging().getInitialNotification().then(handleAppOpenedWithNotification);
     notificationOpenedListener.current = messaging().onNotificationOpenedApp(handleAppOpenedWithNotification);
     appStateListener.current = ApplicationState.addEventListener('change', nextAppState => {
@@ -217,6 +202,7 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
       notificationOpenedListener.current?.();
       appStateListener.current?.remove();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -234,8 +220,8 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
     if (walletReady && !alreadyRanInitialization.current) {
       const addresses: AddressWithRelationship[] = [];
 
-      Object.values(wallets.wallets ?? {}).forEach(wallet =>
-        wallet?.addresses.forEach(
+      Object.values(wallets || {}).forEach(wallet =>
+        (wallet?.addresses || []).forEach(
           ({ address, visible }: { address: string; visible: boolean }) =>
             visible &&
             addresses.push({
@@ -245,11 +231,11 @@ export const NotificationsHandler = ({ walletReady }: Props) => {
             })
         )
       );
-      initializeGlobalNotificationSettings();
-      initializeNotificationSettingsForAllAddressesAndCleanupSettingsForRemovedWallets(addresses);
+      initializeNotificationSettingsForAllAddresses(addresses);
 
       alreadyRanInitialization.current = true;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, walletReady]);
 
   return null;

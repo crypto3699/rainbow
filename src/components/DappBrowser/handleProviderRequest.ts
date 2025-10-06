@@ -1,22 +1,23 @@
 import { Messenger } from '@/browserMessaging/AppMessenger';
 import { AddEthereumChainProposedChain, RequestArguments, RequestResponse, handleProviderRequest } from '@rainbow-me/provider';
-import * as lang from '@/languages';
+import * as i18n from '@/languages';
 
-import { Provider } from '@ethersproject/providers';
-
-import { RainbowNetworks, getNetworkObj } from '@/networks';
-import { getCachedProviderForNetwork } from '@/handlers/web3';
-import { getNetworkFromChainId } from '@/utils/ethereumUtils';
+import { getProvider } from '@/handlers/web3';
 import { UserRejectedRequestError } from 'viem';
-import { convertHexToString } from '@/helpers/utilities';
 import { logger } from '@/logger';
 import { ActiveSession } from '@rainbow-me/provider/dist/references/appSession';
-import { Network } from '@/helpers';
 import { handleDappBrowserConnectionPrompt, handleDappBrowserRequest } from '@/utils/requestNavigationHandlers';
 import { Tab } from '@rainbow-me/provider/dist/references/messengers';
 import { getDappMetadata } from '@/resources/metadata/dapp';
 import { useAppSessionsStore } from '@/state/appSessions';
 import { BigNumber } from '@ethersproject/bignumber';
+import { ChainId } from '@/state/backendNetworks/types';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { Alert } from 'react-native';
+import { debounce } from 'lodash';
+import { useNavigationStore } from '@/state/navigation/navigationStore';
+import Routes from '@/navigation/routesNames';
+import { time } from '@/utils/time';
 
 export type ProviderRequestPayload = RequestArguments & {
   id: number;
@@ -119,81 +120,74 @@ export function createTransport<TPayload, TResponse>({ messenger, topic }: { mes
 const messengerProviderRequestFn = async (messenger: Messenger, request: ProviderRequestPayload) => {
   const hostSessions = useAppSessionsStore.getState().getActiveSession({ host: getDappHost(request.meta?.sender.url) || '' });
   const appSession =
-    hostSessions && hostSessions.sessions[hostSessions.activeSessionAddress]
+    hostSessions && hostSessions.sessions?.[hostSessions.activeSessionAddress]
       ? {
           address: hostSessions.activeSessionAddress,
-          network: hostSessions.sessions[hostSessions.activeSessionAddress],
+          chainId: hostSessions.sessions[hostSessions.activeSessionAddress],
         }
       : null;
 
-  // Wait for response from the popup.
-  let response: unknown | null;
-
   if (request.method === 'eth_requestAccounts') {
     const dappData = await getDappMetadata({ url: getDappHost(request.meta?.sender.url) });
-
-    response = await handleDappBrowserConnectionPrompt({
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - chainId is not defined in the type
+    const chainId = request.params?.[0]?.chainId ? BigNumber.from(request.params?.[0]?.chainId).toNumber() : undefined;
+    const response = await handleDappBrowserConnectionPrompt({
       dappName: dappData?.appName || request.meta?.sender.title || '',
       dappUrl: request.meta?.sender.url || '',
+      chainId,
+      address: hostSessions?.activeSessionAddress || undefined,
     });
+
+    if (!response || response instanceof Error) {
+      throw new UserRejectedRequestError(Error('User rejected the request.'));
+    }
 
     useAppSessionsStore.getState().addSession({
       host: getDappHost(request.meta?.sender.url) || '',
-      // @ts-ignore
-      address: response.address,
-      // @ts-ignore
-      network: getNetworkFromChainId(response.chainId),
-      // @ts-ignore
+      address: response?.address,
+      chainId: response.chainId,
       url: request.meta?.sender.url || '',
     });
+    return response;
   } else {
     const dappData = await getDappMetadata({ url: getDappHost(request.meta?.sender.url) });
 
-    response = await handleDappBrowserRequest({
+    const response = await handleDappBrowserRequest({
       dappName: dappData?.appName || request.meta?.sender.title || request.meta?.sender.url || '',
       imageUrl: dappData?.appLogo || '',
       address: appSession?.address || '',
-      network: appSession?.network || Network.mainnet,
       dappUrl: request.meta?.sender.url || '',
       payload: request,
+      chainId: appSession?.chainId ? appSession?.chainId : ChainId.mainnet,
     });
+    return response as object;
   }
-
-  if (!response) {
-    throw new UserRejectedRequestError(Error('User rejected the request.'));
-  }
-  return response;
 };
 
 const isSupportedChainId = (chainId: number | string) => {
   const numericChainId = BigNumber.from(chainId).toNumber();
-  return !!RainbowNetworks.find(network => Number(network.id) === numericChainId);
+  return !!useBackendNetworksStore
+    .getState()
+    .getSupportedChainIds()
+    .find(chainId => chainId === numericChainId);
 };
 const getActiveSession = ({ host }: { host: string }): ActiveSession => {
   const hostSessions = useAppSessionsStore.getState().getActiveSession({ host });
   const appSession =
-    hostSessions && hostSessions.sessions[hostSessions.activeSessionAddress]
+    hostSessions && hostSessions.sessions?.[hostSessions.activeSessionAddress]
       ? {
           address: hostSessions.activeSessionAddress,
-          network: hostSessions.sessions[hostSessions.activeSessionAddress],
+          chainId: hostSessions.sessions[hostSessions.activeSessionAddress],
         }
       : null;
 
   if (!appSession) return null;
+
   return {
     address: appSession?.address || '',
-    chainId: getChainIdByNetwork(appSession.network),
+    chainId: appSession.chainId,
   };
-  // return null;
-};
-
-const getChainIdByNetwork = (network: Network) => getNetworkObj(network).id;
-
-const getChain = (chainId: number) => RainbowNetworks.find(network => Number(network.id) === chainId);
-
-const getProvider = ({ chainId }: { chainId?: number | undefined }) => {
-  const network = getNetworkFromChainId(chainId || 1);
-  return getCachedProviderForNetwork(network) as unknown as Provider;
 };
 
 const checkRateLimitFn = async (host: string) => {
@@ -266,6 +260,29 @@ const checkRateLimitFn = async (host: string) => {
   return false;
 };
 
+// Debounce alert functions to guard against bad dapp implementations
+const debouncedUnsupportedChainAlert = debounce(
+  () => {
+    const isDappBrowserFocused = useNavigationStore.getState().activeRoute === Routes.DAPP_BROWSER_SCREEN;
+    if (isDappBrowserFocused) {
+      Alert.alert(i18n.t(i18n.l.dapp_browser.provider_error.unsupported_chain));
+    }
+  },
+  time.seconds(1),
+  { leading: true, trailing: false }
+);
+
+const debouncedNoActiveSessionAlert = debounce(
+  () => {
+    const isDappBrowserFocused = useNavigationStore.getState().activeRoute === Routes.DAPP_BROWSER_SCREEN;
+    if (isDappBrowserFocused) {
+      Alert.alert(i18n.t(i18n.l.dapp_browser.provider_error.no_active_session));
+    }
+  },
+  time.seconds(1),
+  { leading: true, trailing: false }
+);
+
 export const handleProviderRequestApp = ({ messenger, data, meta }: { messenger: Messenger; data: any; meta: any }) => {
   const providerRequestTransport = createTransport<ProviderRequestPayload, ProviderResponse>({ messenger, topic: 'providerRequest' });
   const isSupportedChain = (chainId: number) => isSupportedChainId(chainId);
@@ -279,13 +296,11 @@ export const handleProviderRequestApp = ({ messenger, data, meta }: { messenger:
     callbackOptions?: CallbackOptions;
   }): { chainAlreadyAdded: boolean } => {
     const { chainId } = proposedChain;
-    const supportedChains = RainbowNetworks.filter(network => network.features.walletconnect).map(network => network.id.toString());
-    const numericChainId = convertHexToString(chainId);
-    if (supportedChains.includes(numericChainId)) {
+    if (useBackendNetworksStore.getState().getDefaultChains()[Number(chainId)]) {
       // TODO - Open add / switch ethereum chain
       return { chainAlreadyAdded: true };
     } else {
-      logger.info('[DAPPBROWSER]: NOT SUPPORTED CHAIN');
+      logger.debug(`[handleProviderRequestApp]: Dapp requested unsupported chain ${chainId}`);
       return { chainAlreadyAdded: false };
     }
   };
@@ -303,7 +318,6 @@ export const handleProviderRequestApp = ({ messenger, data, meta }: { messenger:
 
   const onSwitchEthereumChainNotSupported = ({
     proposedChain,
-    callbackOptions,
   }: {
     proposedChain: AddEthereumChainProposedChain;
     callbackOptions?: CallbackOptions;
@@ -311,9 +325,9 @@ export const handleProviderRequestApp = ({ messenger, data, meta }: { messenger:
     const { chainId } = proposedChain;
     const supportedChain = isSupportedChainId(chainId);
     if (!supportedChain) {
-      alert(lang.t(lang.l.dapp_browser.provider_error.unsupported_chain));
+      debouncedUnsupportedChainAlert();
     } else {
-      alert(lang.t(lang.l.dapp_browser.provider_error.no_active_session));
+      debouncedNoActiveSessionAlert();
     }
     // console.warn('PROVIDER TODO: TODO SEND NOTIFICATION');
     // TODO SEND NOTIFICATION
@@ -336,15 +350,13 @@ export const handleProviderRequestApp = ({ messenger, data, meta }: { messenger:
     callbackOptions?: CallbackOptions;
   }) => {
     const { chainId } = proposedChain;
-    const supportedChains = RainbowNetworks.filter(network => network.features.walletconnect).map(network => network.id.toString());
-    const numericChainId = convertHexToString(chainId);
-    const supportedChainId = supportedChains.includes(numericChainId);
+    const supportedChainId = useBackendNetworksStore.getState().getSupportedChainIds().includes(Number(chainId));
     if (supportedChainId) {
       const host = getDappHost(callbackOptions?.sender.url) || '';
       const activeSession = getActiveSession({ host });
       if (activeSession) {
-        useAppSessionsStore.getState().updateActiveSessionNetwork({ host: host, network: getNetworkFromChainId(Number(numericChainId)) });
-        messenger.send(`chainChanged:${host}`, Number(numericChainId));
+        useAppSessionsStore.getState().updateActiveSessionNetwork({ host: host, chainId: Number(chainId) });
+        messenger.send(`chainChanged:${host}`, Number(chainId));
       }
       console.warn('PROVIDER TODO: TODO SEND NOTIFICATION');
     }
@@ -361,7 +373,7 @@ export const handleProviderRequestApp = ({ messenger, data, meta }: { messenger:
     onSwitchEthereumChainSupported,
     getProvider,
     getActiveSession,
-    getChain,
+    getChainNativeCurrency: chainId => useBackendNetworksStore.getState().getChainsNativeAsset()[chainId],
   });
 
   // @ts-ignore

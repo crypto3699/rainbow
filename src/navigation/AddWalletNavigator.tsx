@@ -2,22 +2,20 @@ import { createMaterialTopTabNavigator } from '@react-navigation/material-top-ta
 import React, { useState } from 'react';
 import Routes from '@/navigation/routesNames';
 import { deviceUtils } from '@/utils';
-import { AddWalletSheet, AddWalletSheetParams } from '@/screens/AddWalletSheet';
-import { ImportOrWatchWalletSheet, ImportOrWatchWalletSheetParams } from '@/screens/ImportOrWatchWalletSheet';
+import { AddWalletSheet } from '@/screens/AddWalletSheet';
+import { ChooseWalletGroup } from '@/screens/ChooseWalletGroup';
+import { ImportOrWatchWalletSheet } from '@/screens/ImportOrWatchWalletSheet';
 import { BackgroundProvider } from '@/design-system';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { SimpleSheet } from '@/components/sheet/SimpleSheet';
+import { RootStackParamList } from './types';
 
 const Swipe = createMaterialTopTabNavigator();
-
-type RouteParams = {
-  AddWalletNavigatorParams: AddWalletSheetParams & ImportOrWatchWalletSheetParams;
-};
 
 export const AddWalletNavigator = () => {
   const {
     params: { isFirstWallet, type },
-  } = useRoute<RouteProp<RouteParams, 'AddWalletNavigatorParams'>>();
+  } = useRoute<RouteProp<RootStackParamList, typeof Routes.ADD_WALLET_SHEET>>();
 
   const [scrollEnabled, setScrollEnabled] = useState(false);
 
@@ -35,6 +33,16 @@ export const AddWalletNavigator = () => {
               component={AddWalletSheet}
               initialParams={{ isFirstWallet }}
               name={Routes.ADD_WALLET_SHEET}
+              listeners={{
+                focus: () => {
+                  setScrollEnabled(true);
+                },
+              }}
+            />
+            <Swipe.Screen
+              component={ChooseWalletGroup}
+              initialParams={{ isFirstWallet }}
+              name={Routes.CHOOSE_WALLET_GROUP}
               listeners={{
                 focus: () => {
                   setScrollEnabled(true);

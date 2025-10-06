@@ -1,0 +1,15 @@
+appId: ${APP_ID}
+---
+- runFlow:
+    when:
+      visible: 'Choose your PIN'
+      platform: Android
+    commands:
+      - tapOn:
+          text: '1'
+          repeat: 4
+          delay: 1000
+      - tapOn:
+          text: '1'
+          repeat: 4
+          delay: 1000

@@ -1,10 +1,10 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React from 'react';
 import { neverRerender } from '@/utils';
 import { Inset, Stack, Text } from '@/design-system';
 import { useTheme } from '@/theme';
 import { logger } from '@/logger';
-import { useUserAssetCount } from '@/resources/assets/useUserAssetCount';
+import { useUserAssetsStore } from '@/state/assets/userAssets';
 
 export enum NoResultsType {
   Discover = 'discover',
@@ -14,34 +14,34 @@ export enum NoResultsType {
 
 export const NoResults = ({ onL2, type }: { onL2?: boolean; type: NoResultsType }) => {
   const { colors } = useTheme();
-  const { data: assetCount } = useUserAssetCount();
+  const assetCount = useUserAssetsStore(state => state.userAssets.size);
 
   let title;
   let description;
 
   switch (type) {
     case NoResultsType.Discover:
-      title = lang.t('exchange.no_results.nothing_here');
+      title = i18n.t(i18n.l.exchange.no_results.nothing_here);
       break;
     case NoResultsType.Swap:
-      title = lang.t('exchange.no_results.nothing_found');
+      title = i18n.t(i18n.l.exchange.no_results.nothing_found);
       if (assetCount) {
-        description = onL2 ? lang.t('exchange.no_results.description_l2') : lang.t('exchange.no_results.description');
+        description = onL2 ? i18n.t(i18n.l.exchange.no_results.description_l2) : i18n.t(i18n.l.exchange.no_results.description);
       } else {
-        description = lang.t('exchange.no_results.description_no_assets', {
+        description = i18n.t(i18n.l.exchange.no_results.description_no_assets, {
           action: type,
         });
       }
       break;
     case NoResultsType.Send:
-      title = lang.t('exchange.no_results.nothing_to_send');
-      description = lang.t('exchange.no_results.description_no_assets', {
+      title = i18n.t(i18n.l.exchange.no_results.nothing_to_send);
+      description = i18n.t(i18n.l.exchange.no_results.description_no_assets, {
         action: type,
       });
       break;
     default:
-      title = lang.t('exchange.no_results.nothing_found');
-      logger.warn('NoResults: unknown type, falling back to default message');
+      title = i18n.t(i18n.l.exchange.no_results.nothing_found);
+      logger.warn('[NoResults]: unknown type, falling back to default message');
       break;
   }
 

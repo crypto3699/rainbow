@@ -1,24 +1,34 @@
 import type { Address } from 'viem';
 
 import { ETH_ADDRESS } from '@/references';
-import { ChainId, ChainName } from '@/__swaps__/types/chains';
+import { ChainId, ChainName } from '@/state/backendNetworks/types';
 import { SearchAsset } from '@/__swaps__/types/search';
 import { ResponseByTheme } from '../utils/swaps';
 
 export type AddressOrEth = Address | typeof ETH_ADDRESS;
 
-export type UserAssetFilter = 'all' | ChainId;
+export type UserAssetFilter = ChainId | 'all';
 
 export interface ExtendedAnimatedAssetWithColors extends ParsedSearchAsset {
+  // colors
+  color: ResponseByTheme<string>;
+  shadowColor: ResponseByTheme<string>;
+  mixedShadowColor: ResponseByTheme<string>;
   textColor: ResponseByTheme<string>;
   tintedBackgroundColor: ResponseByTheme<string>;
   highContrastColor: ResponseByTheme<string>;
+
+  // total balance minus gas fee if native token
+  maxSwappableAmount: string;
+
+  // price information
+  nativePrice: number | undefined;
 }
 
 export interface ParsedAsset {
   address: AddressOrEth;
   chainId: ChainId;
-  chainName: ChainName;
+  chainName: string;
   colors?: {
     primary?: string;
     fallback?: string;
@@ -47,6 +57,7 @@ export interface ParsedAsset {
     isBridgeable: boolean;
     networks: { [id in ChainId]?: { bridgeable: boolean } };
   };
+  updatedAt?: string;
 }
 
 export interface ParsedUserAsset extends ParsedAsset {
@@ -77,6 +88,7 @@ export type ParsedAssetsDictByChain = Record<ChainId | number, ParsedAssetsDict>
 export interface ZerionAssetPrice {
   value: number;
   relative_change_24h?: number;
+  changed_at?: number;
 }
 
 export type AssetApiResponse = {
@@ -107,7 +119,7 @@ export type AssetApiResponse = {
   interface?: 'erc-721' | 'erc-1155';
 };
 
-type AssetType = ProtocolType | 'nft';
+export type AssetType = ProtocolType | 'nft';
 
 export interface ZerionAsset {
   asset_code: AddressOrEth;
@@ -126,10 +138,18 @@ export interface ZerionAsset {
   is_verified?: boolean;
   price?: ZerionAssetPrice;
   network?: ChainName;
+  isNativeAsset?: boolean;
   bridging: {
     bridgeable: boolean;
     networks: { [id in ChainId]?: { bridgeable: boolean } };
   };
+  networks?: {
+    [chainId in ChainId]?: {
+      address: chainId extends ChainId.mainnet ? AddressOrEth : Address;
+      decimals: number;
+    };
+  };
+  defi_position?: boolean;
 }
 
 // protocols https://github.com/rainbow-me/go-utils-lib/blob/master/pkg/enums/token_type.go#L44
@@ -162,7 +182,8 @@ export type ProtocolType =
   | 'sushiswap'
   | 'native'
   | 'wrappedNative'
-  | 'stablecoin';
+  | 'stablecoin'
+  | 'rainbow';
 
 export type AssetMetadata = {
   circulatingSupply: number;

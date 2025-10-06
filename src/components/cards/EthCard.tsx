@@ -1,50 +1,53 @@
-import { Box, Inline, Stack, Text, AccentColorProvider, Bleed } from '@/design-system';
-import { useTheme } from '@/theme';
-import React, { useCallback, useEffect, useState } from 'react';
-import { GenericCard } from './GenericCard';
-import { ButtonPressAnimation } from '../animations';
-import { useAccountSettings, useChartThrottledPoints, useColorForAsset, useWallets } from '@/hooks';
+import { analytics } from '@/analytics';
+import { ButtonPressAnimationTouchEvent } from '@/components/animations/ButtonPressAnimation/types';
+import { ChainImage } from '@/components/coin-icon/ChainImage';
+import { AccentColorProvider, Bleed, Box, Inline, Stack, Text } from '@/design-system';
+import { IS_IOS } from '@/env';
+import showWalletErrorAlert from '@/helpers/support';
+import { useChartThrottledPoints, useColorForAsset } from '@/hooks';
+import { useAccountAccentColor } from '@/hooks/useAccountAccentColor';
+import * as i18n from '@/languages';
 import { useRemoteConfig } from '@/model/remoteConfig';
-import { deviceUtils } from '@/utils';
 import { useNavigation } from '@/navigation';
 import Routes from '@/navigation/routesNames';
-import { analyticsV2 } from '@/analytics';
+import { ChartDot, ChartPath, ChartPathProvider } from '@/react-native-animated-charts/src';
 import { ETH_ADDRESS } from '@/references';
-import { ChartPath, ChartPathProvider } from '@/react-native-animated-charts/src';
-import Labels from '../value-chart/ExtremeLabels';
-import showWalletErrorAlert from '@/helpers/support';
-import { IS_IOS } from '@/env';
-import Spinner from '../Spinner';
-import Skeleton, { FakeText } from '../skeleton/Skeleton';
-import { useAccountAccentColor } from '@/hooks/useAccountAccentColor';
-import { useRoute } from '@react-navigation/native';
-import * as i18n from '@/languages';
-import { ButtonPressAnimationTouchEvent } from '@/components/animations/ButtonPressAnimation/types';
-import { useExternalToken } from '@/resources/assets/externalAssetsQuery';
-import assetTypes from '@/entities/assetTypes';
-import { Network } from '@/networks/types';
+import { FormattedExternalAsset, useExternalToken } from '@/resources/assets/externalAssetsQuery';
+import { ChainId, Network } from '@/state/backendNetworks/types';
+import { getIsDamagedWallet } from '@/state/wallets/walletsStore';
+import { useTheme } from '@/theme';
+import { deviceUtils } from '@/utils';
 import { getUniqueId } from '@/utils/ethereumUtils';
-import { EthCoinIcon } from '../coin-icon/EthCoinIcon';
+import { useRoute } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Spinner from '../Spinner';
+import { ButtonPressAnimation } from '../animations';
+import Skeleton, { FakeText } from '../skeleton/Skeleton';
+import { ExtremeLabels } from '@/components/value-chart/ExtremeLabels';
+import { GenericCard } from './GenericCard';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
 
 export const ETH_CARD_HEIGHT = 284.3;
 
 export const EthCard = () => {
-  const { nativeCurrency } = useAccountSettings();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
   const { colors, isDarkMode } = useTheme();
   const { navigate } = useNavigation();
-  const { isDamaged } = useWallets();
   const { data: externalEthAsset } = useExternalToken({
     address: ETH_ADDRESS,
-    network: Network.mainnet,
+    chainId: ChainId.mainnet,
     currency: nativeCurrency,
   });
 
-  const ethAsset = {
-    ...externalEthAsset,
-    address: ETH_ADDRESS,
-    network: Network.mainnet,
-    uniqueId: getUniqueId(ETH_ADDRESS, Network.mainnet),
-  };
+  const ethAsset = useMemo(() => {
+    return {
+      ...(externalEthAsset || {}),
+      address: ETH_ADDRESS,
+      network: Network.mainnet,
+      chainId: ChainId.mainnet,
+      uniqueId: getUniqueId(ETH_ADDRESS, ChainId.mainnet),
+    };
+  }, [externalEthAsset]);
 
   const { loaded: accentColorLoaded } = useAccountAccentColor();
   const { name: routeName } = useRoute();
@@ -56,27 +59,29 @@ export const EthCard = () => {
         e.stopPropagation();
       }
 
-      if (isDamaged) {
+      if (getIsDamagedWallet()) {
         showWalletErrorAlert();
         return;
       }
 
       navigate(Routes.ADD_CASH_SHEET);
 
-      analyticsV2.track(analyticsV2.event.buyButtonPressed, {
+      analytics.track(analytics.event.buyButtonPressed, {
         componentName: 'EthCard',
         routeName,
       });
     },
-    [isDamaged, navigate, routeName]
+    [navigate, routeName]
   );
 
   const handleAssetPress = useCallback(() => {
-    navigate(Routes.EXPANDED_ASSET_SHEET, {
-      asset: ethAsset,
-      type: 'token',
+    if (ethAsset.native == null) return;
+    navigate(Routes.EXPANDED_ASSET_SHEET_V2, {
+      asset: ethAsset as FormattedExternalAsset,
+      address: ETH_ADDRESS,
+      chainId: ChainId.mainnet,
     });
-    analyticsV2.track(analyticsV2.event.cardPressed, {
+    analytics.track(analytics.event.cardPressed, {
       cardName: 'EthCard',
       routeName,
       cardType,
@@ -87,7 +92,7 @@ export const EthCard = () => {
     {
       address: ETH_ADDRESS,
       mainnet_address: ETH_ADDRESS,
-      type: assetTypes.token,
+      type: 'token',
     },
     colors.appleBlue
   );
@@ -98,20 +103,21 @@ export const EthCard = () => {
 
   const { throttledData } = useChartThrottledPoints({
     asset: ethAsset,
+    timespan: 'day',
   });
 
   const CHART_WIDTH = deviceUtils.dimensions.width - 80;
   const CHART_HEIGHT = 80;
 
   let isNegativePriceChange = false;
-  if (ethAsset?.native?.change[0] === '-') {
+  if (ethAsset.native?.change[0] === '-') {
     isNegativePriceChange = true;
   }
-  const priceChangeDisplay = isNegativePriceChange ? ethAsset?.native?.change.substring(1) : ethAsset?.native?.change;
+  const priceChangeDisplay = isNegativePriceChange ? ethAsset.native?.change.substring(1) : ethAsset.native?.change;
 
   const priceChangeColor = isNegativePriceChange ? colors.red : colors.green;
 
-  const loadedPrice = accentColorLoaded && ethAsset?.native?.change;
+  const loadedPrice = accentColorLoaded && ethAsset.native?.change;
   const loadedChart = throttledData?.points.length && loadedPrice;
 
   const [noChartData, setNoChartData] = useState(false);
@@ -130,12 +136,7 @@ export const EthCard = () => {
   const { f2c_enabled: addCashEnabled } = useRemoteConfig();
 
   return (
-    <GenericCard
-      /** @ts-ignore */
-      onPress={IS_IOS ? handleAssetPress : handlePressBuy}
-      type={cardType}
-      testID="eth-card"
-    >
+    <GenericCard onPress={IS_IOS ? handleAssetPress : handlePressBuy} type={cardType} testID="eth-card">
       <Stack space={{ custom: 41 }}>
         <Stack space="12px">
           <Bleed top="4px">
@@ -156,9 +157,9 @@ export const EthCard = () => {
                   </>
                 ) : (
                   <>
-                    <EthCoinIcon size={20} />
+                    <ChainImage chainId={ChainId.mainnet} position="relative" size={20} />
                     <Text size="17pt" color={{ custom: colorForAsset }} weight="heavy">
-                      {ethAsset?.name}
+                      {ethAsset.name}
                     </Text>
                   </>
                 )}
@@ -194,7 +195,7 @@ export const EthCard = () => {
             </Box>
           ) : (
             <Text size="26pt" color={{ custom: colorForAsset }} weight="heavy">
-              {ethAsset?.native?.price.display}
+              {ethAsset.native?.price.display}
             </Text>
           )}
         </Stack>
@@ -210,7 +211,14 @@ export const EthCard = () => {
               )}
             </Box>
           ) : (
-            <ChartPathProvider data={throttledData} width={CHART_WIDTH} height={CHART_HEIGHT}>
+            <ChartPathProvider
+              data={throttledData}
+              width={CHART_WIDTH}
+              height={CHART_HEIGHT}
+              color={colorForAsset}
+              selectedColor={colorForAsset}
+              endPadding={32}
+            >
               <ChartPath
                 fill="none"
                 gestureEnabled={false}
@@ -219,20 +227,24 @@ export const EthCard = () => {
                 longPressGestureHandlerProps={undefined}
                 selectedStrokeWidth={3}
                 stroke={colorForAsset}
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore - prop is accepted via prop spreading
                 strokeLinecap="round"
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore - prop is accepted via prop spreading
                 strokeLinejoin="round"
                 strokeWidth={4}
                 width={CHART_WIDTH}
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore - prop is accepted via prop spreading
-                chartXOffset={0}
                 isCard
               />
-              <Labels color={colorForAsset} width={CHART_WIDTH} isCard />
+              <ChartDot
+                size={10}
+                color={colorForAsset}
+                isCard
+                dotStyle={{
+                  shadowColor: isDarkMode ? colors.shadow : colorForAsset,
+                  shadowOffset: { height: 3, width: 0 },
+                  shadowOpacity: 0.6,
+                  shadowRadius: 4.5,
+                }}
+              />
+              <ExtremeLabels color={colorForAsset} isCard />
             </ChartPathProvider>
           )}
         </Box>

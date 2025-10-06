@@ -4,12 +4,14 @@ module.exports = {
     args: {
       config: 'e2e/jest.e2e.config.js',
       _: ['e2e'],
+      bail: true,
+      forceExit: true,
     },
   },
   devices: {
     'ios.simulator': {
       type: 'ios.simulator',
-      device: { type: 'iPhone 15 Pro' },
+      device: { type: 'iPhone 16 Pro' },
     },
     'android.attached': {
       type: 'android.attached',
@@ -55,6 +57,11 @@ module.exports = {
           screenshot: 'failing',
         },
       },
+      behavior: {
+        cleanup: {
+          shutdownDevice: false,
+        },
+      },
     },
     'ios.sim.debug': {
       app: 'ios.debug',
@@ -62,6 +69,11 @@ module.exports = {
       artifacts: {
         plugins: {
           screenshot: 'failing',
+        },
+      },
+      behavior: {
+        cleanup: {
+          shutdownDevice: false,
         },
       },
     },

@@ -1,75 +1,57 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAccountSettings, useWallets } from '@/hooks';
-import { useNavigation } from '@/navigation';
-import ImageAvatar from '@/components/contacts/ImageAvatar';
-import { findWalletWithAccount } from '@/helpers/findWalletWithAccount';
-import { getAccountProfileInfo } from '@/helpers/accountInfo';
-import Routes from '@/navigation/routesNames';
-import { ContactAvatar } from '@/components/contacts';
-import { Bleed } from '@/design-system';
-
-import { useAppSessionsStore } from '@/state/appSessions';
-import { getDappHost } from '../handleProviderRequest';
+import React, { useCallback, useMemo } from 'react';
 import { ButtonPressAnimation } from '@/components/animations';
+import { ContactAvatar } from '@/components/contacts';
+import ImageAvatar from '@/components/contacts/ImageAvatar';
+import { Bleed, useColorMode } from '@/design-system';
+import Navigation from '@/navigation/Navigation';
+import Routes from '@/navigation/routesNames';
+import { useAppSessionsStore } from '@/state/appSessions';
 import { useBrowserStore } from '@/state/browser/browserStore';
+import { useAccountAddress, useAccountProfileInfo } from '@/state/wallets/walletsStore';
 import { useBrowserContext } from '../BrowserContext';
+import { HOMEPAGE_BACKGROUND_COLOR_DARK, HOMEPAGE_BACKGROUND_COLOR_LIGHT, RAINBOW_HOME } from '../constants';
+import { getDappHost } from '../handleProviderRequest';
 
 export const AccountIcon = React.memo(function AccountIcon() {
-  const { navigate } = useNavigation();
-  const { accountAddress } = useAccountSettings();
-  const { wallets, walletNames } = useWallets();
-
-  const [currentAddress, setCurrentAddress] = useState<string>(accountAddress);
-
+  const { isDarkMode } = useColorMode();
   const { activeTabRef } = useBrowserContext();
-  const activeTabHost = useBrowserStore(state => getDappHost(state.getActiveTabUrl()));
-  const hostSessions = useAppSessionsStore(state => state.getActiveSession({ host: activeTabHost }));
 
+  const accountAddress = useAccountAddress();
+  const activeTabHost = useBrowserStore(state => getDappHost(state.getActiveTabUrl())) || RAINBOW_HOME;
+  const hostSessions = useAppSessionsStore(state => state.getActiveSession({ host: activeTabHost }));
   const currentSession = useMemo(
     () =>
-      hostSessions && hostSessions.sessions[hostSessions.activeSessionAddress]
+      hostSessions && hostSessions.sessions?.[hostSessions.activeSessionAddress]
         ? {
             address: hostSessions.activeSessionAddress,
-            network: hostSessions.sessions[hostSessions.activeSessionAddress],
+            chainId: hostSessions.sessions[hostSessions.activeSessionAddress],
           }
         : null,
     [hostSessions]
   );
 
-  // listens to the current active tab and sets the account
-  useEffect(() => {
-    if (activeTabHost) {
-      if (!currentSession) {
-        return;
-      }
+  const currentAddress = useMemo(
+    () => currentSession?.address || hostSessions?.activeSessionAddress || accountAddress,
+    [currentSession?.address, hostSessions?.activeSessionAddress, accountAddress]
+  );
 
-      if (currentSession?.address) {
-        setCurrentAddress(currentSession?.address);
-      } else {
-        setCurrentAddress(accountAddress);
-      }
-    }
-  }, [accountAddress, activeTabHost, currentSession]);
-
-  const accountInfo = useMemo(() => {
-    const selectedWallet = findWalletWithAccount(wallets || {}, currentAddress);
-    const profileInfo = getAccountProfileInfo(selectedWallet, walletNames, currentAddress);
-    return {
-      ...profileInfo,
-    };
-  }, [wallets, currentAddress, walletNames]);
+  const accountInfo = useAccountProfileInfo(currentAddress);
 
   const handleOnPress = useCallback(() => {
-    navigate(Routes.DAPP_BROWSER_CONTROL_PANEL, {
+    Navigation.handleAction(Routes.DAPP_BROWSER_CONTROL_PANEL, {
       activeTabRef,
     });
-  }, [activeTabRef, navigate]);
+  }, [activeTabRef]);
 
   return (
     <Bleed space="8px">
-      <ButtonPressAnimation onPress={handleOnPress} scaleTo={0.8}>
+      <ButtonPressAnimation onPress={handleOnPress} scaleTo={0.8} overflowMargin={30} testID="account-icon">
         {accountInfo?.accountImage ? (
-          <ImageAvatar image={accountInfo.accountImage} size="signing" />
+          <ImageAvatar
+            backgroundColor={isDarkMode ? HOMEPAGE_BACKGROUND_COLOR_DARK : HOMEPAGE_BACKGROUND_COLOR_LIGHT}
+            image={accountInfo.accountImage}
+            size="signing"
+          />
         ) : (
           <ContactAvatar color={accountInfo.accountColor} size="signing" value={accountInfo.accountSymbol} />
         )}

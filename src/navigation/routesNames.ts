@@ -1,10 +1,16 @@
 import { IS_IOS } from '@/env';
 
+export const POINTS_ROUTES = {
+  CLAIM_CONTENT: 'ClaimContent',
+  REFERRAL_CONTENT: 'ReferralContent',
+} as const;
+
 const Routes = {
   ADD_CASH_SCREEN_NAVIGATOR: 'AddCashSheetNavigator',
   ADD_CASH_SHEET: 'AddCashSheet',
   ADD_WALLET_NAVIGATOR: 'AddWalletNavigator',
   ADD_WALLET_SHEET: 'AddWalletSheet',
+  AIRDROPS_SHEET: 'AirdropsSheet',
   APP_ICON_UNLOCK_SHEET: 'AppIconUnlockSheet',
   AVATAR_BUILDER: 'AvatarBuilder',
   AVATAR_BUILDER_WALLET: 'AvatarBuilderWallet',
@@ -12,17 +18,17 @@ const Routes = {
   BACKUP_SHEET: 'BackupSheet',
   CHANGE_WALLET_SHEET: 'ChangeWalletSheet',
   CHANGE_WALLET_SHEET_NAVIGATOR: 'ChangeWalletSheetNavigator',
+  CHECK_IDENTIFIER_SCREEN: 'CheckIdentifierScreen',
+  CHOOSE_WALLET_GROUP: 'ChooseWalletGroup',
+  CLAIM_AIRDROP_SHEET: 'ClaimAirdropSheet',
+  CLAIM_CLAIMABLE_PANEL: 'ClaimClaimablePanel',
   CONFIRM_REQUEST: 'ConfirmRequest',
   CONNECTED_DAPPS: 'ConnectedDapps',
   CONSOLE_SHEET: 'ConsoleSheet',
-  CURRENCY_SELECT_SCREEN: 'CurrencySelectScreen',
   CUSTOM_GAS_SHEET: 'CustomGasSheet',
   DAPP_BROWSER_SCREEN: 'DappBrowserScreen',
   DAPP_BROWSER: 'DappBrowser',
-  SWAP_NAVIGATOR: 'SwapNavigator',
   SWAP: 'Swap',
-  SWAP_REVIEW: 'SwapReview',
-  SWAP_GAS: 'SwapGas',
   DIAGNOSTICS_SHEET: 'DiagnosticsSheet',
   DISCOVER_SCREEN: 'DiscoverScreen',
   ENS_ADDITIONAL_RECORDS_SHEET: 'ENSAdditionalRecordsSheet',
@@ -30,20 +36,20 @@ const Routes = {
   ENS_CONFIRM_REGISTER_SHEET: 'ENSConfirmRegisterSheet',
   ENS_INTRO_SHEET: 'ENSIntroSheet',
   ENS_SEARCH_SHEET: 'ENSSearchSheet',
-  EXCHANGE_MODAL: 'ExchangeModal',
   EXPANDED_ASSET_SCREEN: 'ExpandedAssetScreen',
   EXPANDED_ASSET_SHEET: 'ExpandedAssetSheet',
+  EXPANDED_ASSET_SHEET_V2: 'ExpandedAssetSheetV2',
   EXPLAIN_SHEET: 'ExplainSheet',
   PORTAL: 'Portal',
   EXTERNAL_LINK_WARNING_SHEET: 'ExternalLinkWarningSheet',
   HARDWARE_WALLET_TX_NAVIGATOR: 'HardwareWalletTxNavigator',
   IMPORT_OR_WATCH_WALLET_SHEET: 'ImportOrWatchWalletSheet',
   IMPORT_SCREEN: 'ImportScreen',
+  KING_OF_THE_HILL: 'KingOfTheHill',
   LEARN_WEB_VIEW_SCREEN: 'LearnWebViewScreen',
+  LOG_SHEET: 'LogSheet',
   POAP_SHEET: 'PoapSheet',
   MINT_SHEET: 'MintSheet',
-  MAIN_EXCHANGE_NAVIGATOR: 'MainExchangeNavigator',
-  MAIN_EXCHANGE_SCREEN: 'MainExchangeScreen',
   MAIN_NATIVE_BOTTOM_SHEET_NAVIGATOR: 'MainNativeBottomSheetNavigation',
   MAIN_NAVIGATOR: 'MainNavigator',
   MAIN_NAVIGATOR_WRAPPER: 'MainNavigatorWrapper',
@@ -64,6 +70,7 @@ const Routes = {
   PAIR_HARDWARE_WALLET_SUCCESS_SHEET: 'PairHardwareWalletSuccessSheet',
   PIN_AUTHENTICATION_SCREEN: 'PinAuthenticationScreen',
   POINTS_SCREEN: 'PointsScreen',
+  ...POINTS_ROUTES,
   POSITION_SHEET: 'PositionSheet',
   PROFILE_PREVIEW_SHEET: 'ProfilePreviewSheet',
   PROFILE_SCREEN: 'ProfileScreen',
@@ -86,8 +93,6 @@ const Routes = {
   SPEED_UP_AND_CANCEL_SHEET: 'SpeedUpAndCancelSheet',
   STACK: 'Stack',
   SWAPS_PROMO_SHEET: 'SwapsPromoSheet',
-  SWAP_DETAILS_SHEET: 'SwapDetailsSheet',
-  SWAP_SETTINGS_SHEET: 'SwapSettingsSheet',
   SWIPE_LAYOUT: 'SwipeLayout',
   TRANSACTION_DETAILS: 'TransactionDetails',
   NO_NEED_WC_SHEET: 'NoNeedWCSheet',
@@ -96,9 +101,7 @@ const Routes = {
   WALLET_NOTIFICATIONS_SETTINGS: 'WalletNotificationsSettings',
   WALLET_SCREEN: 'WalletScreen',
   WELCOME_SCREEN: 'WelcomeScreen',
-
   SETTINGS_SECTION: 'SettingsSection',
-  SETTINGS_WALLET_NOTIFICATIONS: 'WalletNotificationsSettings',
   SETTINGS_BACKUP_VIEW: 'ViewWalletBackup',
   SETTINGS_SECTION_APP_ICON: 'AppIconSection',
   SETTINGS_SECTION_BACKUP: 'BackupSection',
@@ -108,22 +111,37 @@ const Routes = {
   SETTINGS_SECTION_NETWORK: 'NetworkSection',
   SETTINGS_SECTION_NOTIFICATIONS: 'NotificationsSection',
   SETTINGS_SECTION_PRIVACY: 'PrivacySection',
+  VIEW_WALLET_BACKUP: 'ViewWalletBackup',
+  VIEW_CLOUD_BACKUPS: 'ViewCloudBackups',
+  SECRET_WARNING: 'SecretWarning',
+  SHOW_SECRET: 'ShowSecret',
   DAPP_BROWSER_CONTROL_PANEL: 'DappBrowserControlPanel',
+  NETWORK_SELECTOR: 'NetworkSelector',
+  CLAIM_REWARDS_PANEL: 'ClaimRewardsPanel',
+  TOKEN_LAUNCHER_SCREEN: 'TokenLauncherScreen',
+  KING_OF_THE_HILL_EXPLAIN_SHEET: 'KingOfTheHillExplainSheet',
 } as const;
 
-export const NATIVE_ROUTES = [
+export const NATIVE_ROUTES = new Set<Route>([
+  Routes.AIRDROPS_SHEET,
+  Routes.CHANGE_WALLET_SHEET,
+  Routes.DAPP_BROWSER_CONTROL_PANEL,
+  Routes.EXPANDED_ASSET_SHEET,
+  Routes.EXPANDED_ASSET_SHEET_V2,
+  Routes.TOKEN_LAUNCHER_SCREEN,
+  Routes.MODAL_SCREEN,
+  Routes.POSITION_SHEET,
   Routes.RECEIVE_MODAL,
   Routes.SETTINGS_SHEET,
-  Routes.EXCHANGE_MODAL,
-  Routes.EXPANDED_ASSET_SHEET,
-  Routes.CHANGE_WALLET_SHEET,
-  Routes.MODAL_SCREEN,
+  Routes.SWAP,
   ...(IS_IOS ? [Routes.SEND_SHEET_NAVIGATOR, Routes.ADD_CASH_SCREEN_NAVIGATOR] : []),
-];
+]);
 
 const RoutesWithPlatformDifferences = {
   ...Routes,
   SEND_FLOW: Routes.SEND_SHEET_NAVIGATOR,
-};
+} as const;
+
+export type Route = (typeof Routes)[keyof typeof Routes];
 
 export default RoutesWithPlatformDifferences;

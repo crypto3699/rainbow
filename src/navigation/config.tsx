@@ -1,14 +1,13 @@
 import React from 'react';
-import { Keyboard, StatusBar } from 'react-native';
+import { Keyboard } from 'react-native';
+import { RouteProp } from '@react-navigation/native';
 
 import { useTheme } from '@/theme/ThemeContext';
 import colors from '@/theme/currentColors';
 import styled from '@/styled-thing';
 import { fonts } from '@/styles';
-import networkTypes from '@/helpers/networkTypes';
 import WalletBackupStepTypes from '@/helpers/walletBackupStepTypes';
 import { deviceUtils, safeAreaInsetValues } from '@/utils';
-import { getNetworkObj } from '@/networks';
 import { getPositionSheetHeight } from '@/screens/positions/PositionSheet';
 
 import { Icon } from '@/components/icons';
@@ -17,18 +16,19 @@ import { Text } from '@/components/text';
 
 import { getENSAdditionalRecordsSheetHeight } from '@/screens/ENSAdditionalRecordsSheet';
 import { ENSConfirmRegisterSheetHeight } from '@/screens/ENSConfirmRegisterSheet';
-import { explainers, ExplainSheetHeight } from '@/screens/ExplainSheet';
+import { ExplainSheetHeight, getExplainSheetConfig } from '@/screens/ExplainSheet';
 import { ExternalLinkWarningSheetHeight } from '@/screens/ExternalLinkWarningSheet';
 import { getSheetHeight as getSendConfirmationSheetHeight } from '@/screens/SendConfirmationSheet';
 
 import { onWillPop } from '@/navigation/Navigation';
 import { HARDWARE_WALLET_TX_NAVIGATOR_SHEET_HEIGHT } from '@/navigation/HardwareWalletTxNavigator';
 import { StackNavigationOptions } from '@react-navigation/stack';
-import { PartialNavigatorConfigOptions } from '@/navigation/types';
+import { ExplainSheetRouteParams, ExplainSheetType, PartialNavigatorConfigOptions, RootStackParamList } from '@/navigation/types';
 import { BottomSheetNavigationOptions } from '@/navigation/bottom-sheet/types';
 import { Box } from '@/design-system';
 import { IS_ANDROID } from '@/env';
-import { SignTransactionSheetRouteProp } from '@/screens/SignTransactionSheet';
+import { RequestSource } from '@/utils/requestNavigationHandlers';
+import Routes from './routesNames';
 
 export const sharedCoolModalTopOffset = safeAreaInsetValues.top;
 
@@ -55,7 +55,28 @@ export type CoolModalConfigOptions = StackNavigationOptions & {
   transitionDuration?: number;
 };
 
-const buildCoolModalConfig = (params: any): CoolModalConfigOptions => ({
+export type CoolModalConfigParams = {
+  type?: ExplainSheetType;
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+  blocksBackgroundTouches?: boolean;
+  cornerRadius?: string | number;
+  disableShortFormAfterTransitionToLongForm?: boolean;
+  gestureEnabled?: boolean;
+  headerHeight?: number;
+  isShortFormEnabled?: boolean;
+  longFormHeight?: number;
+  height?: number;
+  onAppear?: () => void;
+  scrollEnabled?: boolean;
+  single?: boolean;
+  springDamping?: number;
+  startFromShortForm?: boolean;
+  topOffset?: number;
+  transitionDuration?: number;
+};
+
+const buildCoolModalConfig = (params: CoolModalConfigParams): CoolModalConfigOptions => ({
   allowsDragToDismiss: true,
   allowsTapToDismiss: true,
   backgroundColor: params.backgroundColor || colors.themedColors?.shadowBlack,
@@ -68,20 +89,21 @@ const buildCoolModalConfig = (params: any): CoolModalConfigOptions => ({
         : 0.666 // 0.666 gets the screen corner radius internally
       : params.cornerRadius === 0
         ? 0
-        : params.cornerRadius || 39,
+        : typeof params.cornerRadius === 'number'
+          ? params.cornerRadius
+          : 39,
   customStack: true,
-  disableShortFormAfterTransitionToLongForm:
-    params.disableShortFormAfterTransitionToLongForm || params?.type === 'token' || params?.type === 'uniswap',
+  disableShortFormAfterTransitionToLongForm: params.disableShortFormAfterTransitionToLongForm,
   gestureEnabled: true,
   headerHeight: params.headerHeight || 25,
   ignoreBottomOffset: true,
-  isShortFormEnabled: params.isShortFormEnabled || params?.type === 'token',
+  isShortFormEnabled: params.isShortFormEnabled,
   longFormHeight: params.longFormHeight,
-  onAppear: params.onAppear || null,
+  onAppear: params.onAppear || undefined,
   scrollEnabled: params.scrollEnabled,
   single: params.single,
   springDamping: params.springDamping || 0.8,
-  startFromShortForm: params.startFromShortForm || params?.type === 'token' || false,
+  startFromShortForm: params.startFromShortForm || false,
   topOffset: params.topOffset === 0 ? 0 : params.topOffset || sharedCoolModalTopOffset,
   transitionDuration: params.transitionDuration || 0.35,
 });
@@ -92,22 +114,42 @@ export const backupSheetSizes = {
     : deviceUtils.dimensions.height + safeAreaInsetValues.bottom + sharedCoolModalTopOffset + SheetHandleFixedToTopHeight,
   medium: 550,
   short: 424,
+  check_identifier: 414,
   shorter: 364,
 };
 
 export const getHeightForStep = (step: string) => {
   switch (step) {
-    case WalletBackupStepTypes.backup_cloud:
-    case WalletBackupStepTypes.backup_manual:
+    case WalletBackupStepTypes.create_cloud_backup:
     case WalletBackupStepTypes.restore_from_backup:
       return backupSheetSizes.long;
-    case WalletBackupStepTypes.no_provider:
+    case WalletBackupStepTypes.backup_prompt:
       return backupSheetSizes.medium;
-    case WalletBackupStepTypes.backup_now_manually:
-      return backupSheetSizes.shorter;
+    case WalletBackupStepTypes.check_identifier:
+      return backupSheetSizes.check_identifier;
     default:
       return backupSheetSizes.short;
   }
+};
+
+export const checkIdentifierSheetConfig: PartialNavigatorConfigOptions = {
+  options: ({ navigation, route }) => {
+    const { params: { longFormHeight, step, ...params } = {} } = route as {
+      params: any;
+    };
+
+    const heightForStep = getHeightForStep(step);
+    if (longFormHeight !== heightForStep) {
+      navigation.setParams({
+        longFormHeight: heightForStep,
+      });
+    }
+
+    return buildCoolModalConfig({
+      ...params,
+      longFormHeight: heightForStep,
+    });
+  },
 };
 
 export const backupSheetConfig: PartialNavigatorConfigOptions = {
@@ -224,12 +266,53 @@ export const consoleSheetConfig = {
   }),
 };
 
-export const dappBrowserControlPanelConfig = {
+export const panelConfig = {
   options: ({ route: { params = {} } }) => ({
     ...buildCoolModalConfig({
       ...params,
       backgroundOpacity: 0.7,
       cornerRadius: 0,
+      springDamping: 1,
+      topOffset: 0,
+      transitionDuration: 0.3,
+    }),
+  }),
+};
+
+export const airdropsSheetConfig = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 0.7,
+      cornerRadius: 0,
+      headerHeight: safeAreaInsetValues.top + 70,
+      springDamping: 1,
+      topOffset: 0,
+      transitionDuration: 0.3,
+    }),
+  }),
+};
+
+export const claimAirdropSheetConfig = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 0.8,
+      cornerRadius: 0,
+      headerHeight: safeAreaInsetValues.top + 70,
+      springDamping: 1,
+      topOffset: 0,
+      transitionDuration: 0.3,
+    }),
+  }),
+};
+
+export const expandedAssetSheetV2Config = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 1,
+      cornerRadius: 'device',
       springDamping: 1,
       topOffset: 0,
       transitionDuration: 0.3,
@@ -251,10 +334,10 @@ export const swapConfig = {
 };
 
 export const signTransactionSheetConfig = {
-  options: ({ route }: { route: SignTransactionSheetRouteProp }) => ({
+  options: ({ route }: { route: RouteProp<RootStackParamList, typeof Routes.CONFIRM_REQUEST> }) => ({
     ...buildCoolModalConfig({
       ...route.params,
-      backgroundOpacity: route?.params?.source === 'walletconnect' ? 1 : 0.7,
+      backgroundOpacity: [RequestSource.WALLETCONNECT, RequestSource.MOBILE_WALLET_PROTOCOL].includes(route?.params?.source) ? 1 : 0.7,
       cornerRadius: 0,
       springDamping: 1,
       topOffset: 0,
@@ -310,6 +393,17 @@ export const sendConfirmationSheetConfig = {
 };
 
 export const settingsSheetConfig: PartialNavigatorConfigOptions = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 1,
+      scrollEnabled: false,
+      springDamping: 1,
+    }),
+  }),
+};
+
+export const recieveModalSheetConfig: PartialNavigatorConfigOptions = {
   options: ({ route: { params = {} } }) => ({
     ...buildCoolModalConfig({
       ...params,
@@ -456,9 +550,9 @@ export const ensAdditionalRecordsSheetConfig: PartialNavigatorConfigOptions = {
 };
 
 export const explainSheetConfig: PartialNavigatorConfigOptions = {
-  options: ({ route: { params = { network: getNetworkObj(networkTypes.mainnet).name } } }) => {
-    // @ts-ignore
-    const explainerConfig = explainers(params.network)[params?.type];
+  options: ({ route }) => {
+    const params = route.params as ExplainSheetRouteParams;
+    const explainerConfig = getExplainSheetConfig(params);
     return buildCoolModalConfig({
       ...params,
       longFormHeight: ExplainSheetHeight + (explainerConfig?.extraHeight ? explainerConfig?.extraHeight : 0),
@@ -480,6 +574,8 @@ export const expandedAssetSheetConfig: PartialNavigatorConfigOptions = {
     ...buildCoolModalConfig({
       ...params,
       scrollEnabled: true,
+      springDamping: 1,
+      transitionDuration: 0.28,
     }),
   }),
 };
@@ -489,6 +585,8 @@ export const expandedAssetSheetConfigWithLimit: PartialNavigatorConfigOptions = 
     ...buildCoolModalConfig({
       ...params,
       scrollEnabled: true,
+      springDamping: 1,
+      transitionDuration: 0.28,
     }),
     limitActiveModals: true,
   }),
@@ -518,8 +616,54 @@ export const portalSheetConfig: PartialNavigatorConfigOptions = {
   options: ({ route: { params = {} } }) => ({
     ...buildCoolModalConfig({
       ...params,
-      // @ts-ignore
-      longFormHeight: params.sheetHeight,
+      backgroundOpacity: 0.8,
+      cornerRadius: 0,
+      headerHeight: safeAreaInsetValues.top + 70,
+      springDamping: 1,
+      topOffset: 0,
+      transitionDuration: 0.3,
+    }),
+  }),
+};
+
+export const activitySheetConfig: PartialNavigatorConfigOptions = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 0.8,
+      headerHeight: 0,
+      springDamping: 1,
+      topOffset: safeAreaInsetValues.top + 15,
+      transitionDuration: 0.3,
+    }),
+  }),
+};
+
+export const tokenLauncherConfig: PartialNavigatorConfigOptions = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 1,
+      cornerRadius: 0,
+      springDamping: 1,
+      topOffset: 0,
+      transitionDuration: 0.3,
+    }),
+    dismissable: false,
+    gestureEnabled: false,
+  }),
+};
+
+export const kingOfTheHillExplainSheetConfig = {
+  options: ({ route: { params = {} } }) => ({
+    ...buildCoolModalConfig({
+      ...params,
+      backgroundOpacity: 0.8,
+      cornerRadius: 0,
+      headerHeight: safeAreaInsetValues.top + 70,
+      springDamping: 1,
+      topOffset: 0,
+      transitionDuration: 0.3,
     }),
   }),
 };
@@ -562,16 +706,6 @@ export const nativeStackDefaultConfigWithoutStatusBar: CoolModalConfigOptions = 
   onWillDismiss: () => {
     onWillPop();
   },
-};
-
-export const exchangeTabNavigatorConfig = {
-  initialLayout: deviceUtils.dimensions,
-  sceneContainerStyle: {
-    backgroundColor: 'transparent',
-  },
-  swipeDistanceMinimum: 0,
-  tabBar: () => null,
-  transparentCard: true,
 };
 
 const BackArrow = styled(Icon).attrs({

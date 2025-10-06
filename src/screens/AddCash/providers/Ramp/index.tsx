@@ -1,5 +1,4 @@
 import React from 'react';
-import { Linking } from 'react-native';
 import { nanoid } from 'nanoid/non-secure';
 
 import { logger, RainbowError } from '@/logger';
@@ -7,10 +6,11 @@ import { FiatProviderName } from '@/entities/f2c';
 import { ProviderConfig } from '@/screens/AddCash/types';
 import { ProviderCard } from '@/screens/AddCash/components/ProviderCard';
 import { ButtonPressAnimation } from '@/components/animations';
-import { analyticsV2 } from '@/analytics';
+import { analytics } from '@/analytics';
 import { rampGetWidgetURL } from '@/resources/f2c';
 import { WrappedAlert } from '@/helpers/alert';
-import * as lang from '@/languages';
+import * as i18n from '@/languages';
+import { openInBrowser } from '@/utils/openInBrowser';
 
 export function Ramp({ accountAddress, config }: { accountAddress: string; config: ProviderConfig }) {
   return (
@@ -30,28 +30,28 @@ export function Ramp({ accountAddress, config }: { accountAddress: string; confi
 
           const { url } = data;
 
-          analyticsV2.track(analyticsV2.event.f2cProviderFlowStarted, {
+          analytics.track(analytics.event.f2cProviderFlowStarted, {
             provider: FiatProviderName.Ramp,
             sessionId,
           });
 
-          logger.info('F2C: opening provider', {
+          logger.debug('[AddCash]: opening provider', {
             provider: FiatProviderName.Ramp,
           });
 
-          Linking.openURL(url);
+          openInBrowser(url, false, true);
         } catch (e) {
-          logger.error(new RainbowError('F2C: failed to open provider'), {
+          logger.error(new RainbowError('[AddCash]: failed to open provider'), {
             provider: FiatProviderName.Ramp,
             message: (e as Error).message,
           });
 
           WrappedAlert.alert(
-            lang.t(lang.l.wallet.add_cash_v2.generic_error.title),
-            lang.t(lang.l.wallet.add_cash_v2.generic_error.message),
+            i18n.t(i18n.l.wallet.add_cash_v2.generic_error.title),
+            i18n.t(i18n.l.wallet.add_cash_v2.generic_error.message),
             [
               {
-                text: lang.t(lang.l.wallet.add_cash_v2.generic_error.button),
+                text: i18n.t(i18n.l.wallet.add_cash_v2.generic_error.button),
               },
             ]
           );

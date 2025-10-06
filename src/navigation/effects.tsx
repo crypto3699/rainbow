@@ -1,8 +1,8 @@
 import React from 'react';
-import { Animated, StatusBar, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { StackNavigationOptions, TransitionPreset } from '@react-navigation/stack';
 
-import { IS_ANDROID, IS_IOS } from '@/env';
+import { IS_ANDROID } from '@/env';
 import { lightModeThemeColors } from '@/styles';
 import { currentColors as colors } from '@/theme';
 import { deviceUtils, safeAreaInsetValues } from '@/utils';
@@ -14,7 +14,7 @@ import { EmojiAvatar, ProfileAvatarSize } from '@/components/asset-list/Recycler
 import { BottomSheetNavigationOptions } from './bottom-sheet/types';
 import { initialWindowMetrics } from 'react-native-safe-area-context';
 
-const statusBarHeight = IS_IOS ? safeAreaInsetValues.top : StatusBar.currentHeight;
+const statusBarHeight = safeAreaInsetValues.top;
 export const sheetVerticalOffset = statusBarHeight;
 
 export const AVATAR_CIRCLE_TOP_MARGIN = android ? 10 : 4;
@@ -392,16 +392,6 @@ export const expandedPreset: StackNavigationOptions = {
   detachPreviousScreen: false,
 };
 
-export const swapSettingsPreset: StackNavigationOptions = {
-  cardOverlayEnabled: true,
-  cardShadowEnabled: true,
-  cardStyle: { backgroundColor: 'transparent', overflow: 'visible' },
-  cardStyleInterpolator: expandStyleInterpolator(1),
-  gestureDirection: 'vertical',
-  gestureResponseDistance,
-  transitionSpec: { close: closeSpec, open: openSpec },
-};
-
 export const overlayExpandedPreset: StackNavigationOptions = {
   cardOverlayEnabled: true,
   cardShadowEnabled: false,
@@ -462,6 +452,10 @@ export const appIconUnlockSheetPreset = ({ route }: any) => ({
   height: (route?.params.longFormHeight || 0) + (initialWindowMetrics?.insets?.bottom || 0),
 });
 
+export const tokenLauncherSheetPreset = {
+  enablePanDownToClose: false,
+};
+
 export const hardwareWalletTxNavigatorPreset = {
   height: HARDWARE_WALLET_TX_NAVIGATOR_SHEET_HEIGHT,
   backdropOpacity: 1,
@@ -510,17 +504,6 @@ export const settingsPreset = ({ route }: any) => ({
   ...sheetPreset({ route }),
   cardStyleInterpolator: sheetStyleInterpolator(0.7),
 });
-
-export const exchangeModalPreset = {
-  cardStyle: { backgroundColor: 'black' },
-  cardStyleInterpolator: () => ({
-    overlayStyle: {
-      backgroundColor: 'black',
-    },
-  }),
-  gestureEnabled: true,
-  gestureResponseDistance,
-};
 
 export const swapDetailsPreset = {
   cardOverlayEnabled: true,

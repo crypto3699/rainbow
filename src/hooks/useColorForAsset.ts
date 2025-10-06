@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { lightModeThemeColors } from '../styles/colors';
 import { ParsedAddressAsset } from '@/entities';
 import { ethereumUtils, isETH, pseudoRandomArrayItemFromString } from '@/utils';
+import { getHighContrastColor } from './useAccountAccentColor';
 import { usePersistentDominantColorFromImage } from './usePersistentDominantColorFromImage';
+import { useTheme } from '@/theme';
 
 export default function useColorForAsset(
   asset: Partial<ParsedAddressAsset> = {},
@@ -10,7 +12,6 @@ export default function useColorForAsset(
   forceLightMode = false,
   forceETHColor = false
 ) {
-  // @ts-expect-error ts-migrate(2304) FIXME: Cannot find name 'useTheme'.
   const { isDarkMode: isDarkModeTheme, colors } = useTheme();
   const accountAsset = ethereumUtils.getAssetFromAllAssets(asset?.uniqueId || asset?.mainnet_address || asset?.address);
   const resolvedAddress = asset?.mainnet_address || asset?.address || accountAsset?.address;
@@ -19,6 +20,10 @@ export default function useColorForAsset(
   const isDarkMode = forceLightMode || isDarkModeTheme;
 
   const colorDerivedFromAddress = useMemo(() => {
+    if (!resolvedAddress) {
+      return undefined;
+    }
+
     const color = isETH(resolvedAddress)
       ? isDarkMode
         ? forceETHColor
@@ -61,10 +66,16 @@ export default function useColorForAsset(
       color2Return = colorDerivedFromAddress;
     }
 
+    if (!color2Return) {
+      color2Return = fallbackColor || colors.blueGreyDark;
+    }
+
     try {
       // brighten up dark colors in dark mode
       if (isDarkMode && colors.isColorDark(color2Return)) {
         return colors.brighten(color2Return);
+      } else if (!isDarkMode) {
+        return getHighContrastColor(color2Return, isDarkMode);
       }
       return color2Return;
     } catch (e) {

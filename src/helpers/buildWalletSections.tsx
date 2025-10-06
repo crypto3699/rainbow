@@ -1,189 +1,279 @@
 import { createSelector } from 'reselect';
 import { buildBriefCoinsList, buildBriefUniqueTokenList } from './assets';
-import { add, convertAmountToNativeDisplay } from './utilities';
-import { NativeCurrencyKey, ParsedAddressAsset } from '@/entities';
-import { queryClient } from '@/react-query';
-import { positionsQueryKey } from '@/resources/defi/PositionsQuery';
-import store from '@/redux/store';
-import { PositionExtraData } from '@/components/asset-list/RecyclerAssetList2/core/ViewTypes';
-import { getExperimetalFlag, DEFI_POSITIONS } from '@/config/experimental';
+import { NativeCurrencyKey, ParsedAddressAsset, UniqueAsset } from '@/entities';
+import { CellType, CellTypes } from '@/components/asset-list/RecyclerAssetList2/core/ViewTypes';
 import { RainbowPositions } from '@/resources/defi/types';
+import { UniqueId } from '@/__swaps__/types/assets';
+import { Language } from '@/languages';
+import { Network } from '@/state/backendNetworks/types';
+import { BooleanMap } from '@/hooks/useCoinListEditOptions';
+import { useExperimentalConfig } from '@/config/experimentalHooks';
+import { ClaimablesStore } from '@/state/claimables/claimables';
+import { AssetListType } from '@/components/asset-list/RecyclerAssetList2';
+import { Collection, CollectionId } from '@/state/nfts/types';
 
-const CONTENT_PLACEHOLDER = [
-  { type: 'LOADING_ASSETS', uid: 'loadings-asset-1' },
-  { type: 'LOADING_ASSETS', uid: 'loadings-asset-2' },
-  { type: 'LOADING_ASSETS', uid: 'loadings-asset-3' },
-  { type: 'LOADING_ASSETS', uid: 'loadings-asset-4' },
-  { type: 'LOADING_ASSETS', uid: 'loadings-asset-5' },
+const CONTENT_PLACEHOLDER: CellTypes[] = [
+  { type: CellType.LOADING_ASSETS, uid: 'loadings-asset-1' },
+  { type: CellType.LOADING_ASSETS, uid: 'loadings-asset-2' },
+  { type: CellType.LOADING_ASSETS, uid: 'loadings-asset-3' },
+  { type: CellType.LOADING_ASSETS, uid: 'loadings-asset-4' },
+  { type: CellType.LOADING_ASSETS, uid: 'loadings-asset-5' },
 ];
 
-const EMPTY_WALLET_CONTENT = [
+const EMPTY_WALLET_CONTENT: CellTypes[] = [
   {
-    type: 'RECEIVE_CARD',
+    type: CellType.RECEIVE_CARD,
     uid: 'receive_card',
   },
-  { type: 'EMPTY_WALLET_SPACER', uid: 'empty-wallet-spacer-1' },
-  { type: 'ETH_CARD', uid: 'eth-card' },
-  { type: 'EMPTY_WALLET_SPACER', uid: 'empty-wallet-spacer-2' },
+  { type: CellType.EMPTY_WALLET_SPACER, uid: 'empty-wallet-spacer-1' },
+  { type: CellType.ETH_CARD, uid: 'eth-card' },
+  { type: CellType.EMPTY_WALLET_SPACER, uid: 'empty-wallet-spacer-2' },
   {
-    type: 'LEARN_CARD',
+    type: CellType.LEARN_CARD,
     uid: 'learn-card',
   },
-  { type: 'BIG_EMPTY_WALLET_SPACER', uid: 'big-empty-wallet-spacer-2' },
+  { type: CellType.BIG_EMPTY_WALLET_SPACER, uid: 'big-empty-wallet-spacer-2' },
   {
-    type: 'DISCOVER_MORE_BUTTON',
+    type: CellType.DISCOVER_MORE_BUTTON,
     uid: 'discover-home-button',
   },
 ];
 
-const ONLY_NFTS_CONTENT = [{ type: 'ETH_CARD', uid: 'eth-card' }];
+const ONLY_NFTS_CONTENT: CellTypes[] = [{ type: CellType.ETH_CARD, uid: 'eth-card' }];
 
-const sortedAssetsSelector = (state: any) => state.sortedAssets;
-const hiddenCoinsSelector = (state: any) => state.hiddenCoins;
-const isCoinListEditedSelector = (state: any) => state.isCoinListEdited;
-const isLoadingUserAssetsSelector = (state: any) => state.isLoadingUserAssets;
-const isReadOnlyWalletSelector = (state: any) => state.isReadOnlyWallet;
-const nativeCurrencySelector = (state: any) => state.nativeCurrency;
-const pinnedCoinsSelector = (state: any) => state.pinnedCoins;
-const sellingTokensSelector = (state: any) => state.sellingTokens;
-const showcaseTokensSelector = (state: any) => state.showcaseTokens;
-const hiddenTokensSelector = (state: any) => state.hiddenTokens;
-const uniqueTokensSelector = (state: any) => state.uniqueTokens;
-const listTypeSelector = (state: any) => state.listType;
+export type WalletSectionsState = {
+  sortedAssets: ParsedAddressAsset[];
+  accountBalanceDisplay: string | undefined;
+  hiddenAssets: Set<UniqueId>;
+  isCoinListEdited: boolean;
+  isLoadingUserAssets: boolean;
+  isLoadingBalance: boolean;
+  isReadOnlyWallet: boolean;
+  isWalletEthZero: boolean;
+  hiddenTokens: string[];
+  listType?: AssetListType;
+  language: Language;
+  network: Network;
+  nativeCurrency: NativeCurrencyKey;
+  pinnedCoins: BooleanMap;
+  sellingTokens?: UniqueAsset[];
+  experimentalConfig: ReturnType<typeof useExperimentalConfig>;
+  showcaseTokens: string[];
+  collections: Map<CollectionId, Collection> | null;
+  isFetchingNfts: boolean;
+  positions: RainbowPositions | null;
+  claimables: ClaimablesStore | null;
+  remoteCards: string[];
+  hasMoreCollections: boolean;
+  isShowcaseDataMigrated: boolean;
+  isHiddenDataMigrated: boolean;
+};
 
-const buildBriefWalletSections = (balanceSectionData: any, uniqueTokenFamiliesSection: any) => {
-  const { balanceSection, isEmpty, isLoadingUserAssets } = balanceSectionData;
-  const positionSection = withPositionsSection(isLoadingUserAssets);
-  const sections = [balanceSection, positionSection, uniqueTokenFamiliesSection];
+const sortedAssetsSelector = (state: WalletSectionsState) => state.sortedAssets;
+const accountBalanceDisplaySelector = (state: WalletSectionsState) => state.accountBalanceDisplay;
+const hiddenAssetsSelector = (state: WalletSectionsState) => state.hiddenAssets;
+const isCoinListEditedSelector = (state: WalletSectionsState) => state.isCoinListEdited;
+const isLoadingUserAssetsSelector = (state: WalletSectionsState) => state.isLoadingUserAssets;
+const isLoadingBalanceSelector = (state: WalletSectionsState) => state.isLoadingBalance;
+const nativeCurrencySelector = (state: WalletSectionsState) => state.nativeCurrency;
+const pinnedCoinsSelector = (state: WalletSectionsState) => state.pinnedCoins;
+const sellingTokensSelector = (state: WalletSectionsState) => state.sellingTokens;
+const showcaseTokensSelector = (state: WalletSectionsState) => state.showcaseTokens;
+const hiddenTokensSelector = (state: WalletSectionsState) => state.hiddenTokens;
+const collectionsSelector = (state: WalletSectionsState) => state.collections;
+const isFetchingNftsSelector = (state: WalletSectionsState) => state.isFetchingNfts;
+const positionsSelector = (state: WalletSectionsState) => state.positions;
+const claimablesSelector = (state: WalletSectionsState) => state.claimables;
+const remoteCardsSelector = (state: WalletSectionsState) => state.remoteCards;
+const hasMoreCollectionsSelector = (state: WalletSectionsState) => state.hasMoreCollections;
+const isShowcaseDataMigratedSelector = (state: WalletSectionsState) => state.isShowcaseDataMigrated;
+const isHiddenDataMigratedSelector = (state: WalletSectionsState) => state.isHiddenDataMigrated;
+const listTypeSelector = (state: WalletSectionsState) => state.listType;
+const isReadOnlyWalletSelector = (state: WalletSectionsState) => state.isReadOnlyWallet;
 
-  const filteredSections = sections.filter(section => section.length !== 0).flat(1);
+interface BalanceSectionData {
+  balanceSection: CellTypes[];
+  isEmpty: boolean;
+  isLoadingUserAssets: boolean;
+}
+
+interface BriefWalletSectionsResult {
+  briefSectionsData: CellTypes[];
+  isEmpty: boolean;
+}
+
+interface BalanceSectionResult {
+  balanceSection: CellTypes[];
+  isLoadingUserAssets: boolean;
+  isEmpty: boolean;
+}
+
+export interface BriefCoinsListResult {
+  briefAssets: CellTypes[];
+  totalBalancesValue: string | number;
+}
+
+const buildBriefWalletSections = (
+  balanceSectionData: BalanceSectionData,
+  uniqueTokenFamiliesSection: CellTypes[],
+  claimables: ClaimablesStore | null,
+  positions: RainbowPositions | null
+): BriefWalletSectionsResult => {
+  const { isEmpty, balanceSection, isLoadingUserAssets } = balanceSectionData;
+
+  const positionsSection = withPositionsSection(positions, isLoadingUserAssets);
+  const claimablesSection = withClaimablesSection(claimables, isLoadingUserAssets);
 
   return {
-    briefSectionsData: filteredSections,
+    briefSectionsData: [...balanceSection, ...claimablesSection, ...positionsSection, ...uniqueTokenFamiliesSection],
     isEmpty,
   };
 };
 
-const withPositionsSection = (isLoadingUserAssets: boolean) => {
-  // check if the feature is enabled
-  const positionsEnabled = getExperimetalFlag(DEFI_POSITIONS);
-  if (!positionsEnabled) return [];
+const withPositionsSection = (positions: RainbowPositions | null, isLoadingUserAssets: boolean): CellTypes[] => {
+  if (isLoadingUserAssets || !positions?.positions || Object.keys(positions.positions).length === 0) return [];
 
-  const { accountAddress: address, nativeCurrency: currency } = store.getState().settings;
-  const positionsObj: RainbowPositions | undefined = queryClient.getQueryData(positionsQueryKey({ address, currency }));
-
-  const result: PositionExtraData[] = [];
-  const sortedPositions = positionsObj?.positions?.sort((a, b) => (a.totals.totals.amount > b.totals.totals.amount ? -1 : 1));
-  sortedPositions?.forEach((position, index) => {
-    const listData = {
-      type: 'POSITION',
-      uniqueId: position.type,
+  const positionSectionItems: CellTypes[] = Object.values(positions.positions).map((position, index) => {
+    return {
+      type: CellType.POSITION,
+      position,
       uid: `position-${position.type}`,
       index,
     };
-    result.push(listData);
   });
-  if (result.length && !isLoadingUserAssets) {
-    const res = [
-      {
-        type: 'POSITIONS_SPACE_BEFORE',
-        uid: 'positions-header-space-before',
-      },
-      {
-        type: 'POSITIONS_HEADER',
-        uid: 'positions-header',
-        total: positionsObj?.totals.total.display,
-      },
-      ...result,
-    ];
 
-    return res;
-  }
-  return [];
+  return [
+    {
+      type: CellType.POSITIONS_SPACE_BEFORE,
+      uid: 'positions-spacer-before',
+    },
+    {
+      type: CellType.POSITIONS_HEADER,
+      uid: 'positions-header',
+      total: positions.totals?.total?.display,
+    },
+    ...positionSectionItems,
+  ];
+};
+
+const withClaimablesSection = (claimables: ClaimablesStore | null, isLoadingUserAssets: boolean): CellTypes[] => {
+  if (isLoadingUserAssets || !claimables?.claimables?.length) return [];
+
+  const claimableSectionItems: CellTypes[] = claimables.claimables.map(claimable => {
+    return {
+      type: CellType.CLAIMABLE,
+      claimable,
+      uid: `claimable-${claimable.uniqueId}`,
+    };
+  });
+
+  return [
+    {
+      type: CellType.CLAIMABLES_SPACE_BEFORE,
+      uid: 'claimables-spacer-before',
+    },
+    {
+      type: CellType.CLAIMABLES_HEADER,
+      uid: 'claimables-header',
+      total: claimables.totalValue,
+    },
+    {
+      type: CellType.CLAIMABLES_SPACE_AFTER,
+      uid: 'claimables-spacer-after',
+    },
+    ...claimableSectionItems,
+  ];
 };
 
 const withBriefBalanceSection = (
   sortedAssets: ParsedAddressAsset[],
   isLoadingUserAssets: boolean,
+  isLoadingBalance: boolean,
+  accountBalanceDisplay: string | undefined,
   nativeCurrency: NativeCurrencyKey,
   isCoinListEdited: boolean,
-  pinnedCoins: any,
-  hiddenCoins: any,
-  collectibles: any,
-  nftSort: string
-) => {
-  const { briefAssets, totalBalancesValue } = buildBriefCoinsList(sortedAssets, nativeCurrency, isCoinListEdited, pinnedCoins, hiddenCoins);
-
-  const { accountAddress: address } = store.getState().settings;
-  const positionsObj: RainbowPositions | undefined = queryClient.getQueryData(positionsQueryKey({ address, currency: nativeCurrency }));
-
-  const positionsTotal = positionsObj?.totals?.total?.amount || '0';
-
-  const totalBalanceWithPositionsValue = add(totalBalancesValue, positionsTotal);
-
-  const totalValue = convertAmountToNativeDisplay(totalBalanceWithPositionsValue, nativeCurrency);
+  pinnedCoins: BooleanMap,
+  hiddenAssets: Set<UniqueId>,
+  collections: Map<CollectionId, Collection> | null,
+  remoteCards: string[]
+): BalanceSectionResult => {
+  const { briefAssets } = buildBriefCoinsList(sortedAssets, nativeCurrency, isCoinListEdited, pinnedCoins, hiddenAssets);
 
   const hasTokens = briefAssets?.length;
-  const hasNFTs = collectibles?.length;
-
-  const isEmpty = !hasTokens && !hasNFTs;
+  const hasNFTs = (collections?.size ?? 0) > 0;
   const hasNFTsOnly = !hasTokens && hasNFTs;
 
-  const header = [
+  const isEmpty = !hasTokens && !hasNFTs;
+  const shouldHideBalanceRow = !isLoadingUserAssets && !isLoadingBalance && !hasTokens;
+
+  const balanceSection: CellTypes[] = shouldHideBalanceRow
+    ? []
+    : [
+        {
+          type: CellType.PROFILE_BALANCE_ROW,
+          uid: 'profile-balance',
+          value: accountBalanceDisplay,
+          isLoadingBalance,
+        },
+        {
+          type: CellType.PROFILE_BALANCE_ROW_SPACE_AFTER,
+          uid: 'profile-balance-space-after',
+        },
+      ];
+
+  let spacer: CellTypes[] = [];
+  if (!hasTokens) {
+    spacer = [
+      {
+        type: CellType.BIG_EMPTY_WALLET_SPACER,
+        uid: 'big-empty-wallet-spacer-1',
+      },
+    ];
+  } else {
+    spacer = [
+      {
+        type: CellType.PROFILE_ACTION_BUTTONS_ROW_SPACE_AFTER,
+        uid: 'profile-action-buttons-space-after',
+        value: accountBalanceDisplay,
+      },
+    ];
+  }
+
+  const header: CellTypes[] = [
     {
-      type: 'PROFILE_STICKY_HEADER',
+      type: CellType.PROFILE_STICKY_HEADER,
       uid: 'assets-profile-header-compact',
-      value: totalValue,
-      isLoadingUserAssets,
     },
     {
-      type: 'PROFILE_AVATAR_ROW_SPACE_BEFORE',
+      type: CellType.PROFILE_AVATAR_ROW_SPACE_BEFORE,
       uid: 'profile-avatar-space-before',
     },
     {
-      type: 'PROFILE_AVATAR_ROW',
+      type: CellType.PROFILE_AVATAR_ROW,
       uid: 'profile-avatar',
     },
     {
-      type: 'PROFILE_AVATAR_ROW_SPACE_AFTER',
+      type: CellType.PROFILE_AVATAR_ROW_SPACE_AFTER,
       uid: 'profile-avatar-space-after',
     },
     {
-      type: 'PROFILE_NAME_ROW',
+      type: CellType.PROFILE_NAME_ROW,
       uid: 'profile-name',
     },
     {
-      type: 'PROFILE_NAME_ROW_SPACE_AFTER',
+      type: CellType.PROFILE_NAME_ROW_SPACE_AFTER,
       uid: 'profile-name-space-after',
     },
-    ...(!hasTokens && !isLoadingUserAssets
-      ? []
-      : [
-          {
-            type: 'PROFILE_BALANCE_ROW',
-            uid: 'profile-balance',
-            value: totalValue,
-          },
-          {
-            type: 'PROFILE_BALANCE_ROW_SPACE_AFTER',
-            uid: 'profile-balance-space-after',
-          },
-        ]),
+    ...balanceSection,
     {
-      type: 'PROFILE_ACTION_BUTTONS_ROW',
+      type: CellType.PROFILE_ACTION_BUTTONS_ROW,
       uid: 'profile-action-buttons',
-      value: totalValue,
+      value: accountBalanceDisplay,
     },
-    hasTokens
-      ? {
-          type: 'PROFILE_ACTION_BUTTONS_ROW_SPACE_AFTER',
-          uid: 'profile-action-buttons-space-after',
-          value: totalValue,
-        }
-      : { type: 'BIG_EMPTY_WALLET_SPACER', uid: 'big-empty-wallet-spacer-1' },
+    ...spacer,
   ];
 
-  let content = CONTENT_PLACEHOLDER;
+  let content: CellTypes[] = CONTENT_PLACEHOLDER;
 
   if (hasTokens) {
     content = briefAssets;
@@ -195,29 +285,45 @@ const withBriefBalanceSection = (
     content = EMPTY_WALLET_CONTENT;
   }
 
-  return {
-    balanceSection: [
-      ...header,
+  if (remoteCards.length) {
+    content = [
       {
-        type: 'REMOTE_CARD_CAROUSEL',
+        type: CellType.REMOTE_CARD_CAROUSEL,
         uid: 'remote-card-carousel',
       },
       ...content,
-    ],
+    ];
+  } else {
+    content = [
+      {
+        type: CellType.EMPTY_REMOTE_CARD_CAROUSEL,
+        uid: 'empty-remote-card-carousel',
+      },
+      ...content,
+    ];
+  }
+
+  const result = {
+    balanceSection: [...header, ...content],
     isLoadingUserAssets,
     isEmpty,
   };
+
+  return result;
 };
 
 const briefUniqueTokenDataSelector = createSelector(
   [
-    uniqueTokensSelector,
-    showcaseTokensSelector,
+    collectionsSelector,
     sellingTokensSelector,
+    showcaseTokensSelector,
     hiddenTokensSelector,
     listTypeSelector,
+    isFetchingNftsSelector,
+    hasMoreCollectionsSelector,
+    isShowcaseDataMigratedSelector,
+    isHiddenDataMigratedSelector,
     isReadOnlyWalletSelector,
-    (state: any, nftSort: string) => nftSort,
   ],
   buildBriefUniqueTokenList
 );
@@ -226,16 +332,19 @@ const briefBalanceSectionSelector = createSelector(
   [
     sortedAssetsSelector,
     isLoadingUserAssetsSelector,
+    isLoadingBalanceSelector,
+    accountBalanceDisplaySelector,
     nativeCurrencySelector,
     isCoinListEditedSelector,
     pinnedCoinsSelector,
-    hiddenCoinsSelector,
-    uniqueTokensSelector,
+    hiddenAssetsSelector,
+    collectionsSelector,
+    remoteCardsSelector,
   ],
   withBriefBalanceSection
 );
 
 export const buildBriefWalletSectionsSelector = createSelector(
-  [briefBalanceSectionSelector, (state: any, nftSort: string) => briefUniqueTokenDataSelector(state, nftSort)],
+  [briefBalanceSectionSelector, briefUniqueTokenDataSelector, claimablesSelector, positionsSelector],
   buildBriefWalletSections
 );

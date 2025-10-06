@@ -1,18 +1,19 @@
-import { useRoute } from '@react-navigation/native';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useMemo } from 'react';
 import { Keyboard, Share } from 'react-native';
-import { MenuActionConfig } from 'react-native-ios-context-menu';
-import { showDeleteContactActionSheet } from '../../contacts';
+import { IS_ANDROID, IS_IOS } from '@/env';
+import { showDeleteContactActionSheet } from '@/components/contacts';
 import More from '../MoreButton/MoreButton';
 import ContextMenuButton from '@/components/native-context-menu/contextMenu';
-import { useClipboard, useContacts, useWallets, useWatchWallet } from '@/hooks';
+import { useClipboard, useContacts, useWatchWallet } from '@/hooks';
+import { useSelectedWallet } from '@/state/wallets/walletsStore';
 import { useNavigation } from '@/navigation';
 import { RAINBOW_PROFILES_BASE_URL } from '@/references';
 import Routes from '@/navigation/routesNames';
-import { ethereumUtils } from '@/utils';
+import { ethereumUtils, isLowerCaseMatch } from '@/utils';
 import { formatAddressForDisplay } from '@/utils/abbreviations';
-import { Network } from '@/networks/types';
+import { ChainId } from '@/state/backendNetworks/types';
+import { switchWallet } from '@/state/wallets/switchWallet';
 
 const ACTIONS = {
   ADD_CONTACT: 'add-contact',
@@ -24,19 +25,17 @@ const ACTIONS = {
 };
 
 export default function MoreButton({ address, ensName }: { address?: string; ensName?: string }) {
-  const { switchToWalletWithAddress, selectedWallet } = useWallets();
+  const selectedWallet = useSelectedWallet();
   const { isWatching } = useWatchWallet({ address });
   const { navigate } = useNavigation();
   const { setClipboard } = useClipboard();
   const { contacts, onRemoveContact } = useContacts();
-  const {
-    params: { setIsSearchModeEnabled },
-  } = useRoute<any>();
   const isSelectedWallet = useMemo(() => {
-    const visibleWallet = selectedWallet.addresses.find((wallet: { visible: boolean }) => wallet.visible);
+    if (!selectedWallet?.addresses) return false;
 
-    return visibleWallet.address.toLowerCase() === address?.toLowerCase();
-  }, [selectedWallet.addresses, address]);
+    const visibleWallet = selectedWallet.addresses.find(wallet => wallet.visible);
+    return isLowerCaseMatch(visibleWallet?.address || '', address);
+  }, [selectedWallet, address]);
 
   const contact = address ? contacts[address.toLowerCase()] : undefined;
 
@@ -44,17 +43,21 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
 
   const menuItems = useMemo(() => {
     return [
-      isWatching && {
-        actionKey: ACTIONS.OPEN_WALLET,
-        actionTitle: lang.t('profiles.details.open_wallet'),
-        icon: {
-          iconType: 'SYSTEM',
-          iconValue: 'iphone.and.arrow.forward',
-        },
-      },
+      ...(isWatching
+        ? [
+            {
+              actionKey: ACTIONS.OPEN_WALLET,
+              actionTitle: i18n.t(i18n.l.profiles.details.open_wallet),
+              icon: {
+                iconType: 'SYSTEM',
+                iconValue: 'iphone.and.arrow.forward',
+              },
+            },
+          ]
+        : []),
       {
         actionKey: ACTIONS.COPY_ADDRESS,
-        actionTitle: lang.t('profiles.details.copy_address'),
+        actionTitle: i18n.t(i18n.l.profiles.details.copy_address),
         discoverabilityTitle: formattedAddress,
         icon: {
           iconType: 'SYSTEM',
@@ -64,7 +67,7 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
       contact
         ? {
             actionKey: ACTIONS.REMOVE_CONTACT,
-            actionTitle: lang.t('profiles.details.remove_from_contacts'),
+            actionTitle: i18n.t(i18n.l.profiles.details.remove_from_contacts),
             icon: {
               iconType: 'SYSTEM',
               iconValue: 'person.crop.circle.badge.minus',
@@ -72,7 +75,7 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
           }
         : {
             actionKey: ACTIONS.ADD_CONTACT,
-            actionTitle: lang.t('profiles.details.add_to_contacts'),
+            actionTitle: i18n.t(i18n.l.profiles.details.add_to_contacts),
             icon: {
               iconType: 'SYSTEM',
               iconValue: 'person.crop.circle.badge.plus',
@@ -80,7 +83,7 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
           },
       {
         actionKey: ACTIONS.ETHERSCAN,
-        actionTitle: lang.t('profiles.details.view_on_etherscan'),
+        actionTitle: i18n.t(i18n.l.profiles.details.view_on_etherscan),
         icon: {
           iconType: 'SYSTEM',
           iconValue: 'link',
@@ -88,13 +91,13 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
       },
       {
         actionKey: ACTIONS.SHARE,
-        actionTitle: lang.t('profiles.details.share'),
+        actionTitle: i18n.t(i18n.l.profiles.details.share),
         icon: {
           iconType: 'SYSTEM',
           iconValue: 'square.and.arrow.up',
         },
       },
-    ].filter(Boolean) as MenuActionConfig[];
+    ].filter(Boolean);
   }, [isWatching, formattedAddress, contact]);
 
   const handlePressMenuItem = useCallback(
@@ -102,8 +105,7 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
     async ({ nativeEvent: { actionKey } }) => {
       if (actionKey === ACTIONS.OPEN_WALLET) {
         if (!isSelectedWallet) {
-          setIsSearchModeEnabled?.(false);
-          switchToWalletWithAddress(address!);
+          switchWallet(address!);
         }
         navigate(Routes.WALLET_SCREEN);
       }
@@ -111,7 +113,7 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
         setClipboard(address!);
       }
       if (address && actionKey === ACTIONS.ETHERSCAN) {
-        ethereumUtils.openAddressInBlockExplorer(address, Network.mainnet);
+        ethereumUtils.openAddressInBlockExplorer({ address, chainId: ChainId.mainnet });
       }
       if (actionKey === ACTIONS.ADD_CONTACT) {
         navigate(Routes.MODAL_SCREEN, {
@@ -128,33 +130,23 @@ export default function MoreButton({ address, ensName }: { address?: string; ens
           nickname: contact!.nickname,
           removeContact: onRemoveContact,
         });
-        android && Keyboard.dismiss();
+        IS_ANDROID && Keyboard.dismiss();
       }
       if (actionKey === ACTIONS.SHARE) {
         const walletDisplay = ensName || address;
         const shareLink = `${RAINBOW_PROFILES_BASE_URL}/${walletDisplay}`;
-        Share.share(android ? { message: shareLink } : { url: shareLink });
+        Share.share(IS_ANDROID ? { message: shareLink } : { url: shareLink });
       }
     },
-    [
-      address,
-      contact,
-      ensName,
-      isSelectedWallet,
-      navigate,
-      onRemoveContact,
-      setClipboard,
-      setIsSearchModeEnabled,
-      switchToWalletWithAddress,
-    ]
+    [address, contact, ensName, isSelectedWallet, navigate, onRemoveContact, setClipboard]
   );
 
-  const menuConfig = useMemo(() => ({ menuItems, ...(ios && { menuTitle: '' }) }), [menuItems]);
+  const menuConfig = useMemo(() => ({ menuItems, ...(IS_IOS && { menuTitle: '' }) }), [menuItems]);
   return (
     <ContextMenuButton
       enableContextMenu
       menuConfig={menuConfig}
-      {...(android ? { handlePressMenuItem } : {})}
+      {...(IS_ANDROID ? { handlePressMenuItem } : {})}
       isMenuPrimaryAction
       onPressMenuItem={handlePressMenuItem}
       useActionSheetFallback={false}

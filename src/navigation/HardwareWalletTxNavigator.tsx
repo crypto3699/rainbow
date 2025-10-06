@@ -1,20 +1,20 @@
-import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import React, { useCallback, useEffect } from 'react';
-import Routes from '@/navigation/routesNames';
+import { SimpleSheet } from '@/components/sheet/SimpleSheet';
 import { BackgroundProvider } from '@/design-system';
-import { useDimensions, useWallets } from '@/hooks';
+import { useDimensions } from '@/hooks';
+import { useLedgerConnect } from '@/hooks/useLedgerConnect';
+import { logger } from '@/logger';
+import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
 import { PairHardwareWalletAgainSheet } from '@/screens/hardware-wallets/PairHardwareWalletAgainSheet';
 import { PairHardwareWalletErrorSheet } from '@/screens/hardware-wallets/PairHardwareWalletErrorSheet';
-import { SimpleSheet } from '@/components/sheet/SimpleSheet';
-import { useLedgerConnect } from '@/hooks/useLedgerConnect';
 import { LEDGER_ERROR_CODES } from '@/utils/ledger';
-import { useNavigation } from '@/navigation';
-import { logger } from '@/logger';
-import { DebugContext } from '@/logger/debugContext';
-// eslint-disable-next-line no-restricted-imports
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import React, { useCallback, useEffect } from 'react';
+import { useSelectedWallet } from '@/state/wallets/walletsStore';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { atom, useRecoilState } from 'recoil';
 import { MMKV } from 'react-native-mmkv';
+import { atom, useRecoilState, useSetRecoilState } from 'recoil';
+import { RootStackParamList } from './types';
 
 export const ledgerStorage = new MMKV({
   id: 'ledgerStorage',
@@ -23,21 +23,13 @@ export const ledgerStorage = new MMKV({
 export const HARDWARE_TX_ERROR_KEY = 'hardwareTXError';
 
 export const setHardwareTXError = (value: boolean) => {
-  logger.info(`setHardwareTXError`, { value });
+  logger.warn(`[HardwareWalletTxNavigator]: setHardwareTXError`, { value });
   ledgerStorage.set(HARDWARE_TX_ERROR_KEY, value);
 };
 
 const Swipe = createMaterialTopTabNavigator();
 
 export const HARDWARE_WALLET_TX_NAVIGATOR_SHEET_HEIGHT = 534;
-
-export type HardwareWalletTxParams = {
-  submit: () => void;
-};
-
-type RouteParams = {
-  HardwareWalletTxParams: HardwareWalletTxParams;
-};
 
 // atoms used for navigator state
 export const LedgerIsReadyAtom = atom({
@@ -56,17 +48,17 @@ export const triggerPollerCleanupAtom = atom({
 
 export const HardwareWalletTxNavigator = () => {
   const { width, height } = useDimensions();
-  const { selectedWallet } = useWallets();
+  const selectedWallet = useSelectedWallet();
   const {
     params: { submit },
-  } = useRoute<RouteProp<RouteParams, 'HardwareWalletTxParams'>>();
+  } = useRoute<RouteProp<RootStackParamList, typeof Routes.PAIR_HARDWARE_WALLET_AGAIN_SHEET>>();
 
   const { navigate } = useNavigation();
 
-  const deviceId = selectedWallet?.deviceId;
+  const deviceId = selectedWallet?.deviceId ?? '';
   const [isReady, setIsReady] = useRecoilState(LedgerIsReadyAtom);
   const [readyForPolling, setReadyForPolling] = useRecoilState(readyForPollingAtom);
-  const [triggerPollerCleanup, setTriggerPollerCleanup] = useRecoilState(triggerPollerCleanupAtom);
+  const setTriggerPollerCleanup = useSetRecoilState(triggerPollerCleanupAtom);
 
   const errorCallback = useCallback(
     (errorType: LEDGER_ERROR_CODES) => {
@@ -83,14 +75,14 @@ export const HardwareWalletTxNavigator = () => {
   );
 
   const successCallback = useCallback(() => {
-    logger.debug('[LedgerTx] - submitting tx', {}, DebugContext.ledger);
+    logger.debug('[HardwareWalletTxNavigator]: submitting tx', {});
     if (!isReady) {
       setReadyForPolling(false);
       setIsReady(true);
       setHardwareTXError(false);
       submit();
     } else {
-      logger.debug('[LedgerTx] - already submitted', {}, DebugContext.ledger);
+      logger.debug('[HardwareWalletTxNavigator]: already submitted', {});
     }
   }, [isReady, setIsReady, setReadyForPolling, submit]);
 

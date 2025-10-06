@@ -1,12 +1,14 @@
-import { useNavigation } from '@react-navigation/native';
+import { useDeleteWallet, useImportingWallet } from '@/hooks';
+import { logger, RainbowError } from '@/logger';
+import { cleanUpWalletKeys, RainbowWallet } from '@/model/wallet';
+import Routes from '@/navigation/routesNames';
+import { setSelectedWallet, useAccountAddress, useWallets } from '@/state/wallets/walletsStore';
+import { doesWalletsContainAddress } from '@/utils';
+import { useNavigation } from '@/navigation/Navigation';
 import { useCallback, useMemo } from 'react';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import { useDispatch } from 'react-redux';
-import { useAccountProfile, useDeleteWallet, useImportingWallet, useInitializeWallet, useWallets } from '@/hooks';
-import { cleanUpWalletKeys, RainbowWallet } from '@/model/wallet';
-import { addressSetSelected, walletsSetSelected } from '@/redux/wallets';
-import Routes from '@/navigation/routesNames';
-import { doesWalletsContainAddress, logger } from '@/utils';
+import { walletLoadingStore } from '@/state/walletLoading/walletLoading';
+import { initializeWallet } from '@/state/wallets/initializeWallet';
 
 export default function useWatchWallet({
   address: primaryAddress,
@@ -19,49 +21,61 @@ export default function useWatchWallet({
   avatarUrl?: string | null;
   showImportModal?: boolean;
 }) {
-  const dispatch = useDispatch();
   const { goBack, navigate } = useNavigation();
-  const { wallets } = useWallets();
+  const wallets = useWallets();
 
   const watchingWallet = useMemo(() => {
-    return Object.values<RainbowWallet>(wallets || {}).find(wallet => wallet.addresses.some(({ address }) => address === primaryAddress));
+    return Object.values<RainbowWallet>(wallets || {}).find(wallet =>
+      (wallet.addresses || []).some(({ address }) => address === primaryAddress)
+    );
   }, [primaryAddress, wallets]);
   const isWatching = useMemo(() => Boolean(watchingWallet), [watchingWallet]);
 
   const deleteWallet = useDeleteWallet({ address: primaryAddress });
 
-  const initializeWallet = useInitializeWallet();
   const changeAccount = useCallback(
     async (walletId: string, address: string) => {
-      const wallet = wallets![walletId];
+      const wallet = (wallets || {})[walletId];
       try {
-        const p1 = dispatch(walletsSetSelected(wallet));
-        const p2 = dispatch(addressSetSelected(address));
-        await Promise.all([p1, p2]);
-
-        // @ts-expect-error ts-migrate(2554) FIXME: Expected 8-9 arguments, but got 7.
-        initializeWallet(null, null, null, false, false, null, true);
+        await setSelectedWallet(wallet, address);
+        await initializeWallet({
+          shouldRunMigrations: false,
+          overwrite: false,
+          switching: true,
+        });
       } catch (e) {
-        logger.log('error while switching account', e);
+        logger.error(new RainbowError(`[useWatchWallet]: error while switching account`, e), {
+          error: (e as Error)?.message || 'Unknown error',
+        });
       }
     },
-    [dispatch, initializeWallet, wallets]
+    [wallets]
   );
 
-  const { accountAddress } = useAccountProfile();
+  const accountAddress = useAccountAddress();
   const { isImporting, handleSetSeedPhrase, handlePressImportButton } = useImportingWallet({
     showImportModal,
   });
   const watchWallet = useCallback(async () => {
     if (!isWatching) {
       handleSetSeedPhrase(ensName ?? '');
-      handlePressImportButton(null, ensName, null, avatarUrl);
+      await handlePressImportButton({
+        forceAddress: ensName,
+        avatarUrl: avatarUrl ?? undefined,
+      });
+
+      // NOTE: Make sure this is cleaned up due to the ProfileSheet calling this function directly
+      if (walletLoadingStore.getState().loadingState) {
+        walletLoadingStore.setState({
+          loadingState: null,
+        });
+      }
     } else {
       // If there's more than 1 account,
       // it's deletable
-      const isLastAvailableWallet = Object.keys(wallets!).find(key => {
-        const someWallet = wallets![key];
-        const otherAccount = someWallet.addresses.find((account: any) => account.visible && account.address !== accountAddress);
+      const isLastAvailableWallet = Object.keys(wallets || {}).find(key => {
+        const someWallet = (wallets || {})[key];
+        const otherAccount = someWallet.addresses?.find(account => account.visible && account.address !== accountAddress);
         if (otherAccount) {
           return true;
         }
@@ -80,7 +94,7 @@ export default function useWatchWallet({
           const { wallet: foundWallet, key } =
             doesWalletsContainAddress({
               address: primaryAddress,
-              wallets: wallets!,
+              wallets: wallets || {},
             }) || {};
           if (foundWallet && key) {
             await changeAccount(key, foundWallet.address);

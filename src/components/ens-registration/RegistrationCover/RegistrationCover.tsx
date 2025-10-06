@@ -1,8 +1,7 @@
 import ConditionalWrap from 'conditional-wrap';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Image } from 'react-native-image-crop-picker';
 import RadialGradient from 'react-native-radial-gradient';
 import { atom, useSetRecoilState } from 'recoil';
 import ButtonPressAnimation from '../../animations/ButtonPressAnimation';
@@ -14,8 +13,9 @@ import { useENSModifiedRegistration, useENSRegistration, useENSRegistrationForm,
 import { ImgixImage } from '@/components/images';
 import { magicMemo, stringifyENSNFTRecord } from '@/utils';
 import { ENS_RECORDS } from '@/helpers/ens';
+import { ImagePickerAsset } from 'expo-image-picker';
 
-export const coverMetadataAtom = atom<Image | undefined>({
+export const coverMetadataAtom = atom<ImagePickerAsset | undefined>({
   default: undefined,
   key: 'ens.coverMetadata',
 });
@@ -50,14 +50,14 @@ const RegistrationCover = ({
 
   const setCoverMetadata = useSetRecoilState(coverMetadataAtom);
   const onChangeImage = useCallback(
-    ({ asset, image }: { asset?: UniqueAsset; image?: Image & { tmpPath?: string } }) => {
+    ({ asset, image }: { asset?: UniqueAsset; image?: ImagePickerAsset }) => {
       setCoverMetadata(image);
-      setCoverUrl(image?.tmpPath || asset?.image_url || asset?.lowResUrl || asset?.image_thumbnail_url || '');
+      setCoverUrl(image?.uri || asset?.images.highResUrl || asset?.images.lowResUrl || '');
 
       if (asset) {
-        const standard = asset.asset_contract?.schema_name || '';
-        const contractAddress = asset.asset_contract?.address || '';
-        const tokenId = asset.id;
+        const standard = asset.standard || '';
+        const contractAddress = asset.contractAddress || '';
+        const tokenId = asset.tokenId;
         onBlurField({
           key: 'header',
           value: stringifyENSNFTRecord({
@@ -66,13 +66,13 @@ const RegistrationCover = ({
             tokenId,
           }),
         });
-      } else if (image?.tmpPath) {
+      } else if (image?.uri) {
         // We want to disallow future avatar state changes (i.e. when upload successful)
         // to avoid avatar flashing (from temp URL to uploaded URL).
         setCoverUpdateAllowed(false);
         onBlurField({
           key: 'header',
-          value: image.tmpPath,
+          value: image.uri,
         });
       }
     },
@@ -83,7 +83,9 @@ const RegistrationCover = ({
 
   const { ContextMenu, handleSelectImage } = useSelectImageMenu({
     imagePickerOptions: {
-      cropping: true,
+      allowsEditing: true,
+      aspect: [3, 1],
+      quality: 1,
       height: 500,
       width: 1500,
     },
@@ -145,7 +147,7 @@ const RegistrationCover = ({
         >
           {(!coverUrl || isUploading || isLoadingImage) && (
             <Text align="center" color="accent" size="18px / 27px (Deprecated)" weight="heavy">
-              􀣵 {isUploading || isLoadingImage ? lang.t('profiles.create.uploading') : lang.t('profiles.create.add_cover')}
+              􀣵 {isUploading || isLoadingImage ? i18n.t(i18n.l.profiles.create.uploading) : i18n.t(i18n.l.profiles.create.add_cover)}
             </Text>
           )}
         </Box>

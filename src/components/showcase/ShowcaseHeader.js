@@ -1,18 +1,19 @@
-import lang from 'i18n-js';
-import React, { createContext, useCallback, useContext, useMemo } from 'react';
-import { ColumnWithMargins } from '../layout';
-import AvatarCircle from '../profile/AvatarCircle';
-import SheetHandle from '../sheet/SheetHandle';
-import { SheetActionButton, SheetActionButtonRow } from '../sheet/sheet-action-buttons';
-import { Text, TruncatedAddress } from '../text';
 import { getContacts } from '@/handlers/localstorage/contacts';
 import { isHexString } from '@/handlers/web3';
-import { useImportingWallet, useWallets } from '@/hooks';
+import { useImportingWallet } from '@/hooks';
 import { useNavigation } from '@/navigation';
 import Routes from '@/navigation/routesNames';
 import styled from '@/styled-thing';
 import { colors, padding } from '@/styles';
 import { abbreviations, profileUtils } from '@/utils';
+import * as i18n from '@/languages';
+import React, { createContext, useCallback, useContext, useMemo } from 'react';
+import { useIsReadOnlyWallet } from '@/state/wallets/walletsStore';
+import { ColumnWithMargins } from '../layout';
+import AvatarCircle from '../profile/AvatarCircle';
+import SheetHandle from '../sheet/SheetHandle';
+import { SheetActionButton, SheetActionButtonRow } from '../sheet/sheet-action-buttons';
+import { Text, TruncatedAddress } from '../text';
 
 export const ShowcaseContext = createContext();
 
@@ -79,7 +80,7 @@ function hashCode(text) {
 export function Header() {
   const { goBack, navigate } = useNavigation();
   const contextValue = useContext(ShowcaseContext);
-  const { isReadOnlyWallet } = useWallets();
+  const isReadOnlyWallet = useIsReadOnlyWallet();
 
   const { colors } = useTheme();
 
@@ -135,9 +136,6 @@ export function Header() {
   const { handleSetSeedPhrase, handlePressImportButton } = useImportingWallet();
 
   const onWatchAddress = useCallback(() => {
-    if (contextValue?.setIsSearchModeEnabled) {
-      contextValue.setIsSearchModeEnabled(false);
-    }
     handleSetSeedPhrase(contextValue.address);
     handlePressImportButton(color, contextValue.address, contextValue?.data?.profile?.accountSymbol);
   }, [contextValue, handleSetSeedPhrase, handlePressImportButton, color]);
@@ -159,7 +157,7 @@ export function Header() {
         <SheetActionButtonRow ignorePaddingBottom>
           <SheetActionButton
             color={color}
-            label={` 􀜖 ${lang.t('button.add')}`}
+            label={` 􀜖 ${i18n.t(i18n.l.button.add)}`}
             onPress={onAddToContact}
             size="big"
             textColor={colors.whiteLabel}
@@ -168,7 +166,7 @@ export function Header() {
           {!isReadOnlyWallet && (
             <SheetActionButton
               color={color}
-              label={` 􀈠 ${lang.t('button.send')}`}
+              label={` 􀈠 ${i18n.t(i18n.l.button.send)}`}
               onPress={onSend}
               size="big"
               textColor={colors.whiteLabel}
@@ -180,7 +178,7 @@ export function Header() {
         <SheetActionButtonRow ignorePaddingBottom>
           <SheetActionButton
             color={colors.blueGreyDark30}
-            label={`􀨭 ${lang.t('button.watch_this_wallet')}`}
+            label={`􀨭 ${i18n.t(i18n.l.button.watch_this_wallet)}`}
             onPress={onWatchAddress}
             size="big"
             textColor={colors.whiteLabel}

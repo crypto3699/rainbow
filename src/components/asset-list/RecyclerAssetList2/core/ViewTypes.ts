@@ -1,7 +1,9 @@
 import { RecyclerListView, RecyclerListViewProps } from 'recyclerlistview';
 import { RecyclerListViewState } from 'recyclerlistview/dist/reactnative/core/RecyclerListView';
 import { UniqueAsset } from '@/entities';
-
+import { NftCollectionSortCriterion } from '@/graphql/__generated__/arc';
+import { Claimable } from '@/resources/addys/claimables/types';
+import { RainbowPosition } from '@/resources/defi/types';
 export enum CellType {
   ASSETS_HEADER_SPACE_AFTER = 'ASSETS_HEADER_SPACE_AFTER',
   COIN = 'COIN',
@@ -17,16 +19,28 @@ export enum CellType {
   PROFILE_NAME_ROW_SPACE_AFTER = 'PROFILE_NAME_ROW_SPACE_AFTER',
   PROFILE_STICKY_HEADER = 'PROFILE_STICKY_HEADER',
   NFTS_HEADER = 'NFTS_HEADER',
+  NFTS_LOADING = 'NFTS_LOADING',
+  NFTS_EMPTY = 'NFTS_EMPTY',
   NFTS_HEADER_SPACE_BEFORE = 'NFTS_HEADER_SPACE_BEFORE',
   NFTS_HEADER_SPACE_AFTER = 'NFTS_HEADER_SPACE_AFTER',
   FAMILY_HEADER = 'FAMILY_HEADER',
   NFT = 'NFT',
   NFT_SPACE_AFTER = 'NFT_SPACE_AFTER',
 
+  // @deprecated - use NFT instead
+  LEGACY_NFT = 'LEGACY_NFT',
+  // @deprecated - use FAMILY_HEADER instead
+  LEGACY_FAMILY_HEADER = 'LEGACY_FAMILY_HEADER',
+
   POSITIONS_SPACE_BEFORE = 'POSITIONS_SPACE_BEFORE',
   POSITIONS_HEADER = 'POSITIONS_HEADER',
   POSITION = 'POSITION',
   POSITIONS_SPACE_AFTER = 'POSITIONS_SPACE_AFTER',
+
+  CLAIMABLES_SPACE_BEFORE = 'CLAIMABLES_SPACE_BEFORE',
+  CLAIMABLES_HEADER = 'CLAIMABLES_HEADER',
+  CLAIMABLE = 'CLAIMABLE',
+  CLAIMABLES_SPACE_AFTER = 'CLAIMABLES_SPACE_AFTER',
 
   LOADING_ASSETS = 'LOADING_ASSETS',
   RECEIVE_CARD = 'RECEIVE_CARD',
@@ -38,6 +52,7 @@ export enum CellType {
   EMPTY_ROW = 'EMPTY_ROW',
 
   REMOTE_CARD_CAROUSEL = 'REMOTE_CARD_CAROUSEL',
+  EMPTY_REMOTE_CARD_CAROUSEL = 'EMPTY_REMOTE_CARD_CAROUSEL',
 }
 export type RecyclerListViewRef = RecyclerListView<RecyclerListViewProps, RecyclerListViewState>;
 
@@ -49,45 +64,91 @@ export type CoinDividerExtraData = {
   defaultToEditButton: boolean;
 };
 
-export type AssetListHeaderExtraData = {
+export type NFTsHeaderExtraData = {
   type: CellType.NFTS_HEADER;
+  nftSort: NftCollectionSortCriterion;
+};
+
+export type NFTsOtherData = {
+  type: CellType.NFTS_HEADER_SPACE_AFTER | CellType.NFT_SPACE_AFTER | CellType.NFTS_EMPTY | CellType.NFTS_LOADING;
 };
 
 export type AssetsHeaderExtraData = {
-  type: CellType.PROFILE_STICKY_HEADER;
+  type: CellType.PROFILE_BALANCE_ROW;
   value: string;
-  isLoadingUserAssets: boolean;
+  isLoadingBalance: boolean;
 };
 export type CoinExtraData = { type: CellType.COIN; uniqueId: string };
 export type NFTExtraData = {
   type: CellType.NFT;
   index: number;
+  uniqueId?: string;
+  collectionId: string;
+  onPressUniqueToken?: (asset: UniqueAsset) => void;
+};
+
+export type LegacyNFTExtraData = {
+  type: CellType.LEGACY_NFT;
+  index: number;
   uniqueId: string;
   onPressUniqueToken?: (asset: UniqueAsset) => void;
 };
+
 export type PositionExtraData = {
-  uniqueId: string;
+  type: CellType.POSITION;
+  position: RainbowPosition;
   index: number;
 };
 export type PositionHeaderExtraData = {
   total: string;
 };
-export type NFTFamilyExtraData = {
-  type: CellType.FAMILY_HEADER;
+export type ClaimableExtraData = {
+  type: CellType.CLAIMABLE;
+  claimable: Claimable;
+};
+export type ClaimablesHeaderExtraData = {
+  total: string;
+};
+
+export type LegacyNFTFamilyExtraData = {
+  type: CellType.LEGACY_FAMILY_HEADER;
   name: string;
   total?: number;
   image?: string;
 };
 
+export type NFTFamilyExtraData = {
+  type: CellType.FAMILY_HEADER;
+  name: string;
+  total?: number;
+  image?: string;
+  uid: string;
+};
+
+export type ProfileActionButtonsRowExtraData = {
+  type: CellType.PROFILE_ACTION_BUTTONS_ROW | CellType.PROFILE_ACTION_BUTTONS_ROW_SPACE_AFTER;
+  value: string | undefined;
+};
+
+export type LoadingAssetsSection = {
+  type: CellType.LOADING_ASSETS;
+};
+
 export type CellExtraData =
-  | { type: CellType.LOADING_ASSETS }
+  | LoadingAssetsSection
   | NFTFamilyExtraData
+  | LegacyNFTFamilyExtraData
   | CoinDividerExtraData
   | CoinExtraData
   | NFTExtraData
-  | AssetListHeaderExtraData
+  | LegacyNFTExtraData
+  | NFTsHeaderExtraData
+  | NFTsOtherData
   | AssetsHeaderExtraData
   | PositionExtraData
-  | PositionHeaderExtraData;
+  | PositionHeaderExtraData
+  | ClaimableExtraData
+  | ClaimablesHeaderExtraData
+  | ProfileActionButtonsRowExtraData;
 
-export type CellTypes = BaseCellType & CellExtraData;
+export type CellTypes = BaseCellType | (CellExtraData & BaseCellType);

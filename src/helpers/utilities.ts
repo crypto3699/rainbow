@@ -2,6 +2,8 @@ import BigNumber from 'bignumber.js';
 import currency from 'currency.js';
 import { isNil } from 'lodash';
 import { supportedNativeCurrencies } from '@/references';
+import { divWorklet, lessThanWorklet, orderOfMagnitudeWorklet, powWorklet } from '@/safe-math/SafeMath';
+import { getNumberFormatter } from '@/helpers/intl';
 
 type BigNumberish = number | string | BigNumber;
 
@@ -25,6 +27,12 @@ export const convertAmountToRawAmount = (value: BigNumberish, decimals: number |
 export const isZero = (value: BigNumberish): boolean => new BigNumber(value).isZero();
 
 export const toFixedDecimals = (value: BigNumberish, decimals: number): string => new BigNumber(value).toFixed(decimals);
+
+export const toFixedDecimalsWorklet = (value: BigNumberish, decimals: number): string => {
+  'worklet';
+
+  return new BigNumber(value).toFixed(decimals);
+};
 
 export const convertNumberToString = (value: BigNumberish): string => new BigNumber(value).toFixed();
 
@@ -108,11 +116,21 @@ export const convertStringToHex = (stringToConvert: string): string => new BigNu
 export const add = (numberOne: BigNumberish, numberTwo: BigNumberish): string => new BigNumber(numberOne).plus(numberTwo).toFixed();
 
 export const addDisplay = (numberOne: string, numberTwo: string): string => {
-  const unit = numberOne.replace(/[\d.-]/g, '');
+  const unit = numberOne.replace(/[\d,.]/g, '');
   const leftAlignedUnit = numberOne.indexOf(unit) === 0;
-  return currency(0, { symbol: unit, pattern: leftAlignedUnit ? '!#' : '#!' })
-    .add(numberOne)
-    .add(numberTwo)
+
+  const cleanNumber = (str: string): string => {
+    const numericPart = str.replace(/[^\d,.]/g, '');
+    return numericPart.replace(/,/g, '');
+  };
+
+  return currency(0, {
+    symbol: unit,
+    pattern: leftAlignedUnit ? '!#' : '#!',
+    errorOnInvalid: true,
+  })
+    .add(cleanNumber(numberOne))
+    .add(cleanNumber(numberTwo))
     .format();
 };
 
@@ -183,20 +201,82 @@ export const abbreviateBigNumber = (value: BigNumber, buffer: number): string =>
  * Abbreviates number like 1,200,000 to "1.2m", 1,000 to "1k", etc.
  * Rounds to 1 decimal place, stripping trailing zeros.
  */
-export const abbreviateNumber = (number: number, decimals = 1): string => {
+export const abbreviateNumber = (
+  number: number,
+  decimals = 1,
+  style: 'short' | 'long' = 'short',
+  onlyShowDecimalsIfNeeded = false
+): string => {
   let prefix = number;
   let suffix = '';
-  if (number >= 1_000_000_000) {
+
+  if (number >= 1_000_000_000_000) {
+    prefix = number / 1_000_000_000_000;
+    suffix = style === 'short' ? 't' : ' trillion';
+  } else if (number >= 1_000_000_000) {
     prefix = number / 1_000_000_000;
-    suffix = 'b';
+    suffix = style === 'short' ? 'b' : ' billion';
   } else if (number >= 1_000_000) {
     prefix = number / 1_000_000;
-    suffix = 'm';
+    suffix = style === 'short' ? 'm' : ' million';
   } else if (number >= 1000) {
     prefix = number / 1000;
-    suffix = 'k';
+    suffix = style === 'short' ? 'k' : ' thousand';
   }
+
+  if (onlyShowDecimalsIfNeeded && Number.isInteger(prefix)) {
+    return Math.floor(prefix) + suffix;
+  }
+
   return prefix.toFixed(decimals).replace(/\.0$/, '') + suffix;
+};
+export const abbreviateNumberWorklet = (
+  number: number,
+  decimals = 1,
+  style: 'short' | 'long' = 'short',
+  onlyShowDecimalsIfNeeded = false
+): string => {
+  'worklet';
+  let prefix = number;
+  let suffix = '';
+  if (number >= 1_000_000_000_000) {
+    prefix = number / 1_000_000_000_000;
+    suffix = style === 'short' ? 't' : ' trillion';
+  } else if (number >= 1_000_000_000) {
+    prefix = number / 1_000_000_000;
+    suffix = style === 'short' ? 'b' : ' billion';
+  } else if (number >= 1_000_000) {
+    prefix = number / 1_000_000;
+    suffix = style === 'short' ? 'm' : ' million';
+  } else if (number >= 1000) {
+    prefix = number / 1000;
+    suffix = style === 'short' ? 'k' : ' thousand';
+  }
+
+  if (onlyShowDecimalsIfNeeded && Number.isInteger(prefix)) {
+    return Math.floor(prefix) + suffix;
+  }
+
+  return prefix.toFixed(decimals).replace(/\.0$/, '') + suffix;
+};
+
+export const handleSignificantDecimalsWorklet = (value: number | string, decimals: number, buffer = 3): string => {
+  'worklet';
+  let dec;
+
+  if (lessThanWorklet(value, 1)) {
+    const orderOfMagnitude = orderOfMagnitudeWorklet(value);
+    const sigDigitsWithBuffer = -orderOfMagnitude - 1 + buffer;
+    dec = Math.min(sigDigitsWithBuffer, 8);
+  } else {
+    dec = Math.min(decimals, buffer);
+  }
+
+  return getNumberFormatter('en-US', {
+    maximumFractionDigits: dec,
+    minimumFractionDigits: Math.min(2, dec),
+    useGrouping: true,
+  }).format(Number(value));
 };
 
 export const handleSignificantDecimals = (
@@ -232,11 +312,10 @@ export const convertAmountAndPriceToNativeDisplay = (
   amount: BigNumberish,
   priceUnit: BigNumberish,
   nativeCurrency: keyof nativeCurrencyType,
-  buffer?: number,
-  skipDecimals = false
+  useThreshold = false
 ): { amount: string; display: string } => {
   const nativeBalanceRaw = convertAmountToNativeAmount(amount, priceUnit);
-  const nativeDisplay = convertAmountToNativeDisplay(nativeBalanceRaw, nativeCurrency, buffer, skipDecimals);
+  const nativeDisplay = convertAmountToNativeDisplayWorklet(nativeBalanceRaw, nativeCurrency, useThreshold);
   return {
     amount: nativeBalanceRaw,
     display: nativeDisplay,
@@ -250,11 +329,49 @@ export const convertRawAmountToNativeDisplay = (
   rawAmount: BigNumberish,
   assetDecimals: number,
   priceUnit: BigNumberish,
-  nativeCurrency: keyof nativeCurrencyType,
-  buffer?: number
+  nativeCurrency: keyof nativeCurrencyType
 ) => {
   const assetBalance = convertRawAmountToDecimalFormat(rawAmount, assetDecimals);
-  return convertAmountAndPriceToNativeDisplay(assetBalance, priceUnit, nativeCurrency, buffer);
+  return convertAmountAndPriceToNativeDisplay(assetBalance, priceUnit, nativeCurrency);
+};
+
+/**
+ * @worklet
+ * @desc convert from raw amount to decimal format
+ */
+export const convertRawAmountToDecimalFormatWorklet = (value: number | string, decimals = 18): string => {
+  'worklet';
+  return divWorklet(value, powWorklet(10, decimals));
+};
+
+/**
+ * @desc convert from amount value to display formatted string
+ */
+export const convertAmountToBalanceDisplayWorklet = (
+  value: number | string,
+  asset: { decimals: number; symbol?: string },
+  buffer?: number
+) => {
+  'worklet';
+  const decimals = typeof asset?.decimals === 'number' ? asset.decimals : 18;
+  const display = handleSignificantDecimalsWorklet(value, decimals, buffer);
+  return `${display} ${asset?.symbol || ''}`;
+};
+
+/**
+ * @worklet
+ * @desc convert from raw amount to balance object
+ */
+export const convertRawAmountToBalanceWorklet = (value: number | string, asset: { decimals: number; symbol?: string }, buffer?: number) => {
+  'worklet';
+  const decimals = typeof asset?.decimals === 'number' ? asset.decimals : 18;
+
+  const assetBalance = convertRawAmountToDecimalFormatWorklet(value, decimals);
+
+  return {
+    amount: assetBalance,
+    display: convertAmountToBalanceDisplayWorklet(assetBalance, asset, buffer),
+  };
 };
 
 /**
@@ -266,7 +383,7 @@ export const convertRawAmountToBalance = (
   buffer?: number,
   trimTrailingZeros?: boolean
 ) => {
-  const decimals = asset?.decimals ?? 18;
+  const decimals = typeof asset?.decimals === 'number' ? asset.decimals : 18;
   const assetBalance = convertRawAmountToDecimalFormat(value, decimals);
 
   return {
@@ -284,7 +401,7 @@ export const convertAmountToBalanceDisplay = (
   buffer?: number,
   trimTrailingZeros?: boolean
 ) => {
-  const decimals = asset?.decimals ?? 18;
+  const decimals = typeof asset?.decimals === 'number' ? asset.decimals : 18;
   const display = handleSignificantDecimals(value, decimals, buffer);
   const formattedDisplay = trimTrailingZeros ? display.replace(/\.?0+$/, '') : display;
   return `${formattedDisplay} ${asset?.symbol || ''}`;
@@ -317,6 +434,42 @@ export const convertAmountToPercentageDisplayWithThreshold = (value: BigNumberis
 export const convertBipsToPercentage = (value: BigNumberish | null, decimals = 2): string => {
   if (value === null) return '0';
   return new BigNumber(value || 0).shiftedBy(-2).toFixed(decimals);
+};
+
+/**
+ * @desc convert from amount value to display formatted string
+ */
+export const convertAmountToNativeDisplayWorklet = (
+  value: number | string,
+  nativeCurrency: keyof nativeCurrencyType,
+  useThreshold = false,
+  ignoreAlignment = false,
+  decimalPlaces?: number
+) => {
+  'worklet';
+
+  const { alignment, decimals: rawDecimals, symbol } = supportedNativeCurrencies[nativeCurrency];
+  const decimals = decimalPlaces ?? Math.min(rawDecimals, 6);
+
+  const valueNumber = Number(value);
+  const threshold = decimals < 4 ? 0.01 : 0.0001;
+  let thresholdReached = false;
+
+  if (useThreshold && valueNumber < threshold) {
+    thresholdReached = true;
+  }
+
+  const nativeValue = thresholdReached
+    ? threshold
+    : getNumberFormatter('en-US', {
+        maximumFractionDigits: decimals,
+        minimumFractionDigits: nativeCurrency === 'ETH' ? undefined : decimals,
+        useGrouping: true,
+      }).format(valueNumber);
+
+  const nativeDisplay = `${thresholdReached ? '<' : ''}${alignment === 'left' || ignoreAlignment ? symbol : ''}${nativeValue}${!ignoreAlignment && alignment === 'right' ? symbol : ''}`;
+
+  return nativeDisplay;
 };
 
 /**
@@ -371,6 +524,28 @@ export const flattenDeep = (arr: unknown[]): unknown[] =>
   arr.flatMap(subArray => (Array.isArray(subArray) ? flattenDeep(subArray) : subArray));
 
 export const times = (n: number, fn: (i: number) => unknown) => Array.from({ length: n }, (_, i) => fn(i));
+
+/**
+ * @desc Round a number's significant digits to the nearest significant 1 or 5, e.g 1000 -> 1000, 1300 -> 1500, 1800 -> 2000
+ */
+export function roundToSignificant1or5(number: number): number {
+  if (number === 0) return 0;
+
+  // Find the magnitude (power of 10) of the number
+  const magnitude = Math.floor(Math.log10(number));
+  const scale = Math.pow(10, magnitude);
+
+  // Get the first digit
+  const firstDigit = number / scale;
+
+  // Round to nearest 1 or 5
+  let roundedFirstDigit: number;
+  if (firstDigit < 3) roundedFirstDigit = 1;
+  else if (firstDigit < 7.5) roundedFirstDigit = 5;
+  else roundedFirstDigit = 10;
+
+  return roundedFirstDigit * scale;
+}
 
 /**
  * @desc Creates an object composed of the omitted object properties by some predicate function.
@@ -455,3 +630,70 @@ export const getFormattedTimeQuantity = (ms: number, maxUnits?: number): string 
     .slice(0, maxUnits)
     .join(' ');
 };
+
+const decimalSeparator = '.';
+const lessThanPrefix = '<';
+
+export const formatNumber = (value: string, options?: { decimals?: number }) => {
+  if (!+value) return `0${decimalSeparator}0`;
+  if (+value < 0.0001) return `${lessThanPrefix}0${decimalSeparator}0001`;
+
+  const [whole, fraction = ''] = value.split(decimalSeparator);
+  const decimals = options?.decimals;
+  const paddedFraction = `${fraction.padEnd(decimals || 4, '0')}`;
+
+  if (decimals) {
+    if (decimals === 0) return whole;
+    return `${whole}${decimalSeparator}${paddedFraction.slice(0, decimals)}`;
+  }
+
+  if (+whole > 0) return `${whole}${decimalSeparator}${paddedFraction.slice(0, 2)}`;
+  return `0${decimalSeparator}${paddedFraction.slice(0, 4)}`;
+};
+
+/**
+ * Formats a number to a specific number of significant digits with optional minimum decimal places
+ * and a minimum representable value threshold.
+ */
+export function toSignificantDigits({
+  value,
+  significantDigits = 3,
+  minDecimalPlaces = 2,
+  minRepresentable = 0.001,
+}: {
+  value: BigNumberish;
+  significantDigits?: number;
+  minDecimalPlaces?: number;
+  minRepresentable?: number;
+}): string {
+  const num = new BigNumber(value);
+
+  if (num.isZero()) {
+    return minDecimalPlaces > 0 ? '0.' + '0'.repeat(minDecimalPlaces) : '0';
+  }
+
+  const absNum = num.abs();
+
+  if (absNum.isLessThan(minRepresentable)) {
+    return `< ${minRepresentable}`;
+  }
+
+  const sign = num.isNegative() ? '-' : '';
+  const withSigDigs = parseFloat(absNum.toPrecision(significantDigits));
+
+  let result = withSigDigs.toString();
+
+  const decimalIndex = result.indexOf('.');
+  const currentDecimalPlaces = decimalIndex === -1 ? 0 : result.length - decimalIndex - 1;
+
+  if (currentDecimalPlaces < minDecimalPlaces) {
+    if (decimalIndex === -1) {
+      // No decimal point, add one
+      result += '.';
+    }
+    // Add zeros to reach minimum decimal places
+    result += '0'.repeat(minDecimalPlaces - currentDecimalPlaces);
+  }
+
+  return sign + result;
+}

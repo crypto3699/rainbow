@@ -3,26 +3,14 @@ import { BigNumber, BigNumberish } from '@ethersproject/bignumber';
 import { isHexString as isEthersHexString } from '@ethersproject/bytes';
 import { Contract } from '@ethersproject/contracts';
 import { isValidMnemonic as ethersIsValidMnemonic } from '@ethersproject/hdnode';
-import { Block, Network as EthersNetwork, StaticJsonRpcProvider, TransactionRequest, TransactionResponse } from '@ethersproject/providers';
+import { Block, JsonRpcBatchProvider, StaticJsonRpcProvider, TransactionRequest } from '@ethersproject/providers';
 import { parseEther } from '@ethersproject/units';
 import Resolution from '@unstoppabledomains/resolution';
 import { startsWith } from 'lodash';
-import { getRemoteConfig } from '@/model/remoteConfig';
-import { AssetType, NewTransaction, ParsedAddressAsset } from '@/entities';
+import { AssetType, NewTransaction, ParsedAddressAsset, UniqueAsset } from '@/entities';
 import { isNativeAsset } from '@/handlers/assets';
-import { Network } from '@/helpers/networkTypes';
 import { isUnstoppableAddressFormat } from '@/helpers/validators';
-import {
-  ARBITRUM_ETH_ADDRESS,
-  ETH_ADDRESS,
-  ethUnits,
-  MATIC_POLYGON_ADDRESS,
-  BNB_BSC_ADDRESS,
-  OPTIMISM_ETH_ADDRESS,
-  smartContractMethods,
-  CRYPTO_KITTIES_NFT_ADDRESS,
-  CRYPTO_PUNKS_NFT_ADDRESS,
-} from '@/references';
+import { ethUnits, smartContractMethods, CRYPTO_KITTIES_NFT_ADDRESS, CRYPTO_PUNKS_NFT_ADDRESS } from '@/references';
 import {
   addBuffer,
   convertAmountToRawAmount,
@@ -36,70 +24,22 @@ import {
 import { ethereumUtils } from '@/utils';
 import { logger, RainbowError } from '@/logger';
 import { IS_IOS, RPC_PROXY_API_KEY, RPC_PROXY_BASE_URL } from '@/env';
-import { getNetworkObj } from '@/networks';
+import { ChainId, chainAnvil } from '@/state/backendNetworks/types';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { useConnectedToAnvilStore } from '@/state/connectedToAnvil';
+import { NftTokenType } from '@/graphql/__generated__/arc';
+import { Address } from 'viem';
 
-export enum TokenStandard {
-  ERC1155 = 'ERC1155',
-  ERC721 = 'ERC721',
-}
+export const chainsProviders = new Map<ChainId, StaticJsonRpcProvider>();
 
-export const networkProviders: {
-  [network in Network]?: StaticJsonRpcProvider;
-} = {};
+export const chainsBatchProviders = new Map<ChainId, JsonRpcBatchProvider>();
 
 /**
  * Creates an rpc endpoint for a given chain id using the Rainbow rpc proxy.
  * If the firebase config flag is disabled, it will fall back to the deprecated rpc.
  */
-export const proxyRpcEndpoint = (chainId: number, customEndpoint?: string) => {
-  const {
-    rpc_proxy_enabled,
-    arbitrum_mainnet_rpc,
-    ethereum_goerli_rpc,
-    optimism_mainnet_rpc,
-    polygon_mainnet_rpc,
-    base_mainnet_rpc,
-    bsc_mainnet_rpc,
-    zora_mainnet_rpc,
-    avalanche_mainnet_rpc,
-    ethereum_mainnet_rpc,
-    blast_mainnet_rpc,
-    degen_mainnet_rpc,
-  } = getRemoteConfig();
-  if (rpc_proxy_enabled) {
-    return `${RPC_PROXY_BASE_URL}/${chainId}/${RPC_PROXY_API_KEY}${
-      customEndpoint ? `?custom_rpc=${encodeURIComponent(customEndpoint)}` : ''
-    }`;
-  } else {
-    if (customEndpoint) return customEndpoint;
-    const network = ethereumUtils.getNetworkFromChainId(chainId);
-    switch (network) {
-      case Network.arbitrum:
-        return arbitrum_mainnet_rpc;
-      case Network.goerli:
-        return ethereum_goerli_rpc;
-      case Network.optimism:
-        return optimism_mainnet_rpc;
-      case Network.polygon:
-        return polygon_mainnet_rpc;
-      case Network.base:
-        return base_mainnet_rpc;
-      case Network.bsc:
-        return bsc_mainnet_rpc;
-      case Network.zora:
-        return zora_mainnet_rpc;
-      case Network.avalanche:
-        return avalanche_mainnet_rpc;
-      case Network.blast:
-        return blast_mainnet_rpc;
-      case Network.degen:
-        return degen_mainnet_rpc;
-      case Network.gnosis:
-      case Network.mainnet:
-      default:
-        return ethereum_mainnet_rpc;
-    }
-  }
+export const proxyCustomRpcEndpoint = (chainId: number, customEndpoint: string) => {
+  return `${RPC_PROXY_BASE_URL}/${chainId}/${RPC_PROXY_API_KEY}?custom_rpc=${encodeURIComponent(customEndpoint)}`;
 };
 
 /**
@@ -118,7 +58,7 @@ type GasParamsInput = { gasPrice: BigNumberish } & {
 /**
  * The input data provied to `getTxDetails`.
  */
-type TransactionDetailsInput = Pick<NewTransactionNonNullable, 'from' | 'to' | 'data' | 'gasLimit' | 'network' | 'nonce'> &
+type TransactionDetailsInput = Pick<NewTransactionNonNullable, 'from' | 'to' | 'data' | 'gasLimit' | 'chainId' | 'nonce'> &
   Pick<NewTransaction, 'amount'> &
   GasParamsInput;
 
@@ -129,7 +69,7 @@ type TransactionDetailsReturned = {
   data?: TransactionRequest['data'];
   from?: TransactionRequest['from'];
   gasLimit?: string;
-  network?: Network | string;
+  chainId?: ChainId | string;
   to?: TransactionRequest['to'];
   value?: TransactionRequest['value'];
   nonce?: TransactionRequest['nonce'];
@@ -140,51 +80,18 @@ type TransactionDetailsReturned = {
  * This is useful for functions that assume that certain fields are not set
  * to null on a `NewTransaction`.
  */
-type NewTransactionNonNullable = {
+export type NewTransactionNonNullable = {
   [key in keyof NewTransaction]-?: NonNullable<NewTransaction[key]>;
 };
 
 /**
- * @desc web3 http instance
- */
-export let web3Provider: StaticJsonRpcProvider = null as unknown as StaticJsonRpcProvider;
-
-/**
- * @desc Checks whether or not a `Network | string` union type should be
- * treated as a `Network` based on its prefix, as opposed to a `string` type.
- * @param network The network to check.
- * @return A type predicate of `network is Network`.
- */
-const isNetworkEnum = (network: Network | string): network is Network => {
-  return !network.startsWith('http://');
-};
-
-/**
- * @desc Sets a different web3 provider.
- * @param network The network to set.
- * @return A promise that resolves with an Ethers Network when the provider is ready.
- */
-export const web3SetHttpProvider = async (network: Network | string): Promise<EthersNetwork> => {
-  web3Provider = await getProviderForNetwork(network);
-  return web3Provider.ready;
-};
-
-/**
  * @desc Checks if the given network is a Layer 2.
- * @param network The network to check.
+ * @param chainId The network to check.
  * @return Whether or not the network is a L2 network.
  */
-export const isL2Network = (network: Network | string): boolean => {
-  return getNetworkObj(network as Network).networkType === 'layer2';
-};
-
-/**
- * @desc Checks whether a provider is HardHat.
- * @param providerUrl The provider URL.
- * @return Whether or not the provider is HardHat.
- */
-export const isHardHat = (providerUrl: string): boolean => {
-  return providerUrl?.startsWith('http://') && providerUrl?.endsWith('8545');
+export const isL2Chain = ({ chainId = ChainId.mainnet }: { chainId?: ChainId }): boolean => {
+  const defaultChains = useBackendNetworksStore.getState().getDefaultChains();
+  return defaultChains[chainId]?.id !== ChainId.mainnet && !defaultChains[chainId]?.testnet;
 };
 
 /**
@@ -192,66 +99,54 @@ export const isHardHat = (providerUrl: string): boolean => {
  * @param network The network to check.
  * @return Whether or not the network is a testnet.
  */
-export const isTestnetNetwork = (network: Network): boolean => {
-  return getNetworkObj(network as Network).networkType === 'testnet';
+export const isTestnetChain = ({ chainId = ChainId.mainnet }: { chainId?: ChainId }): boolean => {
+  return !!useBackendNetworksStore.getState().getDefaultChains()[chainId]?.testnet;
 };
 
-// shoudl figure out better way to include this in networks
-export const getFlashbotsProvider = async () => {
-  return new StaticJsonRpcProvider(
-    proxyRpcEndpoint(
-      1,
-      'https://rpc.flashbots.net/?hint=hash&builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder'
-    ),
-    Network.mainnet
-  );
+export const getCachedProviderForNetwork = (chainId: ChainId = ChainId.mainnet): StaticJsonRpcProvider | undefined => {
+  return chainsProviders.get(chainId);
 };
 
-export const getCachedProviderForNetwork = (network: Network = Network.mainnet) => {
-  return networkProviders[network]!;
-};
+export const getBatchedProvider = ({ chainId = ChainId.mainnet }: { chainId?: number }): JsonRpcBatchProvider => {
+  if (useConnectedToAnvilStore.getState().connectedToAnvil) {
+    const provider = new JsonRpcBatchProvider(chainAnvil.rpcUrls.default.http[0], ChainId.mainnet);
+    chainsBatchProviders.set(chainId, provider);
 
-/**
- * @desc Gets or constructs a web3 provider for the specified network.
- * @param network The network as a `Network` or string.
- * @return The provider for the network.
- */
-export const getProviderForNetwork = async (network: Network | string = Network.mainnet): Promise<StaticJsonRpcProvider> => {
-  if (isNetworkEnum(network) && networkProviders[network]) {
-    return networkProviders[network]!;
-  }
-
-  if (!isNetworkEnum(network)) {
-    const provider = new StaticJsonRpcProvider(network, Network.mainnet);
-    networkProviders[Network.mainnet] = provider;
-    return provider;
-  } else {
-    const chainId = getNetworkObj(network).id;
-    const provider = new StaticJsonRpcProvider(getNetworkObj(network).rpc, chainId);
-    if (!networkProviders[network]) {
-      networkProviders[network] = provider;
-    }
-    await provider.ready;
     return provider;
   }
+
+  const cachedProvider = chainsBatchProviders.get(chainId);
+  const providerUrl = useBackendNetworksStore.getState().getDefaultChains()[chainId]?.rpcUrls?.default?.http?.[0];
+
+  if (cachedProvider && cachedProvider?.connection.url === providerUrl) {
+    return cachedProvider;
+  }
+  const provider = new JsonRpcBatchProvider(providerUrl, chainId);
+  chainsBatchProviders.set(chainId, provider);
+
+  return provider;
 };
 
-/**
- * @desc Sends an arbitrary RCP call using a given provider, or the default
- * cached provider.
- * @param payload The payload, including a method and parameters, based on
- * the Ethers.js `StaticJsonRpcProvider.send` arguments.
- * @param provider The provider to use. If `null`, the current cached web3
- * provider is used.
- * @return The response from the `StaticJsonRpcProvider.send` call.
- */
-export const sendRpcCall = async (
-  payload: {
-    method: string;
-    params: any[];
-  },
-  provider: StaticJsonRpcProvider | null = null
-): Promise<any> => (provider || web3Provider)?.send(payload.method, payload.params);
+export const getProvider = ({ chainId = ChainId.mainnet }: { chainId?: number }): StaticJsonRpcProvider => {
+  if (useConnectedToAnvilStore.getState().connectedToAnvil) {
+    const provider = new StaticJsonRpcProvider(chainAnvil.rpcUrls.default.http[0], ChainId.mainnet);
+    chainsProviders.set(chainId, provider);
+
+    return provider;
+  }
+
+  const cachedProvider = chainsProviders.get(chainId);
+
+  const providerUrl = useBackendNetworksStore.getState().getDefaultChains()[chainId]?.rpcUrls?.default?.http?.[0];
+
+  if (cachedProvider && cachedProvider?.connection.url === providerUrl) {
+    return cachedProvider;
+  }
+  const provider = new StaticJsonRpcProvider(providerUrl, chainId);
+  chainsProviders.set(chainId, provider);
+
+  return provider;
+};
 
 /**
  * @desc check if hex string
@@ -294,6 +189,39 @@ export const isHexStringIgnorePrefix = (value: string): boolean => {
 export const addHexPrefix = (value: string): string => (startsWith(value, '0x') ? value : `0x${value}`);
 
 /**
+ * @desc Asserts "0x" prefix on a string.
+ * @param value The potential address string.
+ * @return The same string.
+ */
+export const assertValidHex: (value: string) => asserts value is Address = value => {
+  if (!value.startsWith(`0x`)) throw new Error(`Non address-like string`);
+};
+
+/**
+ * @desc Ensures "0x" prefix on a string.
+ * @param value The potential address string.
+ * @return The same string.
+ */
+export const ensureValidHex = (value: string): Address => {
+  assertValidHex(value);
+  return value;
+};
+
+/**
+ * @desc Ensures "0x" prefix on a string.
+ * @param value The potential address string.
+ * @return The same string.
+ */
+export const isValidHex = (value: any): value is Address => {
+  try {
+    assertValidHex(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * @desc is valid mnemonic
  * @param value The string to check.
  * @return Whether or not the string was a valid mnemonic.
@@ -324,25 +252,32 @@ export const toChecksumAddress = (address: string): string | null => {
   }
 };
 
+// Ensures an address is a checksummed address (just a helper for naming consistency)
+export const ensureChecksumAddress = (address: string): string => getAddress(address);
+
 /**
  * @desc estimate gas limit
  * @param estimateGasData The transaction request to use for the estimate.
- * @param provider If specified, a provider to use instead of the cached
- * `web3Provider`.
+ * @param provider
  * @return The gas limit, or `null` if an error occurs.
  */
-export const estimateGas = async (
-  estimateGasData: TransactionRequest,
-  provider: StaticJsonRpcProvider | null = null
-): Promise<string | null> => {
+export const estimateGas = async (estimateGasData: TransactionRequest, provider: StaticJsonRpcProvider): Promise<string | null> => {
   try {
-    const p = provider || web3Provider;
-    const gasLimit = await p?.estimateGas(estimateGasData);
+    const gasLimit = await provider.estimateGas(estimateGasData);
     return gasLimit?.toString() ?? null;
   } catch (error) {
     return null;
   }
 };
+
+export function assetIsUniqueAsset(asset: ParsedAddressAsset | UniqueAsset | undefined): asset is UniqueAsset {
+  if (!asset) return false;
+  return asset.type === AssetType.nft || asset.type === AssetType.ens || asset.type === AssetType.poap;
+}
+
+export function assetIsParsedAddressAsset(asset: ParsedAddressAsset | UniqueAsset): asset is ParsedAddressAsset {
+  return 'address' in asset;
+}
 
 /**
  * @desc Estimates gas for a transaction with a padding multiple.
@@ -351,24 +286,19 @@ export const estimateGas = async (
  * defaulting to `null`.
  * @param callArguments Arbitrary arguments passed as the first parameters
  * of `contractCallEstimateGas`, if provided.
- * @param provider The provider to use. If none is specified, the cached
- * `web3Provider` is used instead.
+ * @param provider The provider to use.
  * @param paddingFactor The padding applied to the gas limit.
  * @return The gas estimation as a string, or `null` if estimation failed
  */
 export async function estimateGasWithPadding(
   txPayload: TransactionRequest,
   contractCallEstimateGas: Contract['estimateGas'][string] | null = null,
-  callArguments: any[] | null = null,
-  provider: StaticJsonRpcProvider | null = null,
-  paddingFactor: number = 1.1
+  callArguments: unknown[] | null = null,
+  provider: StaticJsonRpcProvider,
+  paddingFactor = 1.1
 ): Promise<string | null> {
   try {
-    const p = provider || web3Provider;
-    if (!p) {
-      return null;
-    }
-
+    const p = provider;
     const txPayloadToEstimate: TransactionRequest & { gas?: string } = {
       ...txPayload,
     };
@@ -383,16 +313,16 @@ export async function estimateGasWithPadding(
     const code = to ? await p.getCode(to) : undefined;
     // 2 - if it's not a contract AND it doesn't have any data use the default gas limit
     if ((!contractCallEstimateGas && !to) || (to && !data && (!code || code === '0x'))) {
-      logger.info('⛽ Skipping estimates, using default', {
+      logger.debug('[web3]: ⛽ Skipping estimates, using default', {
         ethUnits: ethUnits.basic_tx.toString(),
       });
       return ethUnits.basic_tx.toString();
     }
 
-    logger.info('⛽ Calculating safer gas limit for last block');
+    logger.debug('[web3]: ⛽ Calculating safer gas limit for last block');
     // 3 - If it is a contract, call the RPC method `estimateGas` with a safe value
     const saferGasLimit = fraction(gasLimit.toString(), 19, 20);
-    logger.info('⛽ safer gas limit for last block is', { saferGasLimit });
+    logger.debug('[web3]: ⛽ safer gas limit for last block is', { saferGasLimit });
 
     txPayloadToEstimate[contractCallEstimateGas ? 'gasLimit' : 'gas'] = toHex(saferGasLimit);
 
@@ -402,9 +332,13 @@ export async function estimateGasWithPadding(
       ? contractCallEstimateGas(...(callArguments ?? []), txPayloadToEstimate)
       : p.estimateGas(cleanTxPayload));
 
+    if (!BigNumber.isBigNumber(estimatedGas)) {
+      throw new Error('Invalid gas limit type');
+    }
+
     const lastBlockGasLimit = addBuffer(gasLimit.toString(), 0.9);
     const paddedGas = addBuffer(estimatedGas.toString(), paddingFactor.toString());
-    logger.info('⛽ GAS CALCULATIONS!', {
+    logger.debug('[web3]: ⛽ GAS CALCULATIONS!', {
       estimatedGas: estimatedGas.toString(),
       gasLimit: gasLimit.toString(),
       lastBlockGasLimit: lastBlockGasLimit,
@@ -413,26 +347,24 @@ export async function estimateGasWithPadding(
 
     // If the safe estimation is above the last block gas limit, use it
     if (greaterThan(estimatedGas.toString(), lastBlockGasLimit)) {
-      logger.info('⛽ returning orginal gas estimation', {
+      logger.debug('[web3]: ⛽ returning orginal gas estimation', {
         esimatedGas: estimatedGas.toString(),
       });
       return estimatedGas.toString();
     }
     // If the estimation is below the last block gas limit, use the padded estimate
     if (greaterThan(lastBlockGasLimit, paddedGas)) {
-      logger.info('⛽ returning padded gas estimation', { paddedGas });
+      logger.debug('[web3]: ⛽ returning padded gas estimation', { paddedGas });
       return paddedGas;
     }
     // otherwise default to the last block gas limit
-    logger.info('⛽ returning last block gas limit', { lastBlockGasLimit });
+    logger.debug('[web3]: ⛽ returning last block gas limit', { lastBlockGasLimit });
     return lastBlockGasLimit;
-  } catch (e: any) {
+  } catch (e) {
     /*
      * Reported ~400x per day, but if it's not actionable it might as well be a warning.
      */
-    logger.warn('Error calculating gas limit with padding', {
-      message: e.message,
-    });
+    logger.warn('[web3]: Error calculating gas limit with padding', { message: e instanceof Error ? e.message : 'Unknown error' });
     return null;
   }
 }
@@ -448,27 +380,11 @@ export const toWei = (ether: string): string => {
 };
 
 /**
- * @desc get transaction info
- * @param hash The transaction hash.
- * @return The corresponding `TransactionResponse`, or `null` if one could not
- * be found.
- */
-export const getTransaction = async (hash: string): Promise<TransactionResponse | null> => web3Provider?.getTransaction(hash) ?? null;
-
-/**
- * @desc get address transaction count
- * @param address The address to check.
- * @return The transaction count, or `null` if it could not be found.
- */
-export const getTransactionCount = async (address: string): Promise<number | null> =>
-  web3Provider?.getTransactionCount(address, 'pending') ?? null;
-
-/**
  * get transaction gas params depending on network
  * @returns - object with `gasPrice` or `maxFeePerGas` and `maxPriorityFeePerGas`
  */
-export const getTransactionGasParams = (transaction: Pick<NewTransactionNonNullable, 'network'> & GasParamsInput): GasParamsReturned => {
-  return getNetworkObj(transaction.network).gas.gasType === 'legacy'
+export const getTransactionGasParams = (transaction: Pick<NewTransactionNonNullable, 'chainId'> & GasParamsInput): GasParamsReturned => {
+  return transaction.gasPrice
     ? {
         gasPrice: toHex(transaction.gasPrice),
       }
@@ -512,7 +428,7 @@ export const getTxDetails = async (transaction: TransactionDetailsInput): Promis
  * @param domain The domain as a string.
  * @return The resolved address, or undefined if none could be found.
  */
-export const resolveUnstoppableDomain = async (domain: string): Promise<string | void> => {
+export const resolveUnstoppableDomain = async (domain: string): Promise<string | null> => {
   // This parameter doesn't line up with the `Resolution` type declaration,
   // but it can be casted to `any` as it does match the documentation here:
   // https://unstoppabledomains.github.io/resolution/v2.2.0/classes/resolution.html.
@@ -522,10 +438,11 @@ export const resolveUnstoppableDomain = async (domain: string): Promise<string |
     .then((address: string) => {
       return address;
     })
-    .catch((error: any) => {
-      logger.error(new RainbowError(`resolveUnstoppableDomain error`), {
+    .catch(error => {
+      logger.error(new RainbowError(`[web3]: resolveUnstoppableDomain error`), {
         message: error.message,
       });
+      return null;
     });
   return res;
 };
@@ -533,17 +450,18 @@ export const resolveUnstoppableDomain = async (domain: string): Promise<string |
 /**
  * @desc Resolves a name or address to an Ethereum hex-formatted address.
  * @param nameOrAddress The name or address to resolve.
- * @param provider If provided, a provider to use instead of the cached
- * `web3Provider`.
- * @return The address, or undefined if one could not be resolved.
+ * @return The address, or null if one could not be resolved.
  */
-export const resolveNameOrAddress = async (nameOrAddress: string): Promise<string | void | null> => {
+export const resolveNameOrAddress = async (nameOrAddress: string): Promise<string | null> => {
   if (!isHexString(nameOrAddress)) {
     if (isUnstoppableAddressFormat(nameOrAddress)) {
-      return resolveUnstoppableDomain(nameOrAddress);
+      const resolvedAddress = await resolveUnstoppableDomain(nameOrAddress);
+      return resolvedAddress;
     }
-    const p = await getProviderForNetwork(Network.mainnet);
-    return p?.resolveName(nameOrAddress);
+    const p = getProvider({ chainId: ChainId.mainnet });
+    const resolvedAddress = await p?.resolveName(nameOrAddress);
+
+    return resolvedAddress;
   }
   return nameOrAddress;
 };
@@ -558,7 +476,7 @@ export const resolveNameOrAddress = async (nameOrAddress: string): Promise<strin
 export const getTransferNftTransaction = async (
   transaction: Pick<
     NewTransactionNonNullable,
-    'asset' | 'from' | 'to' | 'gasPrice' | 'gasLimit' | 'network' | 'nonce' | 'maxFeePerGas' | 'maxPriorityFeePerGas'
+    'asset' | 'from' | 'to' | 'gasPrice' | 'gasLimit' | 'nonce' | 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'chainId'
   >
 ): Promise<TransactionDetailsReturned> => {
   const recipient = await resolveNameOrAddress(transaction.to);
@@ -567,15 +485,14 @@ export const getTransferNftTransaction = async (
     throw new Error(`Invalid recipient "${transaction.to}"`);
   }
 
-  const { from, nonce } = transaction;
-  const contractAddress = transaction.asset.asset_contract?.address;
+  const { from, nonce, asset: { contractAddress } = {} } = transaction;
   const data = getDataForNftTransfer(from, recipient, transaction.asset);
   const gasParams = getTransactionGasParams(transaction);
   return {
     data,
     from,
     gasLimit: transaction.gasLimit?.toString(),
-    network: transaction.network,
+    chainId: transaction.chainId,
     nonce,
     to: contractAddress,
     ...gasParams,
@@ -591,7 +508,7 @@ export const getTransferNftTransaction = async (
 export const getTransferTokenTransaction = async (
   transaction: Pick<
     NewTransactionNonNullable,
-    'asset' | 'from' | 'to' | 'amount' | 'gasPrice' | 'gasLimit' | 'network' | 'maxFeePerGas' | 'maxPriorityFeePerGas'
+    'asset' | 'from' | 'to' | 'amount' | 'gasPrice' | 'gasLimit' | 'chainId' | 'maxFeePerGas' | 'maxPriorityFeePerGas'
   >
 ): Promise<TransactionDetailsReturned> => {
   const value = convertAmountToRawAmount(transaction.amount, transaction.asset.decimals);
@@ -602,7 +519,7 @@ export const getTransferTokenTransaction = async (
     data,
     from: transaction.from,
     gasLimit: transaction.gasLimit?.toString(),
-    network: transaction.network,
+    chainId: transaction.chainId,
     to: transaction.asset.address,
     ...gasParams,
   };
@@ -615,17 +532,11 @@ export const getTransferTokenTransaction = async (
  */
 export const createSignableTransaction = async (transaction: NewTransactionNonNullable): Promise<TransactionDetailsReturned> => {
   // handle native assets seperately
-  if (
-    transaction.asset.address === ETH_ADDRESS ||
-    transaction.asset.address === ARBITRUM_ETH_ADDRESS ||
-    transaction.asset.address === OPTIMISM_ETH_ADDRESS ||
-    transaction.asset.address === MATIC_POLYGON_ADDRESS ||
-    transaction.asset.address === BNB_BSC_ADDRESS
-  ) {
+  if (isNativeAsset(transaction.asset.address, transaction.chainId)) {
     return getTxDetails(transaction);
   }
-  const isNft = transaction.asset.type === AssetType.nft;
-  const result = isNft ? await getTransferNftTransaction(transaction) : await getTransferTokenTransaction(transaction);
+  const isUniqueAsset = assetIsUniqueAsset(transaction.asset);
+  const result = isUniqueAsset ? await getTransferNftTransaction(transaction) : await getTransferTokenTransaction(transaction);
 
   // `result` will conform to `TransactionDetailsInput`, except it will have
   // either { gasPrice: string } | { maxFeePerGas: string; maxPriorityFeePerGas: string }
@@ -640,8 +551,8 @@ export const createSignableTransaction = async (transaction: NewTransactionNonNu
  * @param asset The asset to check.
  * @return The estimated portion.
  */
-const estimateAssetBalancePortion = (asset: ParsedAddressAsset): string => {
-  if (asset.type !== AssetType.nft && asset.balance?.amount) {
+const estimateAssetBalancePortion = (asset: ParsedAddressAsset | UniqueAsset): string => {
+  if (!assetIsUniqueAsset(asset) && asset.balance?.amount) {
     const assetBalance = asset.balance?.amount;
     const decimals = asset.decimals;
     const portion = multiply(assetBalance, 0.1);
@@ -670,33 +581,35 @@ export const getDataForTokenTransfer = (value: string, to: string): string => {
  * @param asset The asset to transfer.
  * @return The data string if the transfer can be attempted, otherwise undefined.
  */
-export const getDataForNftTransfer = (from: string, to: string, asset: ParsedAddressAsset): string | undefined => {
-  if (!asset.id || !asset.asset_contract?.address) return;
-  const lowercasedContractAddress = asset.asset_contract.address.toLowerCase();
-  const standard = asset.asset_contract?.schema_name;
+export const getDataForNftTransfer = (
+  from: string,
+  to: string,
+  { chainId, contractAddress, tokenId, standard }: Partial<Pick<UniqueAsset, 'tokenId' | 'contractAddress' | 'chainId' | 'standard'>>
+): string | undefined => {
+  if (!tokenId || !contractAddress) return;
   let data: string | undefined;
-  if (lowercasedContractAddress === CRYPTO_KITTIES_NFT_ADDRESS && asset.network === Network.mainnet) {
+  if (contractAddress === CRYPTO_KITTIES_NFT_ADDRESS && chainId === ChainId.mainnet) {
     const transferMethod = smartContractMethods.token_transfer;
-    data = ethereumUtils.getDataString(transferMethod.hash, [ethereumUtils.removeHexPrefix(to), convertStringToHex(asset.id)]);
-  } else if (lowercasedContractAddress === CRYPTO_PUNKS_NFT_ADDRESS && asset.network === Network.mainnet) {
+    data = ethereumUtils.getDataString(transferMethod.hash, [ethereumUtils.removeHexPrefix(to), convertStringToHex(tokenId)]);
+  } else if (contractAddress === CRYPTO_PUNKS_NFT_ADDRESS && chainId === ChainId.mainnet) {
     const transferMethod = smartContractMethods.punk_transfer;
-    data = ethereumUtils.getDataString(transferMethod.hash, [ethereumUtils.removeHexPrefix(to), convertStringToHex(asset.id)]);
-  } else if (standard === TokenStandard.ERC1155) {
+    data = ethereumUtils.getDataString(transferMethod.hash, [ethereumUtils.removeHexPrefix(to), convertStringToHex(tokenId)]);
+  } else if (standard === NftTokenType.Erc1155) {
     const transferMethodHash = smartContractMethods.erc1155_transfer.hash;
     data = ethereumUtils.getDataString(transferMethodHash, [
       ethereumUtils.removeHexPrefix(from),
       ethereumUtils.removeHexPrefix(to),
-      convertStringToHex(asset.id),
+      convertStringToHex(tokenId),
       convertStringToHex('1'),
       convertStringToHex('160'),
       convertStringToHex('0'),
     ]);
-  } else if (standard === TokenStandard.ERC721) {
+  } else if (standard === NftTokenType.Erc721) {
     const transferMethod = smartContractMethods.erc721_transfer;
     data = ethereumUtils.getDataString(transferMethod.hash, [
       ethereumUtils.removeHexPrefix(from),
       ethereumUtils.removeHexPrefix(to),
-      convertStringToHex(asset.id),
+      convertStringToHex(tokenId),
     ]);
   }
   return data;
@@ -707,7 +620,7 @@ export const getDataForNftTransfer = (from: string, to: string, asset: ParsedAdd
  * @param [{address, amount, asset, gasLimit, recipient}] The transaction
  * initialization details.
  * @param provider The RCP provider to use.
- * @param network The network for the transaction
+ * @param chainId The chainId for the transaction
  * @return The transaction request.
  */
 export const buildTransaction = async (
@@ -718,16 +631,19 @@ export const buildTransaction = async (
     gasLimit,
     recipient,
   }: {
-    asset: ParsedAddressAsset;
+    asset: ParsedAddressAsset | UniqueAsset;
     address: string;
     recipient: string;
     amount: number;
     gasLimit?: string;
   },
-  provider: StaticJsonRpcProvider | null,
-  network: Network
+  provider: StaticJsonRpcProvider | undefined,
+  chainId: ChainId
 ): Promise<TransactionRequest> => {
-  const _amount = amount && Number(amount) ? convertAmountToRawAmount(amount, asset.decimals) : estimateAssetBalancePortion(asset);
+  const _amount =
+    amount && Number(amount) && assetIsParsedAddressAsset(asset)
+      ? convertAmountToRawAmount(amount, asset.decimals)
+      : estimateAssetBalancePortion(asset);
   const value = _amount.toString();
   const _recipient = (await resolveNameOrAddress(recipient)) as string;
   let txData: TransactionRequest = {
@@ -736,15 +652,14 @@ export const buildTransaction = async (
     to: _recipient,
     value,
   };
-  if (asset.type === AssetType.nft) {
-    const contractAddress = asset.asset_contract?.address;
+  if (assetIsUniqueAsset(asset)) {
     const data = getDataForNftTransfer(address, _recipient, asset);
     txData = {
       data,
       from: address,
-      to: contractAddress,
+      to: asset.contractAddress,
     };
-  } else if (!isNativeAsset(asset.address, network)) {
+  } else if (assetIsParsedAddressAsset(asset) && !isNativeAsset(asset.address, chainId)) {
     const transferData = getDataForTokenTransfer(value, _recipient);
     txData = {
       data: transferData,
@@ -762,9 +677,8 @@ export const buildTransaction = async (
  * transaction.
  * @param addPadding Whether or not to add padding to the gas limit, defaulting
  * to `false`.
- * @param provider If provided, a provider to use instead of the default
- * cached `web3Provider`.
- * @param network The network to use, defaulting to `Network.mainnet`.
+ * @param provider
+ * @param chainId The chainId to use, defaulting to `ChainId.mainnet`.
  * @returns The estimated gas limit.
  */
 export const estimateGasLimit = async (
@@ -774,16 +688,16 @@ export const estimateGasLimit = async (
     recipient,
     amount,
   }: {
-    asset: ParsedAddressAsset;
+    asset: ParsedAddressAsset | UniqueAsset;
     address: string;
     recipient: string;
     amount: number;
   },
-  addPadding: boolean = false,
-  provider: StaticJsonRpcProvider | null = null,
-  network: Network = Network.mainnet
+  addPadding = false,
+  provider: StaticJsonRpcProvider,
+  chainId: ChainId = ChainId.mainnet
 ): Promise<string | null> => {
-  const estimateGasData = await buildTransaction({ address, amount, asset, recipient }, provider, network);
+  const estimateGasData = await buildTransaction({ address, amount, asset, recipient }, provider, chainId);
 
   if (addPadding) {
     return estimateGasWithPadding(estimateGasData, null, null, provider);

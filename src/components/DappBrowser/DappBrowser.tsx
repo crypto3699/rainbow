@@ -1,59 +1,53 @@
-import React, { useEffect } from 'react';
-import { InteractionManager, StyleSheet } from 'react-native';
-import Animated, {
-  interpolateColor,
-  useAnimatedProps,
-  useAnimatedReaction,
-  useAnimatedStyle,
-  useDerivedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import React, { memo, useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
+import Animated, { interpolateColor, runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedValue } from 'react-native-reanimated';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { TIMING_CONFIGS } from '@/components/animations/animationConfigs';
 import { Page } from '@/components/layout';
 import { Box, globalColors, useColorMode } from '@/design-system';
 import { IS_ANDROID } from '@/env';
 import { useSyncSharedValue } from '@/hooks/reanimated/useSyncSharedValue';
+import { setParams } from '@/navigation/Navigation';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
 import { useBrowserStore } from '@/state/browser/browserStore';
 import { useBrowserHistoryStore } from '@/state/browserHistory';
-import { deviceUtils, safeAreaInsetValues } from '@/utils';
-import { AnimatedScrollView } from '../AnimatedComponents/AnimatedScrollView';
+import { DEVICE_HEIGHT, DEVICE_WIDTH } from '@/utils/deviceUtils';
+import { time } from '@/utils';
+import { generateUniqueId } from '@/worklets/strings';
 import { BrowserContextProvider, useBrowserContext } from './BrowserContext';
 import { BrowserTab } from './BrowserTab';
 import { BrowserWorkletsContextProvider, useBrowserWorkletsContext } from './BrowserWorkletsContext';
-import { TAB_VIEW_ROW_HEIGHT } from './Dimensions';
 import { ProgressBar } from './ProgressBar';
 import { TabViewToolbar } from './TabViewToolbar';
-import { BrowserGestureBlocker } from './components/BrowserGestureBlocker';
+import {
+  BROWSER_BACKGROUND_COLOR_DARK,
+  BROWSER_BACKGROUND_COLOR_LIGHT,
+  HOMEPAGE_BACKGROUND_COLOR_LIGHT,
+  TAB_VIEW_BACKGROUND_COLOR_DARK,
+  TAB_VIEW_BACKGROUND_COLOR_LIGHT,
+} from './constants';
+import { useBrowserScrollView } from './hooks/useBrowserScrollView';
 import { useScreenshotAndScrollTriggers } from './hooks/useScreenshotAndScrollTriggers';
 import { pruneScreenshots } from './screenshots';
 import { Search } from './search/Search';
 import { SearchContextProvider } from './search/SearchContext';
-
-export type DappBrowserParams = {
-  url: string;
-};
-
-type RouteParams = {
-  DappBrowserParams: DappBrowserParams;
-};
+import { AnimatedTabUrls, TabViewGestureStates } from './types';
 
 export const DappBrowser = () => {
   const { isDarkMode } = useColorMode();
   return (
-    <BrowserGestureBlocker>
-      <Box as={Page} height="full" style={isDarkMode ? styles.rootViewBackground : styles.rootViewBackgroundLight} width="full">
-        <BrowserContextProvider>
-          <BrowserWorkletsContextProvider>
-            <DappBrowserComponent />
-          </BrowserWorkletsContextProvider>
-        </BrowserContextProvider>
-      </Box>
-    </BrowserGestureBlocker>
+    <Box as={Page} height="full" style={[isDarkMode ? styles.rootViewBackgroundDark : styles.rootViewBackgroundLight]} width="full">
+      <BrowserContextProvider>
+        <BrowserWorkletsContextProvider>
+          <DappBrowserComponent />
+        </BrowserWorkletsContextProvider>
+      </BrowserContextProvider>
+    </Box>
   );
 };
 
-const DappBrowserComponent = () => {
+const DappBrowserComponent = memo(function DappBrowserComponent() {
   useScreenshotAndScrollTriggers();
   useScreenshotPruner();
 
@@ -71,32 +65,54 @@ const DappBrowserComponent = () => {
       </SearchContextProvider>
     </>
   );
-};
+});
 
 const NewTabTrigger = () => {
+  const { animatedTabUrls, currentlyOpenTabIds } = useBrowserContext();
   const { newTabWorklet } = useBrowserWorkletsContext();
-  const route = useRoute<RouteProp<RouteParams, 'DappBrowserParams'>>();
+
+  const route = useRoute<RouteProp<RootStackParamList, typeof Routes.DAPP_BROWSER_SCREEN>>();
+  const newTabUrl = route.params?.url;
 
   useAnimatedReaction(
-    () => route.params?.url,
+    () => newTabUrl,
     (current, previous) => {
-      if (current !== previous && route.params?.url) {
-        newTabWorklet(current);
+      if (current && current !== previous) {
+        const newTabId = generateUniqueId();
+        const updatedTabUrls = { ...animatedTabUrls.value, [newTabId]: current };
+        const newActiveIndex = previous === null ? currentlyOpenTabIds.value.length : undefined;
+
+        runOnJS(setNewTabUrl)(updatedTabUrls, newActiveIndex);
+        newTabWorklet({ newTabId, newTabUrl: current });
       }
     },
-    [newTabWorklet, route.params?.url]
+    [newTabUrl]
   );
 
   return null;
 };
 
+function setNewTabUrl(updatedTabUrls: AnimatedTabUrls, newActiveIndex: number | undefined): void {
+  const { setActiveTabIndex, setPersistedTabUrls } = useBrowserStore.getState();
+  // Set the new tab URL ahead of creating the tab so the URL is available when the tab is rendered
+  setPersistedTabUrls(updatedTabUrls);
+  if (newActiveIndex !== undefined) setActiveTabIndex(newActiveIndex);
+  setParams<typeof Routes.DAPP_BROWSER_SCREEN>({ url: undefined });
+}
+
 function useScreenshotPruner() {
   useEffect(() => {
-    // Delay pruning screenshots until after the tab states have been updated
-    InteractionManager.runAfterInteractions(() => {
-      pruneScreenshots(useBrowserStore.getState().tabsData);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let idleCallbackId: number;
+    const timeoutId = setTimeout(() => {
+      idleCallbackId = requestIdleCallback(() => {
+        pruneScreenshots(useBrowserStore.getState().tabsData);
+      });
+    }, time.seconds(10));
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (typeof idleCallbackId === 'number') cancelIdleCallback(idleCallbackId);
+    };
   }, []);
 }
 
@@ -109,7 +125,10 @@ const TabViewBackground = () => {
       backgroundColor: interpolateColor(
         tabViewProgress.value,
         [0, 100],
-        [isDarkMode ? globalColors.grey100 : '#FBFCFD', isDarkMode ? '#0A0A0A' : '#FBFCFD']
+        [
+          isDarkMode ? BROWSER_BACKGROUND_COLOR_DARK : BROWSER_BACKGROUND_COLOR_LIGHT,
+          isDarkMode ? TAB_VIEW_BACKGROUND_COLOR_DARK : TAB_VIEW_BACKGROUND_COLOR_LIGHT,
+        ]
       ),
     };
   });
@@ -118,31 +137,29 @@ const TabViewBackground = () => {
 };
 
 const TabViewScrollView = ({ children }: { children: React.ReactNode }) => {
-  const { currentlyOpenTabIds, scrollViewRef, tabViewVisible } = useBrowserContext();
-
-  const scrollEnabledProp = useAnimatedProps(() => ({
-    scrollEnabled: tabViewVisible.value,
-  }));
-
-  const scrollViewHeightStyle = useAnimatedStyle(() => {
-    const height = Math.max(
-      Math.ceil(currentlyOpenTabIds.value.length / 2) * TAB_VIEW_ROW_HEIGHT + safeAreaInsetValues.bottom + 165 + 28 + (IS_ANDROID ? 35 : 0),
-      deviceUtils.dimensions.height
-    );
-    // Using paddingBottom on a nested container instead of height because the height of the ScrollView
-    // seemingly cannot be directly animated. This works because the tabs are all positioned absolutely.
-    return { paddingBottom: withTiming(height, TIMING_CONFIGS.tabPressConfig) };
-  });
+  const { scrollViewOffset, scrollViewRef } = useBrowserContext();
+  const { animatedProps, gestureManager, gestureManagerStyle, scrollViewContainerStyle, scrollViewStyle } = useBrowserScrollView();
 
   return (
-    <AnimatedScrollView animatedProps={scrollEnabledProp} ref={scrollViewRef} scrollEventThrottle={16} showsVerticalScrollIndicator={false}>
-      <Animated.View style={scrollViewHeightStyle}>{children}</Animated.View>
-    </AnimatedScrollView>
+    <Animated.View style={[styles.scrollViewContainer, gestureManagerStyle]} testID="browser-screen">
+      <GestureDetector gesture={gestureManager}>
+        <Animated.ScrollView
+          animatedProps={animatedProps}
+          ref={scrollViewRef}
+          scrollViewOffset={scrollViewOffset}
+          showsVerticalScrollIndicator={false}
+          style={[styles.scrollView, scrollViewContainerStyle]}
+        >
+          <Animated.View style={[styles.scrollViewHeight, scrollViewStyle]} />
+        </Animated.ScrollView>
+      </GestureDetector>
+      {children}
+    </Animated.View>
   );
 };
 
-const TabViewContent = React.memo(function TabViewContent() {
-  const { currentlyBeingClosedTabIds, currentlyOpenTabIds } = useBrowserContext();
+const TabViewContent = () => {
+  const { currentlyBeingClosedTabIds, currentlyOpenTabIds, tabViewGestureState } = useBrowserContext();
 
   const tabIds = useBrowserStore(state => state.tabIds);
   const addRecent = useBrowserHistoryStore(state => state.addRecent);
@@ -150,10 +167,12 @@ const TabViewContent = React.memo(function TabViewContent() {
   const setTabIds = useBrowserStore(state => state.setTabIds);
   const setTitle = useBrowserStore(state => state.setTitle);
 
-  const areTabCloseAnimationsRunning = useDerivedValue(() => currentlyBeingClosedTabIds.value.length > 0);
+  const shouldPauseSync = useDerivedValue(
+    () => currentlyBeingClosedTabIds.value.length > 0 || tabViewGestureState.value === TabViewGestureStates.DRAG_END_ENTERING
+  );
 
   useSyncSharedValue({
-    pauseSync: areTabCloseAnimationsRunning,
+    pauseSync: shouldPauseSync,
     setState: setTabIds,
     sharedValue: currentlyOpenTabIds,
     state: tabIds,
@@ -167,16 +186,35 @@ const TabViewContent = React.memo(function TabViewContent() {
       ))}
     </>
   );
-});
+};
 
 const styles = StyleSheet.create({
-  rootViewBackground: {
+  rootViewBackgroundDark: {
     backgroundColor: globalColors.grey100,
     flex: 1,
+    position: 'absolute',
   },
   rootViewBackgroundLight: {
-    backgroundColor: '#FBFCFD',
+    backgroundColor: HOMEPAGE_BACKGROUND_COLOR_LIGHT,
     flex: 1,
+    position: 'absolute',
+  },
+  scrollView: {
+    flex: 1,
+    height: DEVICE_HEIGHT,
+    position: 'absolute',
+    width: DEVICE_WIDTH,
+    zIndex: 10000,
+  },
+  scrollViewContainer: {
+    height: DEVICE_HEIGHT,
+    position: 'absolute',
+    width: DEVICE_WIDTH,
+  },
+  scrollViewHeight: {
+    height: DEVICE_HEIGHT,
+    pointerEvents: 'box-none',
+    width: DEVICE_WIDTH,
   },
   tabViewBackground: {
     height: '100%',

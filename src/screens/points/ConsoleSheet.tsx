@@ -1,10 +1,9 @@
-/* eslint-disable no-nested-ternary */
 import React, { useCallback, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { Box, Inset, globalColors } from '@/design-system';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
-import { analyticsV2 } from '@/analytics';
+import { analytics } from '@/analytics';
 
 import { RainbowPointsFlowSteps, SCREEN_BOTTOM_INSET } from './constants';
 import { TypingAnimation } from './contexts/AnimationContext';
@@ -15,22 +14,16 @@ import { Share } from './content/console/share';
 import { Review } from './content/console/review';
 import { ViewWeeklyEarnings } from './content/console/view-weekly-earnings';
 import { RequireWalletBalance } from './content/console/require-wallet-balance';
-
-type ConsoleSheetParams = {
-  ConsoleSheet: {
-    referralCode: string | undefined;
-    deeplinked: boolean;
-    viewWeeklyEarnings: boolean;
-  };
-};
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
 
 export const ConsoleSheet = () => {
-  const { params } = useRoute<RouteProp<ConsoleSheetParams, 'ConsoleSheet'>>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.CONSOLE_SHEET>>();
   const referralCode = params?.referralCode;
-  const deeplinked = params?.deeplinked;
-  const viewWeeklyEarnings = params?.viewWeeklyEarnings;
+  const deeplinked = params?.deeplinked ?? false;
+  const viewWeeklyEarnings = params?.viewWeeklyEarnings ?? false;
 
-  const { animationKey, setReferralCode, setProfile, setAnimationKey, setStep, setIntent, setDeeplinked } = usePointsProfileContext();
+  const { animationKey, setReferralCode, setProfile, setAnimationKey, setStep, setDeeplinked } = usePointsProfileContext();
 
   useEffect(() => {
     if (viewWeeklyEarnings) return;
@@ -48,17 +41,16 @@ export const ConsoleSheet = () => {
     setProfile(undefined);
     setAnimationKey(0);
     setStep(RainbowPointsFlowSteps.Initialize);
-    setIntent(undefined);
-  }, [viewWeeklyEarnings, setProfile, setAnimationKey, setStep, setIntent]);
+  }, [viewWeeklyEarnings, setProfile, setAnimationKey, setStep]);
 
   useFocusEffect(
     useCallback(() => {
       if (viewWeeklyEarnings) {
-        analyticsV2.track(analyticsV2.event.pointsViewedWeeklyEarnings);
+        analytics.track(analytics.event.pointsViewedWeeklyEarnings);
         return;
       }
 
-      analyticsV2.track(analyticsV2.event.pointsViewedOnboardingSheet);
+      analytics.track(analytics.event.pointsViewedOnboardingSheet);
     }, [viewWeeklyEarnings])
   );
 

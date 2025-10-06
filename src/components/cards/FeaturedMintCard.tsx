@@ -1,4 +1,4 @@
-import styled from '@/styled-thing';
+import { analytics } from '@/analytics';
 import {
   AccentColorProvider,
   Box,
@@ -13,21 +13,21 @@ import {
   useColorMode,
   useForegroundColor,
 } from '@/design-system';
-import React, { useCallback, useEffect, useState } from 'react';
-import { ButtonPressAnimation } from '../animations';
-import { useMints } from '@/resources/mints';
-import { useAccountProfile, useDimensions } from '@/hooks';
-import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
-import { ImgixImage } from '../images';
-import { abbreviateNumber, convertRawAmountToRoundedDecimal } from '@/helpers/utilities';
-import { BlurView } from '@react-native-community/blur';
-import { View } from 'react-native';
 import { IS_IOS } from '@/env';
-import { Media } from '../Media';
-import { analyticsV2 } from '@/analytics';
+import { abbreviateNumber, convertRawAmountToRoundedDecimal } from '@/helpers/utilities';
+import { useDimensions } from '@/hooks';
+import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
 import * as i18n from '@/languages';
+import { useMints } from '@/resources/mints';
 import { navigateToMintCollection } from '@/resources/reservoir/mints';
-import { ethereumUtils } from '@/utils';
+import styled from '@/styled-thing';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
+import { BlurView } from 'react-native-blur-view';
+import { useAccountAddress } from '../../state/wallets/walletsStore';
+import { ButtonPressAnimation } from '../animations';
+import { ImgixImage } from '../images';
+import { Media } from '../Media';
 
 const IMAGE_SIZE = 111;
 
@@ -44,13 +44,12 @@ const BlurWrapper = styled(View).attrs({
 });
 
 export function FeaturedMintCard() {
-  const { accountAddress } = useAccountProfile();
+  const accountAddress = useAccountAddress();
+  const { width: deviceWidth } = useDimensions();
+
   const {
     data: { featuredMint },
-  } = useMints({
-    walletAddress: accountAddress,
-  });
-  const { width: deviceWidth } = useDimensions();
+  } = useMints({ walletAddress: accountAddress });
 
   const [mediaRendered, setMediaRendered] = useState(false);
   const { colorMode } = useColorMode();
@@ -68,19 +67,20 @@ export function FeaturedMintCard() {
 
   const handlePress = useCallback(() => {
     if (featuredMint) {
-      analyticsV2.track(analyticsV2.event.mintsPressedFeaturedMintCard, {
+      analytics.track(analytics.event.mintsPressedFeaturedMintCard, {
         contractAddress: featuredMint.contractAddress,
         chainId: featuredMint.chainId,
         totalMints: featuredMint.totalMints,
         mintsLastHour: featuredMint.totalMints,
         priceInEth: convertRawAmountToRoundedDecimal(featuredMint.mintStatus.price, 18, 6),
       });
-      const network = ethereumUtils.getNetworkFromChainId(featuredMint.chainId);
-      navigateToMintCollection(featuredMint.contract, network);
+      navigateToMintCollection(featuredMint.contract, featuredMint.mintStatus.price, featuredMint.chainId);
     }
   }, [featuredMint]);
 
-  return featuredMint ? (
+  if (!featuredMint) return null;
+
+  return (
     <ColorModeProvider value="darkTinted">
       <AccentColorProvider color={accentColor ?? labelSecondary}>
         <View
@@ -140,8 +140,8 @@ export function FeaturedMintCard() {
                   <Cover>
                     {IS_IOS ? (
                       <BlurView
-                        blurAmount={100}
-                        blurType="light"
+                        blurIntensity={100}
+                        blurStyle="light"
                         style={{
                           height: '100%',
                           width: '100%',
@@ -282,7 +282,5 @@ export function FeaturedMintCard() {
         </View>
       </AccentColorProvider>
     </ColorModeProvider>
-  ) : (
-    <></>
   );
 }

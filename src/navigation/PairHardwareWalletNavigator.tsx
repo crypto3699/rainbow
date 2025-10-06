@@ -10,18 +10,10 @@ import { SimpleSheet } from '@/components/sheet/SimpleSheet';
 import { atom, useRecoilState } from 'recoil';
 import Routes from '@/navigation/routesNames';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { analyticsV2 } from '@/analytics';
+import { analytics } from '@/analytics';
+import { RootStackParamList } from './types';
 
 const Swipe = createMaterialTopTabNavigator();
-
-type PairHardwareWalletNavigatorParams = {
-  entryPoint: string;
-  isFirstWallet: boolean;
-};
-
-type RouteParams = {
-  PairHardwareWalletNavigatorParams: PairHardwareWalletNavigatorParams;
-};
 
 // atoms used for navigator state
 export const LedgerImportDeviceIdAtom = atom({
@@ -30,7 +22,7 @@ export const LedgerImportDeviceIdAtom = atom({
 });
 
 export function PairHardwareWalletNavigator() {
-  const { params } = useRoute<RouteProp<RouteParams, 'PairHardwareWalletNavigatorParams'>>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.PAIR_HARDWARE_WALLET_INTRO_SHEET>>();
   const { height, width } = useDimensions();
 
   const [currentRouteName, setCurrentRouteName] = useState<string>(Routes.PAIR_HARDWARE_WALLET_INTRO_SHEET);
@@ -45,10 +37,10 @@ export function PairHardwareWalletNavigator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => analyticsV2.track(analyticsV2.event.pairHwWalletNavEntered, params), []);
+  useEffect(() => analytics.track(analytics.event.pairHwWalletNavEntered, params), []);
 
   const onDismiss = () =>
-    analyticsV2.track(analyticsV2.event.pairHwWalletNavExited, {
+    analytics.track(analytics.event.pairHwWalletNavExited, {
       step: currentRouteName,
       ...params,
     });
@@ -56,11 +48,18 @@ export function PairHardwareWalletNavigator() {
   return (
     <BackgroundProvider color="surfaceSecondary">
       {({ backgroundColor }) => (
-        <SimpleSheet backgroundColor={backgroundColor as string} onDismiss={onDismiss} scrollEnabled={false}>
+        <SimpleSheet backgroundColor={backgroundColor as string} onDismiss={onDismiss} scrollEnabled={false} useAdditionalTopPadding>
+          {(currentRouteName === Routes.PAIR_HARDWARE_WALLET_INTRO_SHEET ||
+            currentRouteName === Routes.PAIR_HARDWARE_WALLET_SEARCH_SHEET) && (
+            <NanoXDeviceAnimation
+              state={currentRouteName === Routes.PAIR_HARDWARE_WALLET_SEARCH_SHEET ? 'loading' : 'idle'}
+              isConnected={deviceId !== ''}
+            />
+          )}
           <Swipe.Navigator
             initialLayout={{ height, width }}
             initialRouteName={currentRouteName}
-            sceneContainerStyle={{ backgroundColor }}
+            sceneContainerStyle={{ backgroundColor: 'transparent' }}
             screenOptions={{ swipeEnabled: false, lazy: true }}
             tabBar={() => null}
           >
@@ -92,13 +91,6 @@ export function PairHardwareWalletNavigator() {
               }}
             />
           </Swipe.Navigator>
-          {(currentRouteName === Routes.PAIR_HARDWARE_WALLET_INTRO_SHEET ||
-            currentRouteName === Routes.PAIR_HARDWARE_WALLET_SEARCH_SHEET) && (
-            <NanoXDeviceAnimation
-              state={currentRouteName === Routes.PAIR_HARDWARE_WALLET_SEARCH_SHEET ? 'loading' : 'idle'}
-              isConnected={deviceId !== ''}
-            />
-          )}
         </SimpleSheet>
       )}
     </BackgroundProvider>

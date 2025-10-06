@@ -1,40 +1,21 @@
-import lang from 'i18n-js';
-import { getAddress, isAddress } from '@ethersproject/address';
-import { ChainId, EthereumAddress } from '@rainbow-me/swaps';
-import { Contract } from '@ethersproject/contracts';
+import * as i18n from '@/languages';
 import { rankings } from 'match-sorter';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTheme } from '../theme/ThemeContext';
-import usePrevious from './usePrevious';
-import { RainbowToken, RainbowToken as RT, TokenSearchTokenListId } from '@/entities';
-import { tokenSearch } from '@/handlers/tokenSearch';
-import { addHexPrefix, getProviderForNetwork } from '@/handlers/web3';
+import { addHexPrefix } from '@/handlers/web3';
 import tokenSectionTypes from '@/helpers/tokenSectionTypes';
-import { DAI_ADDRESS, erc20ABI, ETH_ADDRESS, rainbowTokenList, USDC_ADDRESS, WBTC_ADDRESS, WETH_ADDRESS } from '@/references';
-import { ethereumUtils, filterList, isLowerCaseMatch, logger } from '@/utils';
-import useSwapCurrencies from '@/hooks/useSwapCurrencies';
-import { Network } from '@/helpers';
-import { CROSSCHAIN_SWAPS, useExperimentalFlag } from '@/config';
+import { filterList } from '@/utils';
 import { IS_TEST } from '@/env';
 import { useFavorites } from '@/resources/favorites';
+import { ChainId } from '@/state/backendNetworks/types';
 import { getUniqueId } from '@/utils/ethereumUtils';
+import { useDiscoverSearchQueryStore, useDiscoverSearchStore } from '@/__swaps__/screens/Swap/resources/search/searchV2';
+import { SearchAsset, TokenSearchAssetKey, TokenSearchThreshold } from '@/__swaps__/types/search';
+import { isAddress } from '@ethersproject/address';
 
-const MAINNET_CHAINID = 1;
-type swapCurrencyListType =
-  | 'verifiedAssets'
-  | 'highLiquidityAssets'
-  | 'lowLiquidityAssets'
-  | 'favoriteAssets'
-  | 'curatedAssets'
-  | 'importedAssets';
-
-type CrosschainVerifiedAssets = {
-  [Network.mainnet]: RT[];
-  [Network.optimism]: RT[];
-  [Network.polygon]: RT[];
-  [Network.bsc]: RT[];
-  [Network.arbitrum]: RT[];
-};
+const MAX_VERIFIED_RESULTS = 24;
+const MAX_HIGH_LIQUIDITY_RESULTS = 6;
+const MAX_LOW_LIQUIDITY_RESULTS = 6;
 
 const abcSort = (list: any[], key?: string) => {
   return list.sort((a, b) => {
@@ -42,475 +23,134 @@ const abcSort = (list: any[], key?: string) => {
   });
 };
 
-const searchCurrencyList = async (searchParams: {
-  chainId: number;
-  fromChainId?: number | '';
-  searchList: RT[] | TokenSearchTokenListId;
-  query: string;
-}) => {
-  const { searchList, query, chainId } = searchParams;
-  const isAddress = query.match(/^(0x)?[0-9a-fA-F]{40}$/);
-  const keys: (keyof RT)[] = isAddress ? ['address'] : ['symbol', 'name'];
-  const formattedQuery = isAddress ? addHexPrefix(query).toLowerCase() : query;
-  if (typeof searchList === 'string') {
-    const threshold = isAddress ? 'CASE_SENSITIVE_EQUAL' : 'CONTAINS';
-    if (chainId === MAINNET_CHAINID && !formattedQuery && searchList !== 'verifiedAssets') {
-      return [];
-    }
-    return tokenSearch({
-      chainId,
+const useSearchCurrencyList = () => {
+  const searchQuery = useDiscoverSearchQueryStore(state => state.searchQuery.trim().toLowerCase());
+  const searching = useMemo(() => searchQuery !== '', [searchQuery]);
+
+  const { favoritesMetadata: favoriteMap } = useFavorites();
+  const unfilteredFavorites = useMemo(() => {
+    return Object.values(favoriteMap)
+      .filter(token => token.networks[ChainId.mainnet])
+      .map(favToken => ({
+        ...favToken,
+        favorite: true,
+        mainnetAddress: favToken.networks?.[ChainId.mainnet]?.address || favToken.mainnet_address,
+        uniqueId: getUniqueId(favToken.address, ChainId.mainnet),
+      })) as SearchAsset[];
+  }, [favoriteMap]);
+
+  const memoizedData = useMemo(() => {
+    const queryIsAddress = isAddress(searchQuery);
+    const keys: TokenSearchAssetKey[] = queryIsAddress ? ['address'] : ['name', 'symbol'];
+    const threshold: TokenSearchThreshold = queryIsAddress ? 'CASE_SENSITIVE_EQUAL' : 'CONTAINS';
+    const enableUnverifiedSearch = searchQuery.length > 2;
+
+    return {
+      queryIsAddress,
       keys,
-      list: searchList,
       threshold,
-      query: formattedQuery,
-    });
-  } else {
-    return (
-      filterList(searchList, formattedQuery, keys, {
-        threshold: isAddress ? rankings.CASE_SENSITIVE_EQUAL : rankings.CONTAINS,
-      }) || []
-    );
-  }
-};
-
-const useSearchCurrencyList = (searchQuery: string, searchChainId = MAINNET_CHAINID, isDiscover = false) => {
-  const previousChainId = usePrevious(searchChainId);
-
-  const searching = useMemo(() => searchQuery !== '' || MAINNET_CHAINID !== searchChainId, [searchChainId, searchQuery]);
-
-  const { favorites: favoriteAddresses, favoritesMetadata: favoriteMap } = useFavorites();
-
-  const curatedMap = rainbowTokenList.CURATED_TOKENS;
-  const unfilteredFavorites = Object.values(favoriteMap);
-
-  const [loading, setLoading] = useState(true);
-  const [favoriteAssets, setFavoriteAssets] = useState<RT[]>([]);
-  const [importedAssets, setImportedAssets] = useState<RT[]>([]);
-  const [highLiquidityAssets, setHighLiquidityAssets] = useState<RT[]>([]);
-  const [lowLiquidityAssets, setLowLiquidityAssets] = useState<RT[]>([]);
-  const [verifiedAssets, setVerifiedAssets] = useState<RT[]>([]);
-  const [fetchingCrosschainAssets, setFetchingCrosschainAssets] = useState(false);
-  const [crosschainVerifiedAssets, setCrosschainVerifiedAssets] = useState<CrosschainVerifiedAssets>({
-    [Network.mainnet]: [],
-    [Network.optimism]: [],
-    [Network.polygon]: [],
-    [Network.bsc]: [],
-    [Network.arbitrum]: [],
-  });
-
-  const crosschainSwapsEnabled = useExperimentalFlag(CROSSCHAIN_SWAPS);
-
-  const { inputCurrency } = useSwapCurrencies();
-  const previousInputCurrencyNetwork = usePrevious(inputCurrency?.network);
-  const inputChainId = useMemo(() => ethereumUtils.getChainIdFromNetwork(inputCurrency?.network), [inputCurrency?.network]);
-  const isCrosschainSearch = useMemo(() => {
-    if (inputChainId && inputChainId !== searchChainId && crosschainSwapsEnabled && !isDiscover) {
-      return true;
-    }
-  }, [inputChainId, searchChainId, crosschainSwapsEnabled, isDiscover]);
-
-  const isFavorite = useCallback(
-    (address: EthereumAddress) => favoriteAddresses.map(a => a?.toLowerCase()).includes(address?.toLowerCase()),
-    [favoriteAddresses]
-  );
-  const handleSearchResponse = useCallback(
-    (tokens: RT[]): RT[] => {
-      // These transformations are necessary for L2 tokens to match our spec
-      return (tokens || [])
-        .map(token => {
-          const t: RT = {
-            ...token,
-            address: token?.address || token.uniqueId.toLowerCase(),
-          } as RT;
-
-          return t;
-        })
-        .filter(({ address }) => !isFavorite(address));
-    },
-    [isFavorite]
-  );
-
-  const getCurated = useCallback(() => {
-    const addresses = favoriteAddresses.map(a => a.toLowerCase());
-    return Object.values(curatedMap)
-      .filter(({ address }) => !addresses.includes(address.toLowerCase()))
-      .sort((t1, t2) => {
-        const { address: address1, name: name1 } = t1;
-        const { address: address2, name: name2 } = t2;
-        const mainnetPriorityTokens = [ETH_ADDRESS, WETH_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, WBTC_ADDRESS];
-        const rankA = mainnetPriorityTokens.findIndex(address => address === address1.toLowerCase());
-        const rankB = mainnetPriorityTokens.findIndex(address => address === address2.toLowerCase());
-        const aIsRanked = rankA > -1;
-        const bIsRanked = rankB > -1;
-        if (aIsRanked) {
-          if (bIsRanked) {
-            return rankA > rankB ? -1 : 1;
-          }
-          return -1;
-        }
-        return bIsRanked ? 1 : name1?.localeCompare(name2);
-      });
-  }, [curatedMap, favoriteAddresses]);
-
-  const getFavorites = useCallback(async () => {
-    return searching
-      ? await searchCurrencyList({
-          searchList: unfilteredFavorites as RainbowToken[],
-          query: searchQuery,
-          chainId: searchChainId,
-        })
-      : unfilteredFavorites;
-  }, [searchChainId, searchQuery, searching, unfilteredFavorites]);
-
-  const getImportedAsset = useCallback(
-    async (searchQuery: string, chainId: number): Promise<RT[] | null> => {
-      if (searching) {
-        if (isAddress(searchQuery)) {
-          const tokenListEntry = rainbowTokenList.RAINBOW_TOKEN_LIST[searchQuery.toLowerCase()];
-          if (tokenListEntry) {
-            return [tokenListEntry];
-          }
-          const network = ethereumUtils.getNetworkFromChainId(chainId);
-          const provider = await getProviderForNetwork(network);
-          const tokenContract = new Contract(searchQuery, erc20ABI, provider);
-          try {
-            const [name, symbol, decimals, address] = await Promise.all([
-              tokenContract.name(),
-              tokenContract.symbol(),
-              tokenContract.decimals(),
-              getAddress(searchQuery),
-            ]);
-            const uniqueId = getUniqueId(address, network);
-
-            return [
-              {
-                address,
-                decimals,
-                favorite: false,
-                highLiquidity: false,
-                isRainbowCurated: false,
-                isVerified: false,
-                name,
-                networks: {
-                  [chainId]: {
-                    address,
-                    decimals,
-                  },
-                },
-                symbol,
-                network,
-                uniqueId,
-              } as RainbowToken,
-            ];
-          } catch (e) {
-            logger.log('error getting token data');
-            logger.log(e);
-            return null;
-          }
-        }
-      }
-      return null;
-    },
-    [searching]
-  );
-
-  const getCrosschainVerifiedAssetsForNetwork = useCallback(
-    async (network: Network) => {
-      const crosschainId = ethereumUtils.getChainIdFromNetwork(network);
-      const fromChainId = inputChainId !== crosschainId ? inputChainId : '';
-      const results = await searchCurrencyList({
-        searchList: 'verifiedAssets',
-        query: '',
-        chainId: crosschainId,
-        fromChainId,
-      });
-      setCrosschainVerifiedAssets(state => ({
-        ...state,
-        [network]: handleSearchResponse(results || []),
-      }));
-    },
-    [handleSearchResponse, inputChainId]
-  );
-
-  const getCrosschainVerifiedAssets = useCallback(async () => {
-    const crosschainAssetRequests: Promise<void>[] = [];
-    Object.keys(crosschainVerifiedAssets).forEach(network => {
-      crosschainAssetRequests.push(getCrosschainVerifiedAssetsForNetwork(network as Network));
-    });
-    await Promise.all(crosschainAssetRequests);
-  }, [crosschainVerifiedAssets, getCrosschainVerifiedAssetsForNetwork]);
-
-  const getResultsForAssetType = useCallback(
-    async (assetType: swapCurrencyListType) => {
-      switch (assetType) {
-        case 'verifiedAssets':
-          setVerifiedAssets(
-            handleSearchResponse(
-              await searchCurrencyList({
-                searchList: assetType,
-                query: searchQuery,
-                chainId: searchChainId,
-                fromChainId: isCrosschainSearch && inputChainId,
-              })
-            )
-          );
-          break;
-        case 'highLiquidityAssets':
-          setHighLiquidityAssets(
-            handleSearchResponse(
-              await searchCurrencyList({
-                searchList: assetType,
-                query: searchQuery,
-                chainId: searchChainId,
-                fromChainId: isCrosschainSearch && inputChainId,
-              })
-            )
-          );
-          break;
-        case 'lowLiquidityAssets':
-          setLowLiquidityAssets(
-            handleSearchResponse(
-              await searchCurrencyList({
-                searchList: assetType,
-                query: searchQuery,
-                chainId: searchChainId,
-                fromChainId: isCrosschainSearch && inputChainId,
-              })
-            )
-          );
-          break;
-        case 'favoriteAssets':
-          setFavoriteAssets((await getFavorites()) || []);
-          break;
-        case 'importedAssets': {
-          const importedAssetResult = await getImportedAsset(searchQuery, searchChainId);
-          if (importedAssetResult) {
-            setImportedAssets(handleSearchResponse(importedAssetResult));
-          }
-          break;
-        }
-      }
-    },
-    [getFavorites, getImportedAsset, handleSearchResponse, searchQuery, searchChainId, inputChainId, isCrosschainSearch]
-  );
-
-  const search = useCallback(async () => {
-    const categories: swapCurrencyListType[] =
-      searchChainId === MAINNET_CHAINID
-        ? ['favoriteAssets', 'highLiquidityAssets', 'verifiedAssets', 'importedAssets']
-        : ['verifiedAssets', 'importedAssets'];
-    setLoading(true);
-    await Promise.all(categories.map(assetType => getResultsForAssetType(assetType)));
-  }, [searchChainId, getResultsForAssetType]);
-
-  const slowSearch = useCallback(async () => {
-    try {
-      await getResultsForAssetType('lowLiquidityAssets');
-      // eslint-disable-next-line no-empty
-    } catch (e) {
-    } finally {
-      setLoading(false);
-    }
-  }, [getResultsForAssetType]);
-
-  const clearSearch = useCallback(() => {
-    getResultsForAssetType('curatedAssets');
-    setLowLiquidityAssets([]);
-    setHighLiquidityAssets([]);
-    setVerifiedAssets([]);
-    setImportedAssets([]);
-  }, [getResultsForAssetType]);
-
-  const wasSearching = usePrevious(searching);
-  const previousSearchQuery = usePrevious(searchQuery);
-
-  useEffect(() => {
-    setFetchingCrosschainAssets(false);
-  }, [inputChainId]);
-
-  useEffect(() => {
-    if (!fetchingCrosschainAssets && crosschainSwapsEnabled) {
-      setFetchingCrosschainAssets(true);
-      getCrosschainVerifiedAssets();
-    }
-  }, [getCrosschainVerifiedAssets, fetchingCrosschainAssets, crosschainSwapsEnabled]);
-
-  useEffect(() => {
-    const doSearch = async () => {
-      if (
-        (searching && !wasSearching) ||
-        (searching && previousSearchQuery !== searchQuery) ||
-        searchChainId !== previousChainId ||
-        inputCurrency?.network !== previousInputCurrencyNetwork
-      ) {
-        if (searchChainId === MAINNET_CHAINID) {
-          search();
-          slowSearch();
-        } else {
-          await search();
-          setLowLiquidityAssets([]);
-          setHighLiquidityAssets([]);
-          setLoading(false);
-        }
-      } else {
-        clearSearch();
-      }
+      enableUnverifiedSearch,
     };
-    doSearch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searching, searchQuery, searchChainId, isCrosschainSearch, inputCurrency?.network]);
+  }, [searchQuery]);
+
+  const favoriteAssets = useMemo(() => {
+    if (searchQuery === '') {
+      return unfilteredFavorites;
+    } else {
+      return filterList(
+        unfilteredFavorites || [],
+        memoizedData.queryIsAddress ? addHexPrefix(searchQuery).toLowerCase() : searchQuery,
+        memoizedData.keys,
+        {
+          threshold: memoizedData.queryIsAddress ? rankings.CASE_SENSITIVE_EQUAL : rankings.CONTAINS,
+        }
+      );
+    }
+  }, [memoizedData.keys, memoizedData.queryIsAddress, searchQuery, unfilteredFavorites]);
 
   const { colors } = useTheme();
 
+  const searchResultAssets = useDiscoverSearchStore(state => state.getData());
+  const loading = useDiscoverSearchStore(state => state.getStatus().isFetching);
+
+  const removeFavoritesAndEnforceResultsLimit = useCallback(
+    (assets: SearchAsset[] | undefined, maxResults: number) => {
+      return (assets || []).filter(asset => !favoriteAssets.some(fav => fav.uniqueId === asset.uniqueId)).slice(0, maxResults);
+    },
+    [favoriteAssets]
+  );
+
   const currencyList = useMemo(() => {
     const list = [];
+    const verifiedAssets = removeFavoritesAndEnforceResultsLimit(searchResultAssets?.verifiedAssets, MAX_VERIFIED_RESULTS);
+    const highLiquidityAssets = removeFavoritesAndEnforceResultsLimit(searchResultAssets?.highLiquidityAssets, MAX_HIGH_LIQUIDITY_RESULTS);
+    const lowLiquidityAssets = removeFavoritesAndEnforceResultsLimit(searchResultAssets?.lowLiquidityAssets, MAX_LOW_LIQUIDITY_RESULTS);
 
-    let bridgeAsset = isCrosschainSearch
-      ? verifiedAssets.find(asset => isLowerCaseMatch(asset?.name, inputCurrency?.name) && asset?.network !== inputCurrency?.network)
-      : null;
     if (searching) {
-      const importedAsset = importedAssets?.[0];
-      let verifiedAssetsWithImport = verifiedAssets;
-      let highLiquidityAssetsWithImport = highLiquidityAssets;
-      let lowLiquidityAssetsWithoutImport = lowLiquidityAssets;
-      const verifiedAddresses = verifiedAssets.map(({ uniqueId }) => uniqueId.toLowerCase());
-      const highLiquidityAddresses = verifiedAssets.map(({ uniqueId }) => uniqueId.toLowerCase());
-      // this conditional prevents the imported token from jumping
-      // sections if verified/highliquidity search responds later
-      // than the contract checker in getImportedAsset
-      if (importedAsset && !isFavorite(importedAsset?.address)) {
-        lowLiquidityAssetsWithoutImport = lowLiquidityAssets.filter(({ address }) => address.toLowerCase() !== importedAsset?.address);
-        if (importedAsset?.isVerified && !verifiedAddresses.includes(importedAsset?.address.toLowerCase())) {
-          verifiedAssetsWithImport = [importedAsset, ...verifiedAssets];
-        } else {
-          if (!highLiquidityAddresses.includes(importedAsset?.address.toLowerCase())) {
-            highLiquidityAssetsWithImport = [importedAsset, ...highLiquidityAssets];
-          }
-        }
-      }
-      if (inputCurrency?.name && verifiedAssets.length) {
-        if (bridgeAsset) {
-          list.push({
-            color: colors.networkColors[bridgeAsset.network],
-            data: [bridgeAsset],
-            key: 'bridgeAsset',
-            title: lang.t(`exchange.token_sections.${tokenSectionTypes.bridgeTokenSection}`),
-          });
-        }
-      }
-      if (favoriteAssets?.length && searchChainId === MAINNET_CHAINID) {
+      if (favoriteAssets?.length) {
         list.push({
           color: colors.yellowFavorite,
           data: abcSort(favoriteAssets, 'name'),
           key: 'favorites',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.favoriteTokenSection}`),
+          title: i18n.t(
+            i18n.l.exchange.token_sections[tokenSectionTypes.favoriteTokenSection as keyof typeof i18n.l.exchange.token_sections]
+          ),
         });
       }
-      if (verifiedAssetsWithImport?.length) {
+      if (verifiedAssets?.length) {
         list.push({
-          data: verifiedAssetsWithImport,
+          data: verifiedAssets,
           key: 'verified',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.verifiedTokenSection}`),
+          title: i18n.t(
+            i18n.l.exchange.token_sections[tokenSectionTypes.verifiedTokenSection as keyof typeof i18n.l.exchange.token_sections]
+          ),
           useGradientText: !IS_TEST,
         });
       }
-      if (highLiquidityAssetsWithImport?.length) {
+      if (highLiquidityAssets?.length) {
         list.push({
-          data: highLiquidityAssetsWithImport,
+          data: highLiquidityAssets,
           key: 'highLiquidity',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.unverifiedTokenSection}`),
+          title: i18n.t(
+            i18n.l.exchange.token_sections[tokenSectionTypes.unverifiedTokenSection as keyof typeof i18n.l.exchange.token_sections]
+          ),
         });
       }
-      if (lowLiquidityAssetsWithoutImport?.length) {
+      if (lowLiquidityAssets?.length) {
         list.push({
-          data: lowLiquidityAssetsWithoutImport,
+          data: lowLiquidityAssets,
           key: 'lowLiquidity',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.lowLiquidityTokenSection}`),
+          title: i18n.t(
+            i18n.l.exchange.token_sections[tokenSectionTypes.lowLiquidityTokenSection as keyof typeof i18n.l.exchange.token_sections]
+          ),
         });
       }
     } else {
-      const curatedAssets = searchChainId === MAINNET_CHAINID && getCurated();
-      if (inputCurrency?.name && isCrosschainSearch && curatedAssets) {
-        bridgeAsset = curatedAssets.find(asset => asset?.name === inputCurrency?.name);
-        if (bridgeAsset) {
-          list.push({
-            color: colors.networkColors[bridgeAsset.network],
-            data: [bridgeAsset],
-            key: 'bridgeAsset',
-            title: lang.t(`exchange.token_sections.${tokenSectionTypes.bridgeTokenSection}`),
-          });
-        }
-      }
-      if (unfilteredFavorites?.length) {
+      if (favoriteAssets?.length) {
         list.push({
           color: colors.yellowFavorite,
-          data: abcSort(unfilteredFavorites, 'name'),
+          data: abcSort(favoriteAssets, 'name'),
           key: 'unfilteredFavorites',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.favoriteTokenSection}`),
+          title: i18n.t(
+            i18n.l.exchange.token_sections[tokenSectionTypes.favoriteTokenSection as keyof typeof i18n.l.exchange.token_sections]
+          ),
         });
       }
-      if (curatedAssets && curatedAssets.length) {
+      if (verifiedAssets?.length) {
         list.push({
-          data: curatedAssets,
-          key: 'curated',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.verifiedTokenSection}`),
+          data: verifiedAssets,
+          key: 'verified',
+          title: i18n.t(
+            i18n.l.exchange.token_sections[tokenSectionTypes.verifiedTokenSection as keyof typeof i18n.l.exchange.token_sections]
+          ),
           useGradientText: !IS_TEST,
         });
       }
     }
     return list;
-  }, [
-    searching,
-    importedAssets,
-    favoriteAssets,
-    verifiedAssets,
-    highLiquidityAssets,
-    lowLiquidityAssets,
-    colors.yellowFavorite,
-    unfilteredFavorites,
-    searchChainId,
-    getCurated,
-    isFavorite,
-    inputCurrency?.name,
-    colors.networkColors,
-    isCrosschainSearch,
-    inputCurrency?.network,
-  ]);
-
-  const crosschainExactMatches = useMemo(() => {
-    if (currencyList.length) return [];
-    if (!searchQuery) return [];
-    const exactMatches: RT[] = [];
-    Object.keys(crosschainVerifiedAssets).forEach(network => {
-      const currentNetworkChainId = ethereumUtils.getChainIdFromNetwork(network as Network);
-      if (currentNetworkChainId !== searchChainId) {
-        // including goerli in our networks type is causing this type issue
-        // @ts-ignore
-        const exactMatch = crosschainVerifiedAssets[network as Network].find((asset: RT) => {
-          const symbolMatch = isLowerCaseMatch(asset?.symbol, searchQuery);
-          const nameMatch = isLowerCaseMatch(asset?.name, searchQuery);
-          return symbolMatch || nameMatch;
-        });
-        if (exactMatch) {
-          exactMatches.push({ ...exactMatch, network });
-        }
-      }
-    });
-    if (exactMatches?.length) {
-      return [
-        {
-          data: exactMatches,
-          key: 'verified',
-          title: lang.t(`exchange.token_sections.${tokenSectionTypes.crosschainMatchSection}`),
-          useGradientText: !IS_TEST,
-        },
-      ];
-    }
-    return [];
-  }, [crosschainVerifiedAssets, currencyList.length, searchChainId, searchQuery]);
+  }, [searchResultAssets, searching, favoriteAssets, colors.yellowFavorite]);
 
   return {
-    crosschainExactMatches,
     swapCurrencyList: currencyList,
     swapCurrencyListLoading: loading,
   };

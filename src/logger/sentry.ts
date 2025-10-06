@@ -2,33 +2,29 @@ import * as Sentry from '@sentry/react-native';
 import { SENTRY_ENDPOINT, SENTRY_ENVIRONMENT } from 'react-native-dotenv';
 import VersionNumber from 'react-native-version-number';
 
-import { IS_PROD, IS_TEST } from '@/env';
+import { IS_TEST } from '@/env';
 import { logger, RainbowError } from '@/logger';
 import isTestFlight from '@/helpers/isTestFlight';
 
-/**
- * We need to disable React Navigation instrumentation for E2E tests because
- * detox doesn't like setTimeout calls that are used inside When enabled detox
- * hangs and timeouts on all test cases
- */
-export const sentryRoutingInstrumentation = IS_PROD ? new Sentry.ReactNavigationInstrumentation() : undefined;
+const ERROR_MESSAGE_BLACKLIST = ['AbortError', 'Network request failed', 'There was an error with the request.'];
 
-export const defaultOptions = {
+export const defaultOptions: Sentry.ReactNativeOptions = {
+  attachStacktrace: true,
   dsn: SENTRY_ENDPOINT,
-  enableAutoSessionTracking: true,
+  enableAppHangTracking: false,
+  enableAutoPerformanceTracing: false,
+  enableAutoSessionTracking: false,
+  enableTracing: false,
   environment: isTestFlight ? 'Testflight' : SENTRY_ENVIRONMENT,
-  integrations: [
-    new Sentry.ReactNativeTracing({
-      routingInstrumentation: sentryRoutingInstrumentation,
-      tracingOrigins: ['localhost', /^\//],
-    }),
-  ],
-  tracesSampleRate: 0.2,
+  ignoreTransactions: ERROR_MESSAGE_BLACKLIST,
+  integrations: [Sentry.httpClientIntegration()], // http client integration will help us see payload / response from errored out requests to better understand the issue
+  maxBreadcrumbs: 10,
+  tracesSampleRate: 0,
 };
 
-export async function initSentry() {
+export function initSentry() {
   if (IS_TEST) {
-    logger.debug(`Sentry is disabled for test environment`);
+    logger.debug(`[sentry]: disabled for test environment`);
     return;
   }
   try {
@@ -41,8 +37,8 @@ export async function initSentry() {
       release, // MUST BE A STRING or Sentry will break in native code
     });
 
-    logger.debug(`Sentry initialized`);
+    logger.debug(`[sentry]: Successfully initialized`);
   } catch (e) {
-    logger.error(new RainbowError(`Sentry initialization failed`));
+    logger.error(new RainbowError(`[sentry]: initialization failed`));
   }
 }

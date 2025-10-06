@@ -1,82 +1,49 @@
-import React, { useCallback, useState } from 'react';
+import React, { memo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Network } from '@/networks/types';
-import { ImageWithCachedMetadata, ImgixImage } from '@/components/images';
+import { ImgixImage } from '@/components/images';
 import { ThemeContextProps } from '@/theme';
 
-const ImageState = {
-  ERROR: 'ERROR',
-  LOADED: 'LOADED',
-  NOT_FOUND: 'NOT_FOUND',
-} as const;
-
-const imagesCache: { [imageUrl: string]: keyof typeof ImageState } = {};
-
-export const FastFallbackCoinIconImage = React.memo(function FastFallbackCoinIconImage({
-  size = 40,
+export const FastFallbackCoinIconImage = memo(function FastFallbackCoinIconImage({
+  children,
+  disableShadow = true,
   icon,
   shadowColor,
-  theme,
-  children,
+  size = 40,
 }: {
-  size?: number;
-  icon?: string;
-  theme: ThemeContextProps;
-  network: Network;
-  symbol: string;
-  shadowColor: string;
   children: () => React.ReactNode;
+  disableShadow?: boolean;
+  icon?: string;
+  shadowColor: string;
+  size?: number;
+  symbol: string;
+  theme: ThemeContextProps;
 }) {
-  const { colors } = theme;
-
-  const key = `${icon}`;
-
-  const [cacheStatus, setCacheStatus] = useState(imagesCache[key]);
-
-  const shouldShowImage = cacheStatus !== ImageState.NOT_FOUND;
-  const isLoaded = cacheStatus === ImageState.LOADED;
-
-  const onLoad = useCallback(() => {
-    if (isLoaded) {
-      return;
-    }
-    imagesCache[key] = ImageState.LOADED;
-    setCacheStatus(ImageState.LOADED);
-  }, [key, isLoaded]);
-
-  const onError = useCallback(
-    // @ts-expect-error passed to an untyped JS component
-    err => {
-      const newError = err?.nativeEvent?.message?.includes('404') ? ImageState.NOT_FOUND : ImageState.ERROR;
-
-      if (cacheStatus === newError) {
-        return;
-      }
-
-      imagesCache[key] = newError;
-      setCacheStatus(newError);
-    },
-    [cacheStatus, key]
-  );
+  const [didErrorForUrl, setDidErrorForUrl] = useState<string | undefined>(undefined);
 
   return (
-    <View style={[sx.coinIconContainer, sx.withShadow, { shadowColor, height: size, width: size, borderRadius: size / 2 }]}>
-      {shouldShowImage && (
-        <ImageWithCachedMetadata
-          cache={ImgixImage.cacheControl.immutable}
-          imageUrl={icon}
-          onError={onError}
-          onLoad={onLoad}
+    <View
+      style={[
+        sx.coinIconContainer,
+        !disableShadow && sx.withShadow,
+        { borderRadius: size / 2, height: size, shadowColor: disableShadow ? undefined : shadowColor, width: size },
+      ]}
+    >
+      {icon === undefined || icon === '' || didErrorForUrl === icon ? (
+        <View style={sx.fallbackWrapper}>{children()}</View>
+      ) : (
+        <ImgixImage
+          enableFasterImage
+          onError={() => {
+            if (icon?.length > 0) {
+              setDidErrorForUrl(icon);
+            }
+          }}
+          onLoad={() => setDidErrorForUrl(undefined)}
           size={size}
-          style={[
-            sx.coinIconFallback,
-            isLoaded && { backgroundColor: colors.white },
-            { height: size, width: size, borderRadius: size / 2 },
-          ]}
+          source={{ uri: icon }}
+          style={[sx.coinIconFallback, { height: size, width: size, borderRadius: size / 2 }]}
         />
       )}
-
-      {!isLoaded && <View style={sx.fallbackWrapper}>{children()}</View>}
     </View>
   );
 });

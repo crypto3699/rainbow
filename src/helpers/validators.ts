@@ -1,8 +1,7 @@
 import { isValidAddress } from 'ethereumjs-util';
-import { memoFn } from '../utils/memoFn';
-import { Network } from './networkTypes';
-import { getProviderForNetwork, isHexStringIgnorePrefix, isValidMnemonic, resolveUnstoppableDomain } from '@/handlers/web3';
+import { getProvider, isHexStringIgnorePrefix, isValidMnemonic, resolveUnstoppableDomain } from '@/handlers/web3';
 import { sanitizeSeedPhrase } from '@/utils/formatters';
+import { ChainId } from '@/state/backendNetworks/types';
 
 // Currently supported Top Level Domains from Unstoppable Domains
 const supportedUnstoppableDomains = ['888', 'bitcoin', 'blockchain', 'coin', 'crypto', 'dao', 'nft', 'wallet', 'x', 'zil'];
@@ -17,8 +16,8 @@ export const isValidEmail = (email: any) =>
     /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
   );
 
-export const isENSAddressFormat = memoFn(address => {
-  // @ts-expect-error ts-migrate(2571) FIXME: Object is of type 'unknown'.
+export const isENSAddressFormat = (address: string | undefined) => {
+  'worklet';
   const parts = !!address && address.split('.');
 
   if (
@@ -31,10 +30,10 @@ export const isENSAddressFormat = memoFn(address => {
     return false;
   }
   return true;
-});
+};
 
-export const isUnstoppableAddressFormat = memoFn(address => {
-  // @ts-expect-error ts-migrate(2571) FIXME: Object is of type 'unknown'.
+export const isUnstoppableAddressFormat = (address: string) => {
+  'worklet';
   const parts = !!address && address.split('.');
   if (
     !parts ||
@@ -45,7 +44,7 @@ export const isUnstoppableAddressFormat = memoFn(address => {
     return false;
   }
   return true;
-});
+};
 
 /**
  * @desc validate ethereum address, ENS, or Unstoppable name formatting
@@ -68,7 +67,7 @@ export const checkIsValidAddressOrDomainFormat = (address: any) => {
  * @return {Boolean}
  */
 export const checkIsValidAddressOrDomain = async (address: any) => {
-  const provider = await getProviderForNetwork(Network.mainnet);
+  const provider = getProvider({ chainId: ChainId.mainnet });
   if (isENSAddressFormat(address)) {
     try {
       const resolvedAddress = await provider.resolveName(address);
@@ -89,9 +88,10 @@ export const checkIsValidAddressOrDomain = async (address: any) => {
  * @param  {String} ENS, or Unstoppable
  * @return {Boolean}
  */
-export const isValidDomainFormat = memoFn(domain => {
+export const isValidDomainFormat = (domain: string) => {
+  'worklet';
   return isUnstoppableAddressFormat(domain) || isENSAddressFormat(domain);
-});
+};
 /**
  * @desc validate seed phrase mnemonic
  * @param  {String} seed phrase mnemonic

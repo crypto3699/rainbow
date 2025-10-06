@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import useENSRegistration from './useENSRegistration';
 import useGas from './useGas';
 import usePrevious from './usePrevious';
-import { useAccountSettings } from '.';
 import {
   estimateENSCommitGasLimit,
   estimateENSRegisterSetRecordsAndNameGasLimit,
@@ -14,7 +13,6 @@ import {
   estimateENSSetRecordsGasLimit,
   fetchReverseRecord,
 } from '@/handlers/ens';
-import { NetworkTypes } from '@/helpers';
 import {
   ENS_DOMAIN,
   formatEstimatedNetworkFee,
@@ -25,10 +23,12 @@ import {
   REGISTRATION_MODES,
   REGISTRATION_STEPS,
 } from '@/helpers/ens';
-import { Network } from '@/helpers/networkTypes';
 import { add, addBuffer, addDisplay, fromWei, greaterThanOrEqualTo, multiply } from '@/helpers/utilities';
 import { ethUnits, timeUnits } from '@/references';
 import { ethereumUtils, gasUtils } from '@/utils';
+import { ChainId } from '@/state/backendNetworks/types';
+import { useAccountAddress } from '@/state/wallets/walletsStore';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
 
 enum QUERY_KEYS {
   GET_COMMIT_GAS_LIMIT = 'GET_COMMIT_GAS_LIMIT',
@@ -55,11 +55,13 @@ export default function useENSRegistrationCosts({
   step: keyof typeof REGISTRATION_STEPS;
   yearsDuration: number;
 }) {
-  const { nativeCurrency, accountAddress } = useAccountSettings();
+  const accountAddress = useAccountAddress();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
   const { registrationParameters, mode } = useENSRegistration();
   const duration = yearsDuration * timeUnits.secs.year;
   const name = inputName.replace(ENS_DOMAIN, '');
   const {
+    selectedGasFee,
     gasFeeParamsBySpeed: useGasGasFeeParamsBySpeed,
     currentBlockParams: useGasCurrentBlockParams,
     updateTxFee,
@@ -69,7 +71,7 @@ export default function useENSRegistrationCosts({
     gasLimit: useGasGasLimit,
     selectedGasFeeOption,
     isGasReady,
-  } = useGas();
+  } = useGas({ enableTracking: true });
 
   const [gasFeeParams, setGasFeeParams] = useState({
     currentBaseFee: useGasCurrentBlockParams?.baseFeePerGas,
@@ -92,7 +94,7 @@ export default function useENSRegistrationCosts({
   const rentPriceInWei = rentPrice?.wei?.toString();
 
   const checkIfSufficientEth = useCallback((wei: string) => {
-    const nativeAsset = ethereumUtils.getNetworkNativeAsset(NetworkTypes.mainnet);
+    const nativeAsset = ethereumUtils.getNetworkNativeAsset({ chainId: ChainId.mainnet });
     const balanceAmount = nativeAsset?.balance?.amount || 0;
     const txFeeAmount = fromWei(wei);
     const isSufficientGas = greaterThanOrEqualTo(balanceAmount, txFeeAmount);
@@ -107,9 +109,11 @@ export default function useENSRegistrationCosts({
       ownerAddress: accountAddress,
       rentPrice: rentPriceInWei as string,
       salt,
+      selectedGasFee,
+      gasFeeParamsBySpeed: useGasGasFeeParamsBySpeed,
     });
     return newCommitGasLimit || '';
-  }, [accountAddress, duration, name, rentPriceInWei]);
+  }, [accountAddress, duration, name, rentPriceInWei, selectedGasFee, useGasGasFeeParamsBySpeed]);
 
   const getRegisterRapGasLimit = useCallback(async () => {
     const newRegisterRapGasLimit = await estimateENSRegisterSetRecordsAndNameGasLimit({
@@ -120,9 +124,21 @@ export default function useENSRegistrationCosts({
       rentPrice: registrationParameters?.rentPrice,
       salt: registrationParameters?.salt,
       setReverseRecord: sendReverseRecord,
+      selectedGasFee: selectedGasFee,
+      gasFeeParamsBySpeed: useGasGasFeeParamsBySpeed,
     });
     return newRegisterRapGasLimit || '';
-  }, [accountAddress, duration, name, registrationParameters?.rentPrice, registrationParameters?.salt, sendReverseRecord, changedRecords]);
+  }, [
+    duration,
+    name,
+    accountAddress,
+    changedRecords,
+    registrationParameters?.rentPrice,
+    registrationParameters?.salt,
+    sendReverseRecord,
+    selectedGasFee,
+    useGasGasFeeParamsBySpeed,
+  ]);
 
   const getSetRecordsGasLimit = useCallback(async () => {
     const newSetRecordsGasLimit = await estimateENSSetRecordsGasLimit({
@@ -233,7 +249,7 @@ export default function useENSRegistrationCosts({
   );
 
   const estimatedFee = useMemo(() => {
-    const nativeAssetPrice = ethereumUtils.getPriceOfNativeAssetForNetwork(Network.mainnet);
+    const nativeAssetPrice = ethereumUtils.getPriceOfNativeAssetForNetwork({ chainId: ChainId.mainnet });
     const { gasFeeParamsBySpeed, currentBaseFee } = gasFeeParams;
 
     let estimatedGasLimit = '';
@@ -319,7 +335,7 @@ export default function useENSRegistrationCosts({
 
   const data = useMemo(() => {
     const rentPricePerYearInWei = rentPrice?.perYear?.wei?.toString();
-    const nativeAssetPrice = ethereumUtils.getPriceOfNativeAssetForNetwork(Network.mainnet);
+    const nativeAssetPrice = ethereumUtils.getPriceOfNativeAssetForNetwork({ chainId: ChainId.mainnet });
 
     if (rentPricePerYearInWei) {
       const rentPriceInWei = multiply(rentPricePerYearInWei, yearsDuration);

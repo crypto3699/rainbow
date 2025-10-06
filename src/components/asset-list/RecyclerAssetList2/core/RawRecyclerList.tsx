@@ -1,10 +1,19 @@
+import { UniqueId } from '@/__swaps__/types/assets';
+import { useExperimentalConfig } from '@/config/experimentalHooks';
+import { NativeCurrencyKey, UniqueAsset } from '@/entities';
+import { useAccountSettings, useCoinListEdited, useCoinListEditOptions, usePrevious } from '@/hooks';
+import { useRemoteConfig } from '@/model/remoteConfig';
+import { useRecyclerListViewScrollToTopContext } from '@/navigation/RecyclerListViewScrollToTopContext';
+import { useUserAssetsStore } from '@/state/assets/userAssets';
+import { ThemeContextProps, useTheme } from '@/theme';
+import { deviceUtils } from '@/utils';
 import React, { LegacyRef, useCallback, useEffect, useMemo, useRef } from 'react';
 import { LayoutChangeEvent } from 'react-native';
 import { SetterOrUpdater } from 'recoil';
 import { DataProvider, RecyclerListView } from 'recyclerlistview';
 import { useMemoOne } from 'use-memo-one';
-import { BooleanMap } from '../../../../hooks/useCoinListEditOptions';
 import { AssetListType } from '..';
+import { BooleanMap } from '../../../../hooks/useCoinListEditOptions';
 import { useRecyclerAssetListPosition } from './Contexts';
 import { ExternalENSProfileScrollViewWithRef, ExternalSelectNFTScrollViewWithRef } from './ExternalENSProfileScrollView';
 import ExternalScrollViewWithRef from './ExternalScrollView';
@@ -13,25 +22,24 @@ import rowRenderer from './RowRenderer';
 import { BaseCellType, CellTypes, RecyclerListViewRef } from './ViewTypes';
 import getLayoutProvider from './getLayoutProvider';
 import useLayoutItemAnimator from './useLayoutItemAnimator';
-import { UniqueAsset } from '@/entities';
-import { useRecyclerListViewScrollToTopContext } from '@/navigation/RecyclerListViewScrollToTopContext';
-import { useAccountProfile, useAccountSettings, useCoinListEdited, useCoinListEditOptions, useWallets } from '@/hooks';
-import { useNavigation } from '@/navigation';
-import { useTheme } from '@/theme';
-import { useRemoteCardContext } from '@/components/cards/remote-cards';
-import { useRoute } from '@react-navigation/native';
+import { useWalletsStore } from '../../../../state/wallets/walletsStore';
+import { useListen } from '@/state/internal/hooks/useListen';
 
-const dataProvider = new DataProvider((r1, r2) => {
+const dimensions = {
+  height: deviceUtils.dimensions.height,
+  width: deviceUtils.dimensions.width,
+};
+
+const dataProvider = new DataProvider((r1: CellTypes, r2: CellTypes) => {
   return r1.uid !== r2.uid;
 });
 
 export type ExtendedState = {
-  theme: any;
+  theme: ThemeContextProps;
   nativeCurrencySymbol: string;
-  nativeCurrency: string;
-  navigate: any;
+  nativeCurrency: NativeCurrencyKey;
   isCoinListEdited: boolean;
-  hiddenCoins: BooleanMap;
+  hiddenAssets: Set<UniqueId>;
   pinnedCoins: BooleanMap;
   toggleSelectedCoin: (id: string) => void;
   setIsCoinListEdited: SetterOrUpdater<boolean>;
@@ -40,63 +48,68 @@ export type ExtendedState = {
   onPressUniqueToken?: (asset: UniqueAsset) => void;
 };
 
+export type ViewableItemsChangedCallback = ({
+  viewableItems,
+  viewableItemsAdded,
+  viewableItemsRemoved,
+}: {
+  viewableItems: BaseCellType[];
+  viewableItemsAdded: BaseCellType[];
+  viewableItemsRemoved: BaseCellType[];
+}) => void;
+
 const RawMemoRecyclerAssetList = React.memo(function RawRecyclerAssetList({
   briefSectionsData,
   disablePullDownToRefresh,
   scrollIndicatorInsets,
   extendedState,
+  onEndReached,
   type,
+  onViewableItemsChanged,
 }: {
-  briefSectionsData: BaseCellType[];
+  briefSectionsData: CellTypes[];
   disablePullDownToRefresh: boolean;
   extendedState: Partial<ExtendedState> & Pick<ExtendedState, 'additionalData'>;
   scrollIndicatorInsets?: object;
+  onEndReached?: () => void;
   type?: AssetListType;
+  onViewableItemsChanged?: ViewableItemsChangedCallback;
 }) {
+  const remoteConfig = useRemoteConfig();
+  const experimentalConfig = useExperimentalConfig();
   const currentDataProvider = useMemoOne(() => dataProvider.cloneWithRows(briefSectionsData), [briefSectionsData]);
   const { isCoinListEdited, setIsCoinListEdited } = useCoinListEdited();
-  const y = useRecyclerAssetListPosition()!;
-
-  const { name } = useRoute();
-  const { getCardsForPlacement } = useRemoteCardContext();
-  const { isReadOnlyWallet } = useWallets();
-
-  const cards = useMemo(() => getCardsForPlacement(name as string), [getCardsForPlacement, name]);
+  const y = useRecyclerAssetListPosition();
+  const hiddenAssets = useUserAssetsStore(state => state.hiddenAssets);
+  const viewableIndicesRef = useRef<number[]>([]);
+  const baseCellItems = useMemo(() => briefSectionsData.map(item => ({ uid: item.uid, type: item.type })), [briefSectionsData]);
+  const previousBaseCellItems = usePrevious(baseCellItems);
 
   const layoutProvider = useMemo(
-    () => getLayoutProvider(briefSectionsData, isCoinListEdited, cards, isReadOnlyWallet),
-    [briefSectionsData, isCoinListEdited, cards, isReadOnlyWallet]
+    () =>
+      getLayoutProvider({
+        briefSectionsData,
+        isCoinListEdited,
+        remoteConfig,
+        experimentalConfig,
+      }),
+    [briefSectionsData, isCoinListEdited, remoteConfig, experimentalConfig]
   );
 
-  const { accountAddress } = useAccountSettings();
   const { setScrollToTopRef } = useRecyclerListViewScrollToTopContext();
 
   const topMarginRef = useRef<number>(0);
-  const ref = useRef<RecyclerListViewRef>();
+  const ref = useRef<RecyclerListViewRef>(undefined);
 
-  useEffect(() => {
-    if (ios) {
-      return;
+  useListen(
+    useWalletsStore,
+    state => state.accountAddress,
+    () => {
+      ref.current?.scrollToTop();
+      topMarginRef.current = 0;
+      y?.setValue(0);
     }
-    // this is hacky, but let me explain what's happening here:
-    // RecyclerListView is trying to persist the position while updating the component.
-    // Therefore, internally the library wants to scroll to old position.
-    // However, Android is setting the position to 0, because there's no content so
-    // the event has no effect on content position and this is set to 0 as expected.
-    // To avoid generating this nonsense event, I firstly set internally the position to 0.
-    // Then the update might happen, but this is OK, because I overrode the position
-    // with `updateOffset` method. However, this is happening inside `setTimeout`
-    // so the callback might be already scheduled (this is a race condition, happens randomly).
-    // We need to clear this scheduled event with `clearTimeout` method.
-    // Then, in case the event was not emitted, we want to emit this anyway (`scrollToOffset`)
-    // to make headers located in `0` position.
-    // @ts-ignore
-    ref.current?._virtualRenderer?.getViewabilityTracker?.()?.updateOffset?.(0, true, 0);
-    // @ts-ignore
-    clearTimeout(ref.current?._processInitialOffsetTimeout);
-    ref.current?.scrollToOffset(0, 0);
-    y.setValue(0);
-  }, [y, accountAddress]);
+  );
 
   useEffect(() => {
     if (!ref.current) return;
@@ -116,18 +129,56 @@ const RawMemoRecyclerAssetList = React.memo(function RawRecyclerAssetList({
 
   const theme = useTheme();
   const { nativeCurrencySymbol, nativeCurrency } = useAccountSettings();
-  const { hiddenCoinsObj: hiddenCoins, pinnedCoinsObj: pinnedCoins, toggleSelectedCoin } = useCoinListEditOptions();
+  const { pinnedCoinsObj: pinnedCoins, toggleSelectedCoin } = useCoinListEditOptions();
 
-  const { navigate } = useNavigation();
+  const handleViewableIndicesChanged = useCallback(
+    (viewableIndices: number[], viewableIndicesAdded: number[], viewableIndicesRemoved: number[]) => {
+      if (!onViewableItemsChanged) return;
+      viewableIndicesRef.current = viewableIndices;
+
+      const viewableItems = viewableIndices.map(index => briefSectionsData[index]);
+      const viewableItemsAdded = viewableIndicesAdded.map(index => briefSectionsData[index]);
+      const viewableItemsRemoved = viewableIndicesRemoved.map(index => briefSectionsData[index]);
+
+      onViewableItemsChanged({ viewableItems, viewableItemsAdded, viewableItemsRemoved });
+    },
+    [onViewableItemsChanged, briefSectionsData]
+  );
+
+  // If viewable indices remain the same but the data changes, we need to trigger onViewableItemsChanged
+  useEffect(() => {
+    if (!onViewableItemsChanged || viewableIndicesRef.current.length === 0 || !previousBaseCellItems) return;
+
+    const currentViewableIndices = viewableIndicesRef.current;
+
+    const hasDataChanged = currentViewableIndices.some(index => {
+      const prevItem = previousBaseCellItems[index];
+      const currItem = baseCellItems[index];
+
+      return !prevItem || !currItem || prevItem.uid !== currItem.uid;
+    });
+
+    if (hasDataChanged) {
+      const viewableItems = currentViewableIndices.map(index => baseCellItems[index]);
+      const previousViewableItems = currentViewableIndices.map(index => previousBaseCellItems[index]).filter(Boolean);
+
+      const currentUids = new Set(viewableItems.map(item => item.uid));
+      const previousUids = new Set(previousViewableItems.map(item => item.uid));
+
+      const viewableItemsAdded = viewableItems.filter(item => !previousUids.has(item.uid));
+      const viewableItemsRemoved = previousViewableItems.filter(item => !currentUids.has(item.uid));
+
+      onViewableItemsChanged({ viewableItems, viewableItemsAdded, viewableItemsRemoved });
+    }
+  }, [onViewableItemsChanged, previousBaseCellItems, baseCellItems]);
 
   const mergedExtendedState = useMemo<ExtendedState>(() => {
     return {
       ...extendedState,
-      hiddenCoins,
       isCoinListEdited,
       nativeCurrency,
       nativeCurrencySymbol,
-      navigate,
+      hiddenAssets,
       pinnedCoins,
       setIsCoinListEdited,
       theme,
@@ -135,15 +186,14 @@ const RawMemoRecyclerAssetList = React.memo(function RawRecyclerAssetList({
     };
   }, [
     extendedState,
-    theme,
-    navigate,
-    nativeCurrencySymbol,
-    nativeCurrency,
-    pinnedCoins,
-    hiddenCoins,
-    toggleSelectedCoin,
     isCoinListEdited,
+    nativeCurrency,
+    nativeCurrencySymbol,
+    hiddenAssets,
+    pinnedCoins,
     setIsCoinListEdited,
+    theme,
+    toggleSelectedCoin,
   ]);
 
   return (
@@ -151,7 +201,7 @@ const RawMemoRecyclerAssetList = React.memo(function RawRecyclerAssetList({
       automaticallyAdjustScrollIndicatorInsets={true}
       dataProvider={currentDataProvider}
       extendedState={mergedExtendedState}
-      // @ts-ignore
+      // @ts-expect-error - scrollview refs are typed differently
       externalScrollView={
         type === 'ens-profile'
           ? ExternalENSProfileScrollViewWithRef
@@ -161,12 +211,17 @@ const RawMemoRecyclerAssetList = React.memo(function RawRecyclerAssetList({
       }
       itemAnimator={layoutItemAnimator}
       layoutProvider={layoutProvider}
+      onEndReachedThreshold={0.5}
+      onEndReached={onEndReached}
       onLayout={onLayout}
       ref={ref as LegacyRef<RecyclerListViewRef>}
       refreshControl={disablePullDownToRefresh ? undefined : <RefreshControl />}
       renderAheadOffset={1000}
       rowRenderer={rowRenderer}
+      canChangeSize={type === 'wallet'}
+      layoutSize={type === 'wallet' ? dimensions : undefined}
       scrollIndicatorInsets={scrollIndicatorInsets}
+      onVisibleIndicesChanged={handleViewableIndicesChanged}
     />
   );
 });

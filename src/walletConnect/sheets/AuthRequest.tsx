@@ -1,41 +1,33 @@
-import React from 'react';
-import { useNavigation } from '@react-navigation/native';
-import { Web3WalletTypes } from '@walletconnect/web3wallet';
-
-import { Box, Text, Separator, BackgroundProvider, AccentColorProvider } from '@/design-system';
+import { Alert } from '@/components/alerts';
 import ButtonPressAnimation from '@/components/animations/ButtonPressAnimation';
 import { ImgixImage } from '@/components/images';
-import { initials } from '@/utils/formatters';
-import { useTheme } from '@/theme';
-import Routes from '@/navigation/routesNames';
-import { AuthRequestAuthenticateSignature, AuthRequestResponseErrorReason } from '@/walletConnect/types';
-import { Alert } from '@/components/alerts';
-import * as lang from '@/languages';
-import { getAccountProfileInfo } from '@/helpers/accountInfo';
-import { findWalletWithAccount } from '@/helpers/findWalletWithAccount';
-import { useSelector } from 'react-redux';
-import { AppState } from '@/redux/store';
-import { Verify } from '@walletconnect/types';
-import { useDappMetadata } from '@/resources/metadata/dapp';
-import { DAppStatus } from '@/graphql/__generated__/metadata';
 import { InfoAlert } from '@/components/info-alert/info-alert';
+import { AccentColorProvider, BackgroundProvider, Box, Separator, Text } from '@/design-system';
+import { DAppStatus } from '@/graphql/__generated__/metadata';
+import * as i18n from '@/languages';
+import Routes from '@/navigation/routesNames';
+import { useDappMetadata } from '@/resources/metadata/dapp';
+import { getAccountProfileInfo, useAccountAddress, useSelectedWallet } from '@/state/wallets/walletsStore';
+import { useTheme } from '@/theme';
+import { initials } from '@/utils/formatters';
+import { AuthRequestAuthenticateSignature, AuthRequestResponseErrorReason } from '@/walletConnect/types';
+import { useNavigation } from '@/navigation/Navigation';
+import { WalletKitTypes } from '@reown/walletkit';
+import { Verify } from '@walletconnect/types';
+import React from 'react';
+import { Address } from 'viem';
 
 export function AuthRequest({
   requesterMeta,
   authenticate,
   verifiedData,
 }: {
-  requesterMeta: Web3WalletTypes.AuthRequest['params']['requester']['metadata'];
+  requesterMeta: WalletKitTypes.SessionProposal['params']['proposer']['metadata'];
   authenticate: AuthRequestAuthenticateSignature;
   verifiedData?: Verify.Context['verified'];
 }) {
-  const { accountAddress } = useSelector((state: AppState) => ({
-    accountAddress: state.settings.accountAddress,
-  }));
-  const { wallets, walletNames } = useSelector((state: AppState) => ({
-    wallets: state.wallets.wallets,
-    walletNames: state.wallets.walletNames,
-  }));
+  const accountAddress = useAccountAddress();
+  const selectedWallet = useSelectedWallet();
 
   const { navigate, goBack } = useNavigation();
   const { colors } = useTheme();
@@ -43,13 +35,12 @@ export function AuthRequest({
   const [address, setAddress] = React.useState(accountAddress);
 
   const { accountSymbol, accountColor, accountImage, accountName, isHardwareWallet } = React.useMemo(() => {
-    const selectedWallet = findWalletWithAccount(wallets!, address);
-    const profileInfo = getAccountProfileInfo(selectedWallet, walletNames, address);
+    const profileInfo = getAccountProfileInfo(address);
     return {
       ...profileInfo,
       isHardwareWallet: !!selectedWallet?.deviceId,
     };
-  }, [walletNames, wallets, address]);
+  }, [address, selectedWallet?.deviceId]);
 
   const auth = React.useCallback(async () => {
     const { success, reason } = await authenticate({ address });
@@ -64,8 +55,8 @@ export function AuthRequest({
           break;
         default:
           Alert({
-            title: lang.t(lang.l.walletconnect.auth.error_alert_title),
-            message: lang.t(lang.l.walletconnect.auth.error_alert_description),
+            title: i18n.t(i18n.l.walletconnect.auth.error_alert_title),
+            message: i18n.t(i18n.l.walletconnect.auth.error_alert_description),
           });
       }
     } else {
@@ -80,7 +71,7 @@ export function AuthRequest({
 
   const { icons, name, url } = requesterMeta;
 
-  const dappUrl = verifiedData?.verifyUrl || url;
+  const dappUrl = verifiedData?.origin || url;
   const { data: metadata } = useDappMetadata({ url: dappUrl });
 
   const isScam = metadata?.status === DAppStatus.Scam;
@@ -92,7 +83,7 @@ export function AuthRequest({
       <Box alignItems="center">
         <Box paddingBottom="36px">
           <Text color={'label'} weight={'heavy'} size={'20pt'} align="center">
-            {lang.t(lang.l.walletconnect.auth.signin_title)}
+            {i18n.t(i18n.l.walletconnect.auth.signin_title)}
           </Text>
         </Box>
         <AccentColorProvider color={accentColor}>
@@ -134,7 +125,7 @@ export function AuthRequest({
 
         <Box paddingBottom="16px" width={{ custom: 281 }}>
           <Text color={'label'} weight={'semibold'} size={'17pt'} align="center">
-            {lang.t(lang.l.walletconnect.auth.signin_prompt, { name })}
+            {i18n.t(i18n.l.walletconnect.auth.signin_prompt, { name })}
           </Text>
         </Box>
 
@@ -149,8 +140,8 @@ export function AuthRequest({
               navigate(Routes.CHANGE_WALLET_SHEET, {
                 watchOnly: true,
                 currentAccountAddress: address,
-                onChangeWallet(address: string) {
-                  setAddress(address);
+                onChangeWallet(address) {
+                  setAddress(address as Address);
                   goBack();
                 },
               });
@@ -187,7 +178,7 @@ export function AuthRequest({
               <Box paddingLeft="10px" paddingRight="16px">
                 <Box paddingBottom="6px">
                   <Text color="labelSecondary" size="13pt" weight="semibold">
-                    {lang.t(lang.l.walletconnect.auth.signin_with)}
+                    {i18n.t(i18n.l.walletconnect.auth.signin_with)}
                   </Text>
                 </Box>
 
@@ -218,8 +209,8 @@ export function AuthRequest({
                   􀘰
                 </Text>
               }
-              title={lang.t(lang.l.walletconnect.dapp_warnings.info_alert.title)}
-              description={lang.t(lang.l.walletconnect.dapp_warnings.info_alert.description)}
+              title={i18n.t(i18n.l.walletconnect.dapp_warnings.info_alert.title)}
+              description={i18n.t(i18n.l.walletconnect.dapp_warnings.info_alert.description)}
             />
           </Box>
         )}
@@ -236,7 +227,7 @@ export function AuthRequest({
                   borderRadius={50}
                 >
                   <Text color="label" size="17pt" weight="heavy">
-                    􀎽 {lang.t(lang.l.walletconnect.auth.signin_button)}
+                    􀎽 {i18n.t(i18n.l.walletconnect.auth.signin_button)}
                   </Text>
                 </Box>
               )}
@@ -246,7 +237,7 @@ export function AuthRequest({
 
         <Box paddingTop="24px" width={{ custom: 245 }}>
           <Text color={'labelQuaternary'} weight={'semibold'} size={'13pt'} align="center">
-            {lang.t(lang.l.walletconnect.auth.signin_notice)}
+            {i18n.t(i18n.l.walletconnect.auth.signin_notice)}
           </Text>
         </Box>
       </Box>

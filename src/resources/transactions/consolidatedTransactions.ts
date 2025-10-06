@@ -1,15 +1,14 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { InfiniteQueryConfig, QueryConfig, QueryFunctionArgs, createQueryKey, queryClient } from '@/react-query';
-import { NativeCurrencyKey, RainbowTransaction } from '@/entities';
-import { TransactionApiResponse, TransactionsReceivedMessage } from './types';
+import { NativeCurrencyKey, RainbowTransaction, TransactionApiResponse, TransactionsReceivedMessage } from '@/entities';
 import { RainbowError, logger } from '@/logger';
-import { rainbowFetch } from '@/rainbow-fetch';
-import { ADDYS_API_KEY } from 'react-native-dotenv';
-import { RainbowNetworks } from '@/networks';
 import { parseTransaction } from '@/parsers/transactions';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { getAddysHttpClient } from '@/resources/addys/client';
+import { IS_TEST } from '@/env';
+import { anvilChain, e2eAnvilConfirmedTransactions } from './transaction';
 
 const CONSOLIDATED_TRANSACTIONS_INTERVAL = 30000;
-const CONSOLIDATED_TRANSACTIONS_TIMEOUT = 20000;
 
 // ///////////////////////////////////////////////
 // Query Types
@@ -59,34 +58,58 @@ export async function consolidatedTransactionsQueryFunction({
   queryKey: [{ address, currency, chainIds }],
   pageParam,
 }: QueryFunctionArgs<typeof consolidatedTransactionsQueryKey>): Promise<_QueryResult> {
+  let transactionsFromAddys: RainbowTransaction[] = [];
+  let nextPageFromAddys: string | undefined = pageParam;
+  let cutoffFromAddys: number | undefined;
   try {
     const chainIdsString = chainIds.join(',');
-    const url = `https://addys.p.rainbow.me/v3/${chainIdsString}/${address}/transactions`;
-    const response = await rainbowFetch(url, {
+    const response = await getAddysHttpClient().get(`/${chainIdsString}/${address}/transactions`, {
       method: 'get',
       params: {
         currency: currency.toLowerCase(),
         ...(pageParam ? { pageCursor: pageParam } : {}),
       },
-      timeout: CONSOLIDATED_TRANSACTIONS_TIMEOUT,
-      headers: {
-        Authorization: `Bearer ${ADDYS_API_KEY}`,
-      },
     });
 
-    const consolidatedTransactions = await parseConsolidatedTransactions(response?.data, currency);
-
-    return {
-      cutoff: response?.data?.meta?.cut_off,
-      nextPage: response?.data?.meta?.next_page_cursor,
-      transactions: consolidatedTransactions,
-    };
+    transactionsFromAddys = await parseConsolidatedTransactions(response?.data, currency);
+    nextPageFromAddys = response?.data?.meta?.next_page_cursor;
+    cutoffFromAddys = response?.data?.meta?.cut_off;
   } catch (e) {
-    logger.error(new RainbowError('consolidatedTransactionsQueryFunction: '), {
+    logger.error(new RainbowError('[consolidatedTransactions]: Error fetching from Addys', e), {
       message: e,
     });
-    return { transactions: [] };
   }
+
+  let finalTransactions: RainbowTransaction[] = [...transactionsFromAddys];
+  if (IS_TEST && chainIds && chainIds.includes(anvilChain.id)) {
+    const userAnvilTransactions = e2eAnvilConfirmedTransactions.filter(tx => {
+      const fromMatch = tx.from && tx.from.toLowerCase() === address.toLowerCase();
+      const toMatch = tx.to && tx.to.toLowerCase() === address.toLowerCase();
+      return fromMatch || toMatch;
+    });
+    const combinedTransactions = [...userAnvilTransactions, ...finalTransactions];
+
+    const uniqueTransactionsMap = new Map<string, RainbowTransaction>();
+    for (const tx of combinedTransactions) {
+      if (tx.hash && !uniqueTransactionsMap.has(tx.hash)) {
+        uniqueTransactionsMap.set(tx.hash, tx);
+      }
+    }
+    finalTransactions = Array.from(uniqueTransactionsMap.values());
+
+    // Sort by timestamp (minedAt) in descending order if available, otherwise keep Anvil Txs at top
+    finalTransactions.sort((a, b) => {
+      const aTime = a.minedAt || (a.chainId === anvilChain.id ? Infinity : 0);
+      const bTime = b.minedAt || (b.chainId === anvilChain.id ? Infinity : 0);
+      return bTime - aTime;
+    });
+  }
+
+  return {
+    transactions: finalTransactions,
+    nextPage: nextPageFromAddys,
+    cutoff: cutoffFromAddys,
+  };
 }
 
 type ConsolidatedTransactionsResult = {
@@ -107,7 +130,9 @@ async function parseConsolidatedTransactions(
 ): Promise<RainbowTransaction[]> {
   const data = message?.payload?.transactions || [];
 
-  const parsedTransactionPromises = data.map((tx: TransactionApiResponse) => parseTransaction(tx, currency));
+  const chainsIdByName = useBackendNetworksStore.getState().getChainsIdByName();
+
+  const parsedTransactionPromises = data.map((tx: TransactionApiResponse) => parseTransaction(tx, currency, chainsIdByName[tx.network]));
   // Filter out undefined values immediately
 
   const parsedConsolidatedTransactions = (await Promise.all(parsedTransactionPromises)).flat(); // Filter out any remaining undefined values
@@ -122,13 +147,21 @@ export function useConsolidatedTransactions(
   { address, currency }: Pick<ConsolidatedTransactionsArgs, 'address' | 'currency'>,
   config: InfiniteQueryConfig<ConsolidatedTransactionsResult, Error, ConsolidatedTransactionsResult> = {}
 ) {
-  const chainIds = RainbowNetworks.filter(network => network.enabled && network.networkType !== 'testnet').map(network => network.id);
+  const mainnetChainIds = useBackendNetworksStore.getState().getSupportedMainnetChainIds();
+  let effectiveChainIds = mainnetChainIds;
+
+  if (IS_TEST) {
+    // Add Anvil's chain ID if it's not already there for testing purposes
+    if (!effectiveChainIds.includes(anvilChain.id)) {
+      effectiveChainIds = [anvilChain.id, ...effectiveChainIds];
+    }
+  }
 
   return useInfiniteQuery(
     consolidatedTransactionsQueryKey({
       address,
       currency,
-      chainIds,
+      chainIds: effectiveChainIds,
     }),
     consolidatedTransactionsQueryFunction,
     {
@@ -136,6 +169,7 @@ export function useConsolidatedTransactions(
       keepPreviousData: true,
       getNextPageParam: lastPage => lastPage?.nextPage,
       refetchInterval: CONSOLIDATED_TRANSACTIONS_INTERVAL,
+      enabled: !!address,
       retry: 3,
     }
   );

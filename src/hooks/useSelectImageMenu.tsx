@@ -1,10 +1,10 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useMutation } from '@tanstack/react-query';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useMemo, useRef } from 'react';
-import { Image, Options } from 'react-native-image-crop-picker';
+import { ImagePickerAsset } from 'expo-image-picker';
 import { ContextMenuButton } from 'react-native-ios-context-menu';
-import { useImagePicker } from '.';
+import useImagePicker, { ImagePickerOptions } from './useImagePicker';
 import { UniqueAsset } from '@/entities';
 import { uploadImage, UploadImageReturnData } from '@/handlers/pinata';
 import { useNavigation } from '@/navigation';
@@ -16,7 +16,7 @@ type Action = 'library' | 'nft';
 const items = {
   library: {
     actionKey: 'library',
-    actionTitle: lang.t('profiles.create.upload_photo'),
+    actionTitle: i18n.t(i18n.l.profiles.create.upload_photo),
     icon: {
       imageValue: {
         systemName: 'photo.on.rectangle.angled',
@@ -26,7 +26,7 @@ const items = {
   },
   nft: {
     actionKey: 'nft',
-    actionTitle: lang.t('profiles.create.choose_nft'),
+    actionTitle: i18n.t(i18n.l.profiles.create.choose_nft),
     icon: {
       imageValue: {
         systemName: 'square.grid.2x2',
@@ -37,7 +37,7 @@ const items = {
   },
   remove: {
     actionKey: 'remove',
-    actionTitle: lang.t('profiles.create.remove'),
+    actionTitle: i18n.t(i18n.l.profiles.create.remove),
     icon: {
       imageValue: {
         systemName: 'trash',
@@ -60,13 +60,13 @@ export default function useSelectImageMenu({
   uploadToIPFS = false,
   testID = '',
 }: {
-  imagePickerOptions?: Options;
+  imagePickerOptions?: ImagePickerOptions;
   menuItems?: Action[];
-  onChangeImage?: ({ asset, image }: { asset?: UniqueAsset; image?: Image & { tmpPath?: string } }) => void;
+  onChangeImage?: ({ asset, image }: { asset?: UniqueAsset; image?: ImagePickerAsset }) => void;
   onRemoveImage?: () => void;
-  onUploading?: ({ image }: { image: Image }) => void;
-  onUploadSuccess?: ({ data, image }: { data: UploadImageReturnData; image: Image }) => void;
-  onUploadError?: ({ error, image }: { error: unknown; image: Image }) => void;
+  onUploading?: ({ image }: { image: ImagePickerAsset }) => void;
+  onUploadSuccess?: ({ data, image }: { data: UploadImageReturnData; image: ImagePickerAsset }) => void;
+  onUploadError?: ({ error, image }: { error: unknown; image: ImagePickerAsset }) => void;
   showRemove?: boolean;
   uploadToIPFS?: boolean;
   testID?: string;
@@ -82,7 +82,7 @@ export default function useSelectImageMenu({
   // When this hook is inside a nested navigator, the child
   // navigator will still think it is focused. Here, we are
   // also checking if the parent has not been dismissed too.
-  const isFocused = useRef<boolean>();
+  const isFocused = useRef<boolean>(undefined);
   useFocusEffect(
     useCallback(() => {
       isFocused.current = true;
@@ -105,22 +105,19 @@ export default function useSelectImageMenu({
   const handleSelectImage = useCallback(async () => {
     const image = await openPicker({
       ...imagePickerOptions,
-      includeBase64: true,
-      mediaType: 'photo',
+      mediaTypes: 'images',
     });
     if (!image) return;
-    const stringIndex = image?.path.indexOf('/tmp');
-    const tmpPath = ios ? `~${image?.path.slice(stringIndex)}` : image?.path;
 
     if (uploadToIPFS) {
       onUploading?.({ image });
       try {
-        const splitPath = image.path.split('/');
-        const filename = image.filename || splitPath[splitPath.length - 1] || '';
+        const splitPath = image.uri.split('/');
+        const filename = image.fileName || splitPath[splitPath.length - 1] || '';
         const data = await upload({
           filename,
-          mime: image.mime,
-          path: image.path.replace('file://', ''),
+          mime: image.mimeType || '',
+          path: image.uri.replace('file://', ''),
         });
         if (!isFocused.current || isRemoved.current) return;
         onUploadSuccess?.({ data, image });
@@ -129,13 +126,13 @@ export default function useSelectImageMenu({
         onUploadError?.({ error: err, image });
       }
     } else {
-      onChangeImage?.({ image: { ...image, tmpPath } });
+      onChangeImage?.({ image });
     }
   }, [imagePickerOptions, isRemoved, onChangeImage, onUploadError, onUploadSuccess, onUploading, openPicker, upload, uploadToIPFS]);
 
   const handleSelectNFT = useCallback(() => {
     navigate(Routes.SELECT_UNIQUE_TOKEN_SHEET, {
-      onSelect: (asset: UniqueAsset) => onChangeImage?.({ asset }),
+      onSelect: asset => onChangeImage?.({ asset }),
       springDamping: 1,
       topOffset: 0,
     });
@@ -166,7 +163,7 @@ export default function useSelectImageMenu({
       {
         options: actionSheetOptions,
       },
-      async (buttonIndex: number) => {
+      async buttonIndex => {
         if (buttonIndex === 0) {
           isRemoved.current = false;
           handleSelectImage();

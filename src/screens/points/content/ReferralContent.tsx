@@ -1,26 +1,41 @@
+import { analytics } from '@/analytics';
 import { ButtonPressAnimation } from '@/components/animations';
-import { Bleed, Box, Column, Columns, Inline, Row, Rows, Stack, Text, useForegroundColor, useTextStyle } from '@/design-system';
+import {
+  Bleed,
+  Box,
+  Column,
+  Columns,
+  Inline,
+  Row,
+  Rows,
+  Stack,
+  Text,
+  globalColors,
+  useColorMode,
+  useForegroundColor,
+  useTextStyle,
+} from '@/design-system';
 import { IS_IOS } from '@/env';
 import { metadataPOSTClient } from '@/graphql';
-import { useAccountAccentColor, useDimensions, useKeyboardHeight, useWallets } from '@/hooks';
+import { PointsErrorType } from '@/graphql/__generated__/metadataPOST';
+import { WrappedAlert as Alert } from '@/helpers/alert';
+import { useAccountAccentColor, useDimensions, useKeyboardHeight } from '@/hooks';
+import * as i18n from '@/languages';
+import { RainbowError, logger } from '@/logger';
 import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
 import { TAB_BAR_HEIGHT } from '@/navigation/SwipeNavigator';
+import { usePointsReferralCode } from '@/resources/points';
+import { ActionButton } from '@/screens/points/components/ActionButton';
 import { haptics, watchingAlert } from '@/utils';
 import { delay } from '@/utils/delay';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Keyboard, TextInput } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { WrappedAlert as Alert } from '@/helpers/alert';
-import * as i18n from '@/languages';
-import Routes from '@/navigation/routesNames';
-import { PointsErrorType } from '@/graphql/__generated__/metadataPOST';
-import { RainbowError, logger } from '@/logger';
-import { ActionButton } from '@/screens/points/components/ActionButton';
+import { useIsReadOnlyWallet } from '@/state/wallets/walletsStore';
 import { PointsIconAnimation } from '../components/PointsIconAnimation';
-import { usePointsReferralCode } from '@/resources/points';
-import { analyticsV2 } from '@/analytics';
-import Clipboard from '@react-native-clipboard/clipboard';
 
 const keyboardSpringConfig = {
   damping: 500,
@@ -41,10 +56,11 @@ const parseReferralCodeFromLink = (code: string) => {
   return;
 };
 
-export default function ReferralContent() {
+export function ReferralContent() {
   const { accentColor } = useAccountAccentColor();
+  const { isDarkMode } = useColorMode();
   const { goBack, navigate } = useNavigation();
-  const { isReadOnlyWallet } = useWallets();
+  const isReadOnlyWallet = useIsReadOnlyWallet();
 
   const label = useForegroundColor('label');
   const labelQuaternary = useForegroundColor('labelQuaternary');
@@ -72,14 +88,14 @@ export default function ReferralContent() {
           setStatus('invalid');
           haptics.notificationError();
         } else {
-          logger.error(new RainbowError('Error validating referral code'), {
+          logger.error(new RainbowError('[ReferralContent]: Error validating referral code'), {
             referralCode: code,
           });
           Alert.alert(i18n.t(i18n.l.points.referral.error));
         }
       } else {
         setStatus('valid');
-        analyticsV2.track(analyticsV2.event.pointsReferralScreenValidatedReferralCode, { deeplinked });
+        analytics.track(analytics.event.pointsReferralScreenValidatedReferralCode, { deeplinked });
         setReferralCode(code);
         textInputRef.current?.blur();
         haptics.notificationSuccess();
@@ -107,7 +123,7 @@ export default function ReferralContent() {
 
   useFocusEffect(
     useCallback(() => {
-      analyticsV2.track(analyticsV2.event.pointsViewedReferralScreen);
+      analytics.track(analytics.event.pointsViewedReferralScreen);
       setGoingBack(false);
       if (status !== 'valid') {
         delay(600).then(() => textInputRef.current?.focus());
@@ -210,14 +226,14 @@ export default function ReferralContent() {
       justifyContent="center"
       paddingBottom="20px"
       paddingHorizontal="20px"
-      style={{ flex: 1 }}
+      style={{ backgroundColor: isDarkMode ? globalColors.grey100 : '#FBFCFD', flex: 1 }}
     >
       <Box alignItems="center" as={Animated.View} justifyContent="center" style={animatedStyle} width="full">
         <Rows>
           <Box
             alignItems="center"
             justifyContent="center"
-            paddingHorizontal={{ custom: 40 }}
+            paddingHorizontal={{ custom: 60 }}
             style={{ flex: 1 }}
             width={{ custom: deviceWidth }}
           >

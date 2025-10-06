@@ -1,63 +1,45 @@
-import { captureException } from '@sentry/react-native';
+import { analytics } from '@/analytics';
+import { logger, RainbowError } from '@/logger';
+import { createQueryKey, queryClient } from '@/react-query';
+import { userAssetsStore } from '@/state/assets/userAssets';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { useClaimablesStore } from '@/state/claimables/claimables';
+import { usePositionsStore } from '@/state/positions/positions';
+import { refetchWalletSummary } from '@/state/wallets/useWalletSummaryStore';
+import { getAccountAddress, refreshWalletInfo } from '@/state/wallets/walletsStore';
+import { time } from '@/utils';
 import delay from 'delay';
 import { useCallback, useState } from 'react';
-import { useDispatch } from 'react-redux';
-import { getCachedProviderForNetwork, isHardHat } from '@/handlers/web3';
-import NetworkTypes from '../helpers/networkTypes';
-import { walletConnectLoadState } from '../redux/walletconnect';
-import { fetchWalletENSAvatars, fetchWalletNames } from '../redux/wallets';
-import useAccountSettings from './useAccountSettings';
-import { PROFILES, useExperimentalFlag } from '@/config';
-import logger from '@/utils/logger';
-import { queryClient } from '@/react-query';
-import { userAssetsQueryKey } from '@/resources/assets/UserAssetsQuery';
-import { nftsQueryKey } from '@/resources/nfts';
-import { positionsQueryKey } from '@/resources/defi/PositionsQuery';
+import { useNftsStore } from '@/state/nfts/nfts';
+import { PAGE_SIZE } from '@/state/nfts/createNftsStore';
+import { hiddenTokensQueryKey } from '@/hooks/useFetchHiddenTokens';
+import { showcaseTokensQueryKey } from '@/hooks/useFetchShowcaseTokens';
+
+// minimum duration we want the "Pull to Refresh" animation to last
+const MIN_REFRESH_DURATION = 1_250;
+
+export const refreshAccountData = async () => {
+  const accountAddress = getAccountAddress();
+
+  // These queries can take too long to fetch, so we do not wait for them
+  refetchWalletSummary();
+  queryClient.invalidateQueries(createQueryKey('nfts', { address: accountAddress }));
+  queryClient.invalidateQueries(showcaseTokensQueryKey({ address: accountAddress }));
+  queryClient.invalidateQueries(hiddenTokensQueryKey({ address: accountAddress }));
+
+  await Promise.all([
+    delay(MIN_REFRESH_DURATION),
+    refreshWalletInfo({ addresses: [accountAddress] }),
+    userAssetsStore.getState().fetch(undefined, { staleTime: 0 }),
+    useBackendNetworksStore.getState().fetch(undefined, { staleTime: time.seconds(30) }),
+    usePositionsStore.getState().fetch(undefined, { staleTime: time.seconds(5) }),
+    useClaimablesStore.getState().fetch(undefined, { staleTime: time.seconds(5) }),
+    useNftsStore.getState().fetch({ limit: PAGE_SIZE }, { staleTime: time.seconds(5) }),
+  ]).then(() => refreshWalletInfo({ useCachedENS: true }));
+};
 
 export default function useRefreshAccountData() {
-  const dispatch = useDispatch();
-  const { accountAddress, network, nativeCurrency } = useAccountSettings();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const profilesEnabled = useExperimentalFlag(PROFILES);
-
-  const fetchAccountData = useCallback(async () => {
-    const provider = getCachedProviderForNetwork(network);
-    const providerUrl = provider?.connection?.url;
-    const connectedToHardhat = isHardHat(providerUrl);
-
-    queryClient.invalidateQueries({
-      queryKey: nftsQueryKey({ address: accountAddress }),
-    });
-    queryClient.invalidateQueries({
-      queryKey: positionsQueryKey({
-        address: accountAddress,
-        currency: nativeCurrency,
-      }),
-    });
-    queryClient.invalidateQueries({
-      queryKey: userAssetsQueryKey({
-        address: accountAddress,
-        currency: nativeCurrency,
-        connectedToHardhat,
-      }),
-    });
-
-    try {
-      const getWalletNames = dispatch(fetchWalletNames());
-      const getWalletENSAvatars = profilesEnabled ? dispatch(fetchWalletENSAvatars()) : null;
-      const wc = dispatch(walletConnectLoadState());
-      return Promise.all([
-        delay(1250), // minimum duration we want the "Pull to Refresh" animation to last
-        getWalletNames,
-        getWalletENSAvatars,
-        wc,
-      ]);
-    } catch (error) {
-      logger.log('Error refreshing data', error);
-      captureException(error);
-      throw error;
-    }
-  }, [accountAddress, dispatch, nativeCurrency, network, profilesEnabled]);
 
   const refresh = useCallback(async () => {
     if (isRefreshing) return;
@@ -65,13 +47,17 @@ export default function useRefreshAccountData() {
     setIsRefreshing(true);
 
     try {
-      await fetchAccountData();
-    } catch (e) {
-      logger.error(e);
+      const start = performance.now();
+      await refreshAccountData();
+      analytics.track(analytics.event.refreshAccountData, {
+        duration: performance.now() - start,
+      });
+    } catch (error) {
+      logger.error(new RainbowError(`[useRefreshAccountData]: Error calling fetchAccountData`, error));
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchAccountData, isRefreshing]);
+  }, [isRefreshing]);
 
   return {
     isRefreshing,

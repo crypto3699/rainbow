@@ -1,6 +1,7 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import uts46 from 'idna-uts46-hx';
 import { UniqueAsset } from '@/entities';
+import { isLowerCaseMatch } from '@/utils';
 
 const supportedTLDs = ['eth'];
 
@@ -23,12 +24,12 @@ export function getENSNFTAvatarUrl(uniqueTokens: UniqueAsset[], avatar?: string)
     if (isNFTAvatar) {
       const { contractAddress, tokenId } = parseENSNFTRecord(avatar);
       const uniqueToken = uniqueTokens.find(
-        token => token.asset_contract.address?.toLowerCase() === contractAddress.toLowerCase() && token.id === tokenId
+        token => isLowerCaseMatch(token.contractAddress, contractAddress) && isLowerCaseMatch(token.tokenId, tokenId)
       );
-      if (uniqueToken?.image_url) {
-        avatarUrl = uniqueToken?.image_url;
-      } else if (uniqueToken?.image_thumbnail_url) {
-        avatarUrl = uniqueToken?.image_thumbnail_url;
+      if (uniqueToken?.images?.highResUrl) {
+        avatarUrl = uniqueToken?.images?.highResUrl;
+      } else if (uniqueToken?.images?.lowResUrl) {
+        avatarUrl = uniqueToken?.images?.lowResUrl;
       }
     } else if (avatar.startsWith('http') || (avatar.startsWith('/') && !avatar.match(/^\/(ipfs|ipns)/))) {
       avatarUrl = avatar;
@@ -108,7 +109,7 @@ export function validateENS(
   if (splitDomain.length < 2) {
     return {
       code: ERROR_CODES.INVALID_DOMAIN,
-      hint: lang.t('profiles.search_validation.invalid_domain'),
+      hint: i18n.t(i18n.l.profiles.search_validation.invalid_domain),
       valid: false,
     };
   }
@@ -118,7 +119,7 @@ export function validateENS(
   if (!supportedTLDs.includes(tld)) {
     return {
       code: ERROR_CODES.INVALID_TLD,
-      hint: lang.t('profiles.search_validation.tld_not_supported'),
+      hint: i18n.t(i18n.l.profiles.search_validation.tld_not_supported),
       valid: false,
     };
   }
@@ -126,7 +127,7 @@ export function validateENS(
   if (!includeSubdomains && (subDomainName || subDomainName === '')) {
     return {
       code: ERROR_CODES.SUBDOMAINS_NOT_SUPPORTED,
-      hint: lang.t('profiles.search_validation.subdomains_not_supported'),
+      hint: i18n.t(i18n.l.profiles.search_validation.subdomains_not_supported),
       valid: false,
     };
   }
@@ -134,7 +135,7 @@ export function validateENS(
   if (domainName.length < 3) {
     return {
       code: ERROR_CODES.INVALID_LENGTH,
-      hint: lang.t('profiles.search_validation.invalid_length'),
+      hint: i18n.t(i18n.l.profiles.search_validation.invalid_length),
       valid: false,
     };
   }
@@ -144,7 +145,7 @@ export function validateENS(
   if (!validDomainName) {
     return {
       code: ERROR_CODES.INVALID_SUBDOMAIN_NAME,
-      hint: lang.t('profiles.search_validation.invalid_special_characters'),
+      hint: i18n.t(i18n.l.profiles.search_validation.invalid_special_characters),
       valid: false,
     };
   }
@@ -154,7 +155,7 @@ export function validateENS(
     if (!validSubDomainName) {
       return {
         code: ERROR_CODES.INVALID_SUBDOMAIN_NAME,
-        hint: lang.t('profiles.search_validation.invalid_special_characters'),
+        hint: i18n.t(i18n.l.profiles.search_validation.invalid_special_characters),
         valid: false,
       };
     }

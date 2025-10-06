@@ -16,6 +16,7 @@
       "tab_balances": "Saldos",
       "tab_balances_empty_state": "Saldo",
       "tab_balances_tooltip": "Saldos de Ethereum e Token",
+      "tab_claimables": "Reivindicáveis",
       "tab_collectibles": "Colecionáveis",
       "tab_interactions": "Interações",
       "tab_interactions_tooltip": "Interações de Contrato Inteligente",
@@ -24,6 +25,7 @@
       "tab_showcase": "Vitrine",
       "tab_points": "Pontos",
       "tab_positions": "Posições",
+      "tab_rewards": "Recompensas",
       "tab_transactions": "Transações",
       "tab_transactions_tooltip": "Transações e Transferências de Token",
       "tab_uniquetokens": "Tokens Únicos",
@@ -45,6 +47,7 @@
       "unknown_token": "Token desconhecido"
     },
     "activity_list": {
+      "title": "Atividade",
       "empty_state": {
         "default_label": "Nenhuma transação ainda",
         "recycler_label": "Nenhuma transação ainda",
@@ -91,7 +94,11 @@
         "no_backups_found": "Não conseguimos encontrar seu backup anterior!",
         "cant_get_encrypted_data": "Não conseguimos acessar seu backup neste momento. Por favor, tente novamente mais tarde.",
         "missing_pin": "Algo deu errado ao processar seu código PIN. Por favor, tente novamente mais tarde.",
-        "generic": "Erro ao tentar fazer backup. Código de erro: %{errorCodes}"
+        "generic": "Erro ao tentar fazer backup. Código de erro: %{errorCodes}",
+        "no_keys_found": "Nenhuma chave encontrada. Por favor, tente novamente.",
+        "backup_not_found": "Backup não encontrado. Por favor, tente novamente.",
+        "no_account_found": "Não foi possível recuperar os arquivos de backup. Certifique-se de que você está logado.",
+        "damaged_wallet": "Incapaz de fazer backup da carteira. Dados do keychain ausentes."
       },
       "wrong_pin": "O código PIN que você digitou está incorreto e não podemos fazer backup. Por favor, tente novamente com o código correto.",
       "already_backed_up": {
@@ -101,17 +108,64 @@
         "imported": "Importado",
         "imported_message": "Sua carteira foi importada"
       },
+      "wallet_group_title_plural": "Grupo da Carteira %{walletGroupNumber}",
+      "wallet_group_title_singular": "Grupo de Carteiras",
+      "private_key_plural": "Chave Privada %{privateKeyNumber}",
+      "private_key_singluar": "Chave Privada",
       "backup_deleted_successfully": "Backups excluídos com sucesso",
       "cloud": {
+        "no_backups": "Nenhum backup encontrado",
+        "failed_to_fetch_backups": "Falha ao buscar backups",
+        "retry": "Tentar novamente",
+        "refresh": "Atualizar",
+        "syncing_cloud_store": "Sincronizando com %{cloudPlatformName}",
+        "fetching_backups": "Recuperando backups de %{cloudPlatformName}",
         "back_up_to_platform": "Faça backup para %{cloudPlatformName}",
-        "manage_platform_backups": "Gerencie %{cloudPlatformName} Backups",
+        "restore_from_platform": "Restaurar de %{cloudPlatformName}",
+        "restoration_in_progress": "Restauração em andamento",
+        "how_would_you_like_to_backup": "Como você gostaria de fazer o backup da sua carteira?",
+        "manage_platform_backups": "Ver Backups de %{cloudPlatformName}",
+        "cloud_platform_backup_settings": "Configurações de Backup de %{cloudPlatformName}",
+        "cloud_backup": "Backup em Nuvem",
+        "backing_up": "Fazendo backup...",
+        "backup_success": "Backup Realizado com Sucesso",
+        "backup_failed": "Falha no Backup",
+        "manual_backup": "Backup manual",
+        "back_to_cloud_platform_now": "Fazer Backup para %{cloudPlatform} Agora",
+        "add_wallet_to_cloud_backups": "Adicionar esta carteira ao seu backup na nuvem?",
+        "enable_cloud_backups": "Ativar Backups na Nuvem",
+        "mayber_later": "Talvez Mais Tarde",
+        "recommended_for_beginners": "Recomendado para iniciantes.",
+        "choose_backup": "Escolha o backup que você gostaria de restaurar",
+        "backup_to_cloud_now": "Fazer Backup para %{cloudPlatformName} Agora",
+        "choose_backup_cloud_description": "Faça backup da sua carteira de forma segura para %{cloudPlatform}, para que você possa restaurá-la se perder seu dispositivo ou adquirir um novo.",
+        "choose_backup_manual_description": "Faça o backup da sua carteira manualmente, salvando sua frase secreta em um local seguro.",
+        "enable_cloud_backups_description": "Se você preferir fazer o backup das suas carteiras manualmente, pode fazê-lo abaixo.",
+        "latest_backup": "Último backup: %{date}",
+        "back_up_all_wallets_to_cloud": "Fazer Backup de Todas as Carteiras para %{cloudPlatformName}",
+        "most_recent_backup": "Backup Mais Recente",
+        "out_of_date": "Desatualizado",
+        "up_to_date": "Atualizado",
+        "older_backups": "Backups Antigos",
+        "no_older_backups": "Sem Backups Antigos",
+        "older_backups_title": "%{date} às %{time}",
+        "statuses": {
+          "not_enabled": "Não Habilitado",
+          "syncing": "Sincronizando",
+          "out_of_date": "Desatualizado",
+          "up_to_date": "Atualizado"
+        },
         "password": {
-          "a_password_youll_remember": "Por favor, use uma senha que você se lembre.",
-          "backup_password": "Senha de backup",
-          "choose_a_password": "Escolha uma senha",
+          "a_password_youll_remember_part_one": "Esta senha é",
+          "not": "não",
+          "a_password_youll_remember_part_two": "recuperável. Certifique-se de escolher uma senha que você se lembrará.",
+          "backup_password": "Senha",
+          "choose_a_password": "Crie uma senha para proteger seu backup",
           "confirm_backup": "Confirmar Backup",
+          "enter_backup_password": "Digite sua senha de backup",
+          "to_restore_from_backup": "Para restaurar a partir deste backup, digite a senha que você criou quando fez o backup",
           "confirm_password": "Confirmar senha",
-          "confirm_placeholder": "Confirmar Senha",
+          "confirm_placeholder": "Repetir Senha",
           "it_cant_be_recovered": "Não pode ser recuperado!",
           "minimum_characters": "Mínimo de %{minimumLength} caracteres",
           "passwords_dont_match": "Senhas não coincidem",
@@ -133,22 +187,31 @@
       },
       "explainers": {
         "backup": "Não se esqueça dessa senha! Ela é separada da sua senha %{cloudPlatformName} , e você deve salvá-la em um local seguro.\n\nVocê precisará dela para restaurar sua carteira a partir do backup no futuro.",
+        "add_to_backups": "Você tem mais de uma carteira que precisa ser feita backup. Por razões de segurança, atualmente só conseguimos fazer o backup de uma carteira por vez.",
         "if_lose_cloud": "Se você perder este dispositivo, poderá recuperar o backup criptografado da sua carteira a partir de %{cloudPlatformName}.",
         "if_lose_imported": "Se você perder este dispositivo, poderá restaurar sua carteira com a chave que você importou originalmente.",
         "if_lose_manual": "Se você perder este dispositivo, poderá restaurar sua carteira com a frase secreta que você salvou."
       },
       "manual": {
-        "label": "Sua frase secreta",
+        "backup_manually": "Backup Manual",
+        "label": "Salve seu %{typeName}",
+        "with_your_label": "Seu %{typeName}",
+        "backup_manually_now": "Você gostaria de fazer o backup desta carteira?",
+        "back_up_now": "Fazer Backup Agora",
+        "already_backed_up": "Já foi feito backup",
         "pkey": {
-          "confirm_save": "Eu salvei minha chave",
+          "confirm_save": "􀆅 Eu salvei minha chave",
           "save_them": "Copie e salve-a em seu gerenciador de senhas ou em outro local seguro.",
-          "these_keys": "Esta é a chave da sua carteira!"
+          "these_keys": "Esta é a chave da sua carteira!",
+          "description": "Qualquer pessoa que possuir essa chave pode acessar sua carteira! Você nunca deveria compartilhá-la."
         },
         "seed": {
-          "confirm_save": "Eu salvei estas palavras",
+          "confirm_save": "􀆅 Eu salvei essas palavras",
           "save_them": "Escreva-as ou salve-as em seu gerenciador de senhas.",
-          "these_keys": "Essas palavras são as chaves da sua carteira!"
-        }
+          "these_keys": "Essas palavras são as chaves da sua carteira!",
+          "description": "Essas palavras são as chaves para sua carteira. Certifique-se de salvá-las em um local seguro."
+        },
+        "create_new_secret_phrase": "Crie uma Nova Frase Secreta"
       },
       "needs_backup": {
         "back_up_your_wallet": "Faça backup da sua carteira",
@@ -177,6 +240,15 @@
         "view_private_key": "Ver chave privada",
         "view_secret_phrase": "Ver frase secreta",
         "you_need_to_authenticate": "Você precisa se autenticar para acessar sua recuperação %{typeName}"
+      },
+      "warning": {
+        "before_you_proceed": "Antes de prosseguir",
+        "title": "Ver seu %{typeName}",
+        "never_share": "Nunca compartilhe seu %{typeName} ou insira em aplicativos ou sites.",
+        "access": "Qualquer pessoa que tenha seu %{typeName} pode acessar toda a sua carteira.",
+        "hide": "Certifique-se de que ninguém possa ver sua tela ao visualizar seu %{typeName}.",
+        "support": "A equipe de suporte do Rainbow nunca irá solicitar sua %{typeName}.",
+        "button": "􀎽 Mostrar %{typeName}"
       }
     },
     "bluetooth": {
@@ -274,6 +346,7 @@
       "receive": "Receber",
       "remove": "Remover",
       "save": "Salvar",
+      "skip": "Pular",
       "send": "Enviar",
       "send_another": "Enviar outro",
       "share": "Compartilhar",
@@ -371,6 +444,57 @@
         "description": "Você também pode pressionar longamente o endereço\nacima para copiá-lo."
       }
     },
+    "check_identifier": {
+      "title": "Autenticação Necessária",
+      "description": "Parece que você pode ter trocado de dispositivo ou reinstalado o Rainbow. Por favor, autentique-se para que possamos validar se seus dados da chave mestra ainda estão em bom estado.",
+      "action": "Autenticar",
+      "dismiss": "Dispensar",
+      "error_alert": {
+        "title": "Erro ao Validar a Chave Mestra",
+        "message": "Encontramos um erro ao validar seus dados da chave mestra. Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte.",
+        "contact_support": "Contactar Suporte",
+        "cancel": "Cancelar"
+      },
+      "failure_alert": {
+        "title": "Dados Inválidos da Chave Mestra",
+        "message": "Não conseguimos verificar a integridade dos seus dados da chave mestra. Por favor, restaure sua carteira e tente novamente. Se o problema persistir, entre em contato com o suporte.",
+        "action": "Continuar"
+      }
+    },
+    "claimables": {
+      "panel": {
+        "estimating_gas_fee": "Estimando Taxa de Gás...",
+        "gas_error": "Erro de Gás",
+        "quote_error": "Erro na Cotação",
+        "no_route_found": "Nenhuma Rota Encontrada",
+        "fetching_quote": "Buscando Cotação...",
+        "rainbow_eth_rewards": "Recompensas Rainbow ETH",
+        "merkl_claimable": "%{dappName} Cofre",
+        "merkl_claimable_description": "Estratégia %{assetSymbols}",
+        "select_a_network": "Selecione uma Rede",
+        "select_a_token": "Selecione um Token",
+        "amount_to_claim_on_network": "%{amount} para reivindicar na %{network}",
+        "claim": "Reivindicar",
+        "claiming": "Reivindicando",
+        "claim_in_progress": "Reivindicação em Progresso...",
+        "claimed": "Reivindicado!",
+        "claiming_failed": "Reivindicação falhou",
+        "insufficient_funds": "Fundos insuficientes",
+        "hold_to_claim": "Pressione para Solicitar",
+        "creator_lp_fees": "Taxas do Criador LP",
+        "rainbow_token_launcher": "Rainbow Token Launcher",
+        "claim_amount": "Reivindicar %{amount}",
+        "done": "Concluído",
+        "try_again": "Tente Novamente",
+        "tokens_on_the_way": "Tokens a caminho!",
+        "a_token": "um token",
+        "a_network": "uma rede",
+        "swap_failed": "Troca Falhou",
+        "receive": "Receber",
+        "on": "ligado",
+        "reset": "Redefinir"
+      }
+    },
     "cloud": {
       "backup_success": "Sua carteira foi salva com sucesso!"
     },
@@ -400,33 +524,41 @@
     },
     "developer_settings": {
       "alert": "Alerta",
+      "analyze_env_variables": "Analisar Variáveis de Ambiente",
+      "analyze_react_query": "Analisar Consulta React",
+      "analyze_user_assets_query": "Analisar Consulta de Ativos do Usuário",
       "applied": "APLICADO",
       "backups_deleted_successfully": "Backups excluídos com sucesso",
-      "clear_async_storage": "Limpar armazenamento assíncrono",
+      "clear_async_storage": "Limpar AsyncStorage",
       "clear_pending_txs": "Limpar transações pendentes",
       "clear_image_cache": "Limpar cache de imagens",
       "clear_image_metadata_cache": "Limpar Cache de Metadados da Imagem",
       "clear_local_storage": "Limpar Armazenamento Local",
       "clear_mmkv_storage": "Limpar Armazenamento MMKV",
-      "connect_to_hardhat": "Conectar ao Hardhat",
-      "crash_app_render_error": "Crash no app (erro de renderização)",
+      "clear_react_query_cache": "Limpar Cache de Consulta React",
+      "connect_to_anvil": "Conectar ao Anvil",
+      "copy_fcm_token": "Copiar Token FCM",
+      "copy_log_lines": "Copiar Linhas de Log",
+      "copy_signing_wallet_address": "Copiar Endereço da Carteira de Assinatura",
+      "disconnect_to_anvil": "Desconectar do Anvil",
+      "crash_app_render_error": "App de Falha (Erro de Renderização)",
       "enable_testnets": "Ativar Testnets",
-      "installing_update": "Instalando atualização",
+      "installing_update": "Instalando Atualização",
       "navigation_entry_point": "Ponto de Entrada de Navegação",
-      "no_update": "Sem atualização",
+      "no_update": "Sem Atualização",
       "not_applied": "NÃO APLICADO",
       "notifications_debug": "Depuração de Notificações",
-      "remove_all_backups": "Remover todos os backups",
+      "remove_all_backups": "Remover Todos os Backups",
       "keychain": {
         "menu_title": "Redefinir Keychain",
-        "delete_wallets": "Excluir todas as carteiras",
+        "delete_wallets": "Excluir Todas as Carteiras",
         "alert_title": "Cuidado!",
         "alert_body": "🚨🚨🚨 \nIsso deletará permanentemente todas as chaves privadas e dados da sua carteira, por favor, certifique-se de ter feito backup de tudo antes de prosseguir!! \n🚨🚨🚨"
       },
-      "restart_app": "Reiniciar app",
-      "reset_experimental_config": "Redefinir configuração experimental",
+      "restart_app": "Reiniciar App",
+      "reset_experimental_config": "Redefinir Configuração Experimental",
       "status": "Status",
-      "sync_codepush": "Sincronizar codepush"
+      "sync_codepush": "Sincronizar CodePush"
     },
     "discover": {
       "pulse": {
@@ -435,7 +567,6 @@
         "trading_at_prefix": "Negociação em"
       },
       "search": {
-        "profiles": "Perfis",
         "search_ethereum": "Pesquisar em todo o Ethereum",
         "search_ethereum_short": "Pesquisar Ethereum",
         "search": "Pesquisar",
@@ -480,9 +611,14 @@
         "expires_in": "Expira em %{minutes}m",
         "from_divider": "de",
         "to_divider": "para",
+        "token": "Token",
         "view_on": "Visualizar em %{blockExplorerName}",
-        "view_on_etherscan": "Visualizar no Etherscan"
+        "view_on_etherscan": "Visualizar no Etherscan",
+        "copy_contract_address": "Copiar Endereço do Contrato"
       },
+      "all_networks": "Todas as redes",
+      "filter_by_network": "Filtrar por rede",
+      "my_tokens": "Meus Tokens",
       "flip": "Virar",
       "max": "Máx",
       "movers": {
@@ -501,9 +637,31 @@
         "nothing_here": "Nada aqui!",
         "nothing_to_send": "Nada para enviar"
       },
+      "quote_errors": {
+        "501": "Nenhuma cotação disponível",
+        "no_quote_available": "Nenhuma cotação disponível",
+        "502": "Liquidez insuficiente",
+        "insufficient_liquidity": "Liquidez insuficiente",
+        "503": "Taxa na Transferência de Token",
+        "fee_on_transfer": "Taxa na Transferência de Token",
+        "504": "Nenhuma rota encontrada",
+        "no_route_found": "Nenhuma rota encontrada"
+      },
       "price_impact": {
+        "long_wait": {
+          "title": "Tempo de espera prolongado",
+          "description": "Aprox. %{time}",
+          "description_prefix": "Aprox."
+        },
+        "unknown_price": {
+          "title": "Valor de mercado desconhecido",
+          "description": "Se decidir continuar, certifique-se de que está satisfeito com o valor cotado."
+        },
         "losing_prefix": "Perdendo",
         "small_market": "Mercado Pequeno",
+        "small_market_try_smaller_amount": "Pequeno mercado — tente um valor menor",
+        "you_are_losing": "Você está perdendo %{priceImpact}",
+        "you_are_losing_prefix": "Você está perdendo",
         "label": "Possível perda"
       },
       "source": {
@@ -518,7 +676,6 @@
       "high": "Alto",
       "slippage_tolerance": "Derrapagem Máxima",
       "source_picker": "Rotas de Trocas passando por",
-      "use_flashbots": "Usar Flashbots",
       "swapping_for_prefix": "Trocar por",
       "view_details": "Ver detalhes",
       "token_sections": {
@@ -547,15 +704,85 @@
         "social": {
           "facebook": "Facebook",
           "homepage": "Página inicial",
+          "website": "Website",
           "reddit": "Reddit",
           "telegram": "Telegram",
-          "twitter": "Twitter"
+          "twitter": "Twitter",
+          "warpcast": "Warpcast",
+          "farcaster": "Farcaster",
+          "other": "Outro",
+          "search_on_twitter": "Procurar no Twitter"
         },
         "uniswap_liquidity": "Liquidez Uniswap",
         "value": "Valor",
-        "volume_24_hours": "Volume 24h"
+        "volume_24_hours": "Volume 24h",
+        "menu": {
+          "view_on": "Visualizar em %{blockExplorerName}",
+          "share": "Compartilhar",
+          "copy_contract_address": "Copiar Endereço do Contrato",
+          "pin": "Pin",
+          "unpin": "Desafixar",
+          "hide": "Ocultar",
+          "unhide": "Mostrar"
+        },
+        "no_data_available": "Nenhum Dado Disponível"
+      },
+      "sections": {
+        "market_stats": {
+          "title": "Estatísticas do Mercado",
+          "circulating_supply": "Oferta Circulante",
+          "max_supply": "Fornecimento Máximo",
+          "fully_diluted_valuation": "Valorização Totalmente Diluída",
+          "created_by": "Criado por",
+          "market_cap": "Valor de Mercado",
+          "created": "Criado",
+          "volume_24_hours": "Volume 24h",
+          "rank": "Classificação"
+        },
+        "buy": {
+          "title": "Comprar",
+          "pay_with": "Comprar com",
+          "available_balance": "Saldo Disponível",
+          "open_swaps": "Operações Abertas",
+          "low_balance": "Saldo Baixo"
+        },
+        "claim": {
+          "claim_button": "Solicitar Airdrop",
+          "created_by": "Criado por %{creator}",
+          "title": "Reivindicar"
+        },
+        "about": {
+          "title": "Sobre",
+          "what_is": "O que é %{assetName}?"
+        },
+        "history": {
+          "title": "Histórico",
+          "tabs": {
+            "all": "Todos",
+            "buys": "Compras",
+            "sells": "Vendas"
+          },
+          "more": "Mais",
+          "less": "Menos",
+          "bought": "Comprado",
+          "sold": "Vendido",
+          "received": "Recebido",
+          "sent": "Enviado",
+          "unknown": "Desconhecido"
+        }
       },
       "chart": {
+        "candlestick": {
+          "candle_field_labels": {
+            "c": "Fechar",
+            "h": "H",
+            "l": "L",
+            "o": "Abrir",
+            "t": "",
+            "v": "V"
+          },
+          "no_volume_label": "Nenhum"
+        },
         "all_time": "Todo o Tempo",
         "date": {
           "months": {
@@ -573,9 +800,10 @@
             "month_11": "Dezembro"
           }
         },
-        "no_price_data": "Sem dados de preço",
+        "no_chart_data": "Nenhum Dado de Gráfico",
+        "no_price_data": "Nenhum Dado de Preço",
         "past_timespan": "Passado %{formattedTimespan}",
-        "today": "Hoje",
+        "today": "Dia Passado",
         "token_pool": "Piscina %{tokenName}"
       },
       "contact_profile": {
@@ -599,9 +827,9 @@
       "swap": {
         "swap": "Trocar",
         "bridge": "Ponte",
-        "flashbots_protect": "Flashbots Proteger",
         "losing": "Perdendo",
         "on": "Ligado",
+        "off": "Desativado",
         "price_impact": "Impacto no preço",
         "price_row_per_token": "por",
         "slippage_message": "Este é um mercado pequeno, então você está obtendo um preço ruim. Tente uma negociação menor!",
@@ -638,6 +866,16 @@
         "number_of_steps": "%{number} Passos",
         "input_exchange_rate": "1 %{inputSymbol} para %{executionRate} %{outputSymbol}",
         "output_exchange_rate": "1 %{outputSymbol} para %{executionRate} %{inputSymbol}"
+      },
+      "swap_details_v2": {
+        "automatic": "Automático",
+        "degen_mode": "Modo Degen",
+        "degen_mode_description": "Pule a etapa de revisão para trocar mais rápido",
+        "maximum_sold": "Máximo Vendido",
+        "minimum_received": "Valor Mínimo Recebido",
+        "preferred_network": "Rede Preferida",
+        "rainbow_fee": "Taxa Rainbow incluída",
+        "settings": "Configurações"
       },
       "token_index": {
         "get_token": "Obter %{assetSymbol}",
@@ -677,11 +915,14 @@
         "registrant": "Registrante",
         "resolver": "Resolvedor",
         "save_to_photos": "Salvar em Fotos",
+        "sell_for_x": "Vender por %{price}",
         "set_primary_name": "Definir como meu nome ENS",
         "share_token_info": "Compartilhar Info %{uniqueTokenName}",
         "showcase": "Vitrine",
         "toast_added_to_showcase": "Adicionado à vitrine",
         "toast_removed_from_showcase": "Removido da vitrine",
+        "refreshing": "Atualizando metadados...",
+        "reported": "Reportado como spam",
         "twitter": "Twitter",
         "view_all_with_property": "Ver tudo com propriedade",
         "view_collection": "Ver coleção",
@@ -691,35 +932,46 @@
         "view_on_platform": "Veja no %{platform}",
         "view_on_web": "Veja na Web",
         "refresh": "Atualizar Metadados",
+        "report": "Reportar como spam",
         "hide": "Ocultar",
         "unhide": "Mostrar"
       }
     },
+    "app_icon_unlock_sheet": {
+      "smol_description": "Você encontrou um Tesouro! Porque você possui um NFT Smolverse, desbloqueou um Ícone Personalizado!",
+      "smol_title": "Você desbloqueou\nRainbow 􀆄 SMOL",
+      "optimism_description": "Para celebrar os NFTs no Optimism, Rainbow e Optimism se uniram para lançar um Ícone de Aplicativo em edição limitada para Exploradores Otimistas como você!",
+      "optimism_title": "Você desbloqueou\nRainbow 􀆄 Optimism",
+      "zora_description": "Um ícone Rainbow Zorb em edição especial feito para meditações mágicas.",
+      "zora_title": "Você desbloqueou\nRainbow 􀆄 Zora",
+      "finiliar_description": "Um ícone Rainbow Fini em edição especial que mantém você atualizado sobre o preço do gás, faça sol ou chuva.",
+      "finiliar_title": "Você desbloqueou um\nRainbow Fini",
+      "golddoge_description": "Um ícone Rainbow dourado em edição limitada para comemorar o 17º aniversário de Kabosu.",
+      "golddoge_title": "Você desbloqueou\nRainbow 􀆄 DOGE",
+      "raindoge_description": "Um ícone Rainbow em edição limitada para comemorar o 17º aniversário de Kabosu.",
+      "raindoge_title": "Você desbloqueou\nRainbow 􀆄 The Doge NFT",
+      "pooly_description": "Um ícone Rainbow Pooly em edição especial para apoiadores da liberdade.",
+      "pooly_title": "Você desbloqueou um\nRainbow Pooly",
+      "zorb_description": "Um Rainbow Zorb em edição especial: 100% do que você ama, mais rápido e eficiente.",
+      "zorb_title": "Você desbloqueou\nRainbow Zorb Energy!",
+      "poolboy_description": "Um ícone especial Rainbow x Poolsuite para um verão on-chain.",
+      "poolboy_title": "Você desbloqueou o\nRainbow Poolboy!",
+      "adworld_description": "Como um Cidadão do Mundo Rainbow, você agora pode desbloquear um ícone especial AdWorld x Rainbow.",
+      "adworld_title": "Bem-vindo ao Mundo Rainbow!",
+      "farcaster_description": "Nosso ícone de aplicativo mais chato, inspirado no minimalismo enfadonho do Warpcast.",
+      "farcaster_title": "Você desbloqueou\nRainbowcast",
+      "redacted_description": "Um ícone Rainbow exclusivo para os verdadeiros apreciadores de Gdupi.",
+      "redacted_title": "Você desbloqueou o\nRedacted Rainbow",
+      "baggy_description": "Das ruas para a cadeia, esta pequena bolsa guarda sua dose portátil de vibrações Rainbow. Sinta as cores e perceba a diferença.",
+      "baggy_title": "Você desbloqueou Rainbow Baggy",
+      "button": "Desbloqueie o ícone"
+    },
     "explain": {
-      "icon_unlock": {
-        "smol_text": "Você encontrou um Tesouro! Porque você possui um NFT Smolverse, você desbloqueou um Ícone Personalizado!",
-        "optimism_text": "Para celebrar os NFTs na Optimism, Rainbow e Optimism se uniram para lançar um Ícone de Aplicativo de Edição Limitada para Exploradores Otimistas como você!",
-        "zora_text": "Um ícone especial de edição limitada Rainbow Zorb feito para ponderações mágicas.",
-        "finiliar_text": "Um ícone especial de edição limitada Rainbow Fini que mantém você atualizado sobre o preço do gás, faça chuva ou faça sol.",
-        "finiliar_title": "Você desbloqueou um Rainbow Fini\n",
-        "golddoge_text": "Um ícone de aplicativo Rainbow dourado de edição limitada em comemoração ao 17º aniversário de Kabosu.",
-        "raindoge_text": "Um ícone de aplicativo Rainbow de edição limitada em comemoração ao 17º aniversário de Kabosu.",
-        "pooly_text": "Um ícone especial de edição limitada Rainbow Pooly para apoiadores da liberdade.",
-        "pooly_title": "Você desbloqueou um Rainbow Pooly\n",
-        "zorb_text": "Um ícone especial de edição limitada Rainbow Zorb:\n100% do que você ama, mais rápido e mais eficiente.",
-        "zorb_title": "Você desbloqueou\nEnergia do Zorb Arco-Íris!",
-        "poolboy_text": "Um Ícone de Edição Especial do Rainbow x Poolsuite para o verão nas correntes.",
-        "poolboy_title": "Você desbloqueou o Carregador de Piscina Arco-Íris\n!",
-        "adworld_text": "Como um Cidadão do Mundo Arco-Íris, você agora pode desbloquear uma edição especial\nAdWorld x Ícone App Arco-Íris.",
-        "adworld_title": "Bem-vindo ao Mundo Arco-Íris!",
-        "title": "Você desbloqueou\nArco-Íris 􀆄 %{partner}",
-        "button": "Pegue o ícone"
-      },
       "output_disabled": {
-        "text": "Por %{fromNetwork}, o Arco-Íris não pode preparar trocas com base na quantidade de %{outputToken} que você gostaria de receber. \n\n Tente inserir a quantidade de %{inputToken} que você gostaria de trocar.",
+        "text": "Por %{fromNetwork}, o Rainbow não pode preparar trocas com base na quantidade de %{outputToken} que você gostaria de receber. \n\n Tente inserir a quantidade de %{inputToken} que você gostaria de trocar.",
         "title": "Insira %{inputToken} em vez disso",
         "title_crosschain": "Insira %{fromNetwork} %{inputToken} em vez disso",
-        "text_crosschain": "O Arco-Íris não pode preparar trocas com base na quantidade de %{outputToken} que você gostaria de receber. \n\n Tente inserir a quantidade de %{inputToken} que você gostaria de trocar.",
+        "text_crosschain": "O Rainbow não pode preparar trocas com base na quantidade de %{outputToken} que você gostaria de receber. \n\n Tente inserir a quantidade de %{inputToken} que você gostaria de trocar.",
         "text_bridge": "O Rainbow não pode preparar uma ponte com base na quantidade de %{outputToken} que você gostaria de receber no destino %{toNetwork} . \n\n Tente informar a quantidade de %{fromNetwork} %{inputToken} que você gostaria de transferir através da ponte.",
         "title_empty": "Escolha um Token"
       },
@@ -728,9 +980,16 @@
         "title_plural": "Disponível em %{length} Redes",
         "title_singular": "Disponível em %{network} Rede"
       },
+      "default_network_explainer": {
+        "text": "%{chainName} é uma rede de Camada 2 que funciona sobre o Ethereum, permitindo transações mais baratas e rápidas, ao mesmo tempo em que se beneficia da segurança subjacente do Ethereum.",
+        "title": "O que é %{chainName}?"
+      },
       "arbitrum": {
         "text": "Arbitrum é uma rede de Camada 2 que funciona em cima do Ethereum, possibilitando transações mais baratas e rápidas, ao mesmo tempo em que se beneficia da segurança subjacente do Ethereum.\n\nEle agrupa várias transações juntas em um \"roll up\" antes de enviá-las para ficar permanentemente no Ethereum.",
         "title": "O que é o Arbitrum?"
+      },
+      "add_to_backups": {
+        "title": "Fazendo backup do %{walletName}"
       },
       "backup": {
         "title": "Importante"
@@ -775,25 +1034,69 @@
         "text": "A gorjeta para os mineradores vai diretamente para o minerador que confirma sua transação na rede.\n\nUma gorjeta maior torna sua transação mais provável de ser confirmada rapidamente.",
         "title": "Gorjeta para o minerador"
       },
-      "optimism": {
-        "text": "O Otimismo é uma rede de camada 2 que roda em cima do Ethereum, permitindo transações mais baratas e rápidas, enquanto ainda se beneficia da segurança subjacente do Ethereum.\n\nEle agrupa muitas transações juntas em um \"roll up\" antes de enviá-las permanentemente para o Ethereum.",
-        "title": "O que é o Optimism?"
+      "apechain": {
+        "text": "ApeChain é uma rede Layer 3 que funciona em cima do Arbitrum Orbit e Ethereum.\n\nEla melhora significativamente a utilidade do ApeCoin, promovendo uma economia robusta e dinâmica impulsionada pelo $APE.",
+        "title": "O que é ApeChain?"
+      },
+      "avalanche": {
+        "text": "Avalanche é uma sidechain, uma rede distinta que opera junto com o Ethereum e é compatível com ela.\n\nPermite transações mais baratas e rápidas, mas, ao contrário das redes de Camada 2, o Avalanche possui seus próprios mecanismos de segurança e consenso que diferem do Ethereum.",
+        "title": "O que é Avalanche?"
       },
       "base": {
         "text": "Base é uma rede de Camada 2 que roda em cima do Ethereum, permitindo transações mais baratas e rápidas enquanto ainda se beneficia da segurança subjacente do Ethereum.\n\nEle agrupa muitas transações juntas em um \"roll up\" antes de enviá-las permanentemente para o Ethereum.",
-        "title": "O que é o Base"
+        "title": "O que é Base?"
       },
-      "zora": {
-        "text": "Zora é uma rede de Camada 2 que roda em cima do Ethereum, permitindo transações mais baratas e rápidas enquanto ainda se beneficia da segurança subjacente do Ethereum.\n\nEle agrupa muitas transações juntas em um \"roll up\" antes de enviá-las permanentemente para o Ethereum.",
-        "title": "O que é o Zora?"
+      "blast": {
+        "text": "Blast é uma rede de Camada 2 que opera sobre o Ethereum, permitindo transações mais baratas e rápidas, enquanto ainda se beneficia da segurança subjacente do Ethereum.\n\nTambém agrupa muitas transações juntas em um \"roll up\" antes de enviá-las permanentemente para o Ethereum.",
+        "title": "O que é Blast?"
+      },
+      "bsc": {
+        "text": "Binance Smart Chain (BSC) é a blockchain da plataforma de negociação Binance. \n\nO BSC permite transações mais baratas e rápidas, mas, ao contrário de uma rede de Camada 2, ele possui seus próprios mecanismos de segurança e consenso diferentes do Ethereum.",
+        "title": "O que é a Binance Smart Chain?"
+      },
+      "degen": {
+        "text": "Degen Chain é uma rede Layer 3 que funciona em cima do Arbitrum e Ethereum.",
+        "title": "O que é Degen Chain?"
+      },
+      "gravity": {
+        "text": "Gravity é um blockchain de alta performance de Camada 1 construído pela Galxe, alcançando mais de um gigagas por segundo de throughput e finalização sub-segundo.\n\nEle utiliza um mecanismo de consenso AptosBFT em pipeline e um tempo de execução paralelo EVM, mantendo a segurança de Prova de Participação por meio de tecnologia de restaking.",
+        "title": "O que é Gravity?"
+      },
+      "gnosis": {
+        "text": "A Gnosis Chain é uma sidechain Ethereum de propriedade comunitária operada por um conjunto diverso de validadores em todo o mundo.\n\nEla se concentra na resiliência e neutralidade credível, oferecendo transações mais baratas e rápidas enquanto mantém seus próprios mecanismos de segurança e consenso.",
+        "title": "O que é Gnosis?"
+      },
+      "ink": {
+        "text": "Ink é uma rede Layer 2 construída no OP Stack, projetada para escalar o Ethereum fornecendo tempos de bloco sub-segundo e taxas de transação baixas.\n\nLançada pela Kraken e parte da Superchain, a Ink visa melhorar o desempenho e a acessibilidade para aplicações de finanças descentralizadas (DeFi).",
+        "title": "O que é Ink?"
+      },
+      "linea": {
+        "text": "Linea é uma blockchain de Camada 2 segura e de baixo custo, equivalente ao Ethereum, desenvolvida pela ConsenSys.\n\nHabilita transações mais rápidas e acessíveis sem comprometer a segurança e descentralização, visando integrar o próximo bilhão de usuários ao web3.",
+        "title": "O que é Linea?"
+      },
+      "opmainnet": {
+        "text": "O Otimismo é uma rede de camada 2 que roda em cima do Ethereum, permitindo transações mais baratas e rápidas, enquanto ainda se beneficia da segurança subjacente do Ethereum.\n\nEle agrupa muitas transações juntas em um \"roll up\" antes de enviá-las permanentemente para o Ethereum.",
+        "title": "O que é o Optimism?"
       },
       "polygon": {
         "text": "Polygon é um sidechain, uma rede distinta que roda ao lado do Ethereum e é compatível com ele.\n\nEle permite transações mais baratas e rápidas, mas, ao contrário das redes de Camada 2, o Polygon possui seus próprios mecanismos de segurança e consenso diferentes do Ethereum.",
         "title": "O que é o Polygon?"
       },
-      "bsc": {
-        "text": "Binance Smart Chain (BSC) é a blockchain da plataforma de negociação Binance. \n\nO BSC permite transações mais baratas e rápidas, mas, ao contrário de uma rede de Camada 2, ele possui seus próprios mecanismos de segurança e consenso diferentes do Ethereum.",
-        "title": "O que é a Binance Smart Chain?"
+      "scroll": {
+        "text": "Scroll é uma solução de Layer 2 construída sobre o Ethereum, visando melhorar a escalabilidade e a eficiência das transações.\n\nEla emprega a tecnologia roll-up para agrupar transações, que são então submetidas ao Ethereum, beneficiando-se de sua infraestrutura de segurança.",
+        "title": "O que é Scroll?"
+      },
+      "sanko": {
+        "text": "Sanko é uma rede de Camada 3 que opera sobre o Arbitrum e Ethereum, focando em NFTs e jogos.\n\nEla usa AnyTrust Data Availability e provas de fraude para validação de estado, permitindo transações mais rápidas e baratas enquanto aproveita a segurança do Ethereum. Sanko apresenta um token nativo chamado DMT e emprega validadores na lista branca para propor e desafiar raízes de estado.",
+        "title": "O que é Sanko?"
+      },
+      "zksync": {
+        "text": "ZKsync é um protocolo Layer 2 projetado para escalar o Ethereum usando provas criptográficas avançadas de conhecimento zero.\n\nEle aumenta a capacidade de throughput do Ethereum enquanto mantém descentralização e segurança, permitindo transações mais rápidas e mais baratas.",
+        "title": "O que é Zksync?"
+      },
+      "zora": {
+        "text": "Zora é uma rede de Camada 2 que roda em cima do Ethereum, permitindo transações mais baratas e rápidas enquanto ainda se beneficia da segurança subjacente do Ethereum.\n\nEle agrupa muitas transações juntas em um \"roll up\" antes de enviá-las permanentemente para o Ethereum.",
+        "title": "O que é o Zora?"
       },
       "read_more": "Leia Mais",
       "learn_more": "Saiba Mais",
@@ -825,7 +1128,7 @@
         "title": "Liquidez Insuficiente"
       },
       "fee_on_transfer": {
-        "fragment1": "Esta troca falhará no Arco-Íris porque o %{tokenName} contrato adiciona taxas extras.  \n\n Leia ",
+        "fragment1": "Esta troca falhará no Rainbow porque o %{tokenName} contrato adiciona taxas extras.  \n\n Leia ",
         "fragment2": "nosso guia",
         "fragment3": " para obter ajuda para trocar este token!",
         "title": "Taxa na Transferência de Token"
@@ -867,15 +1170,6 @@
           "fragment3": " sobre o slippage e como isso afeta as trocas."
         }
       },
-      "flashbots": {
-        "text": "Flashbots protege suas transações de frontrunning e ataques de sanduíche que podem resultar em você obter um preço pior ou sua transação falhar.",
-        "title": "Flashbots",
-        "still_curious": {
-          "fragment1": "Ainda está curioso? ",
-          "fragment2": "Leia mais",
-          "fragment3": " sobre o Flashbots e a proteção que ele oferece."
-        }
-      },
       "swap_refuel": {
         "title": "Nenhum %{networkName} %{gasToken} detectado",
         "text": "Você não poderá usar %{networkName} sem %{networkName} %{gasToken}. Nós podemos agrupá-lo perfeitamente com esta ponte usando cerca de $3 de ETH da sua carteira.",
@@ -890,6 +1184,30 @@
         "title": "Nenhum %{networkName} %{gasToken} detectado",
         "text": "Você não poderá usar %{networkName} sem %{networkName} %{gasToken}. Se você prosseguir com essa transação, não poderá trocar, conectar ou transferir seus tokens %{networkName} sem adicionar %{networkName} %{gasToken} à sua carteira.",
         "button": "Proceder mesmo assim"
+      },
+      "ens_primary_name": {
+        "title": "O que significa definir meu nome ENS?",
+        "text": "As pessoas poderão digitar seu nome .eth em dApps em vez do seu endereço Ethereum completo quando quiserem enviar algo para você, e os dApps poderão usar seu nome .eth e perfil para exibir informações sobre você. Isso também é conhecido como definir seu nome ENS como \"principal\"."
+      },
+      "ens_on_chain_data_warning": {
+        "title": "Atenção!",
+        "text": "Os dados que você fornecer aqui serão armazenados na blockchain Ethereum - o que significa que serão visíveis para todos e acessíveis por qualquer pessoa. Não compartilhe qualquer dado com o qual você não se sinta à vontade para tornar público."
+      },
+      "ens_manager": {
+        "title": "O que é o gerenciador .eth?",
+        "text": "O gerente de um nome .eth é capaz de definir e atualizar seus registros, criar subdomínios daquele nome ou gerenciar sua configuração. O gerente é definido pelo proprietário do nome .eth e também é conhecido como o controlador do nome ENS."
+      },
+      "ens_owner": {
+        "title": "O que é o proprietário do nome .eth?",
+        "text": "O proprietário de um nome .eth possui controle total e definitivo sobre esse nome. Eles podem transferir a propriedade do nome e permitir que outra pessoa administre o nome para eles, se assim escolherem (definindo registros etc.). O proprietário também é conhecido como o registrante do nome ENS."
+      },
+      "ens_resolver": {
+        "title": "O que é um resolvedor .eth?",
+        "text": "Um resolvedor é um contrato que mapeia do nome para o recurso (por exemplo, endereços de criptomoeda, hash de conteúdo, etc.). Os resolvedores são apontados pelo campo de resolvedor do registro."
+      },
+      "ens_configuration": {
+        "title": "O que significam essas opções?",
+        "text": "Ao enviar um nome ENS para outra pessoa e torná-la o novo proprietário do nome ENS, você pode querer configurá-lo antecipadamente para economizar uma transação futura para eles. O Rainbow permite que você limpe qualquer informação de perfil atualmente definida para o nome, configure o nome ENS para apontar para o endereço do destinatário e tornar o endereço do destinatário o administrador do nome."
       }
     },
     "fedora": {
@@ -906,6 +1224,7 @@
       }
     },
     "gas": {
+      "gas_settings": "Configurações de Gás",
       "card": {
         "falling": "Caindo",
         "rising": "Subindo",
@@ -919,14 +1238,17 @@
         "urgent": "Urgente",
         "custom": "Personalizado"
       },
-      "network_fee": "Taxa estimada da rede",
+      "unable_to_determine_selected_gas": "Incapaz de determinar o gás selecionado",
+      "network_fee": "Est. Taxa de Rede",
       "current_base_fee": "Taxa de base atual",
       "max_base_fee": "Taxa base máxima",
       "miner_tip": "Gorjeta para o minerador",
+      "gas_price": "Preço do Gás",
       "max_transaction_fee": "Taxa máxima da transação",
       "warning_separator": "·",
       "lower_than_suggested": "Baixa · pode ficar preso",
       "higher_than_suggested": "Alta · pagando demais",
+      "likely_to_fail": "Baixa · provavelmente falhará",
       "max_base_fee_too_low_error": "Baixa · provavelmente falhará",
       "tip_too_low_error": "Baixa · provavelmente falhará",
       "alert_message_higher_miner_tip_needed": "É recomendado definir uma dica de minerador maior para evitar problemas.",
@@ -1018,6 +1340,12 @@
         "check_out_this_wallet": "Confira os itens colecionáveis desta carteira no 🌈 Rainbow em %{showcaseUrl}"
       }
     },
+    "loading": {
+      "backing_up": "Fazendo backup...",
+      "creating_wallet": "Criando carteira...",
+      "importing_wallet": "Importando...",
+      "restoring": "Restaurando..."
+    },
     "message": {
       "click_to_copy_to_clipboard": "Clique para copiar para a área de transferência",
       "coming_soon": "Em breve...",
@@ -1091,7 +1419,7 @@
             "manual": "Faça backup manualmente"
           },
           "description": "Não perca sua carteira! Salve uma cópia criptografada em %{cloudPlatformName}",
-          "title": "Faça backup da sua carteira"
+          "title": "Como você gostaria de fazer o backup da sua carteira?"
         },
         "existing": {
           "button": {
@@ -1175,10 +1503,20 @@
     "nfts": {
       "selling": "Vendendo",
       "sort": {
+        "ABC": "Abc",
         "abc": "Abc",
+        "MOST_RECENT": "Recente",
         "most_recent": "Mais Recente",
-        "floor_price": "Preço do Piso"
-      }
+        "FLOOR_PRICE": "Preço do Piso",
+        "floor_price": "Preço do Piso",
+        "order": {
+          "asc": "Ordem crescente",
+          "desc": "Ordem decrescente"
+        }
+      },
+      "empty": "Colecionáveis",
+      "collect_now": "Colecione Agora",
+      "will_appear_here": "Suas Colecionáveis Aparecerão Aqui"
     },
     "nft_offers": {
       "card": {
@@ -1214,6 +1552,7 @@
         "offer_expired": "Oferta Expirada",
         "expired": "Expirado",
         "hold_to_sell": "Segure para Vender",
+        "selling": "Vendendo",
         "error": {
           "title": "Erro ao vender NFT",
           "message": "Por favor, contate o suporte do Rainbow para assistência."
@@ -1245,13 +1584,16 @@
       },
       "claim": {
         "title": "Resgate seus pontos",
+        "title_rewards_line_1": "Bem-vindo a",
+        "title_rewards_line_2": "Recompensas Rainbow",
         "subtitle": "Pontos estão aqui. Descubra quantos você recebeu.",
+        "subtitle_rewards": "Seja recompensado por usar o Rainbow. Faça coisas onchain, ganhe pontos, ganhe ETH.",
         "get_started": "Comece Agora",
         "use_referral_code": "Utilize o Código de Indicação"
       },
       "referral": {
         "title": "Insira seu código de indicação",
-        "subtitle": "Insira um código de indicação abaixo para resgatar sua recompensa bônus.",
+        "subtitle": "Insira um código de indicação abaixo para reivindicar seu bônus de pontos.",
         "back": "Voltar",
         "error": "Algo deu errado. Por favor, reinicie o aplicativo e tente novamente.",
         "get_started": "Comece Agora",
@@ -1266,6 +1608,7 @@
         "share_link": "Compartilhar Link",
         "next_drop": "Próxima Disponibilização",
         "your_rank": "Sua Classificação",
+        "no_change": "Sem Alterações",
         "of_x": "De %{totalUsers}",
         "referrals": "Indicações",
         "streak": "Sequência",
@@ -1283,12 +1626,40 @@
         "today": "Hoje",
         "error": "Ops!\nPor favor, puxe para atualizar.",
         "points": "pontos",
+        "points_capitalized": "Pontos",
         "referral_code_copied": "Código de referência copiado",
         "earn_points_for_referring": "Ganhe pontos quando seus indicados trocarem $100 através da Rainbow, além de ganhar 10% dos pontos que seus indicados acumularem",
         "already_claimed_points": "Desculpe! Você já resgatou seus pontos.",
         "now": "Agora",
         "unranked": "Sem Classificação",
-        "points_to_rank": "750 pontos para classificar"
+        "points_to_rank": "750 pontos para classificar",
+        "ranking": "Colocado em #%{rank}",
+        "available_to_claim": "Disponível para Reivindicação",
+        "claim": "Reivindicar %{value}",
+        "choose_claim_network": "Escolha a Rede para Reivindicação",
+        "claim_on_network": "Reivindicar na %{network}",
+        "claimed_on_network": "Reivindicado na %{network}",
+        "claiming_on_network": "Reivindicando na %{network}",
+        "error_claiming": "Reivindicação falhou",
+        "free_to_claim": "Livre para Reivindicar",
+        "has_bridge_fee": "Tem Taxa de Ponte",
+        "claim_rewards": "Reivindicar Recompensas",
+        "earned_last_week": "Ganho na Última Semana",
+        "top_10_earner": "Top 10 Ganhadores",
+        "zero_points": "0 Pontos",
+        "no_weekly_rank": "Sem Classificação Semanal",
+        "none": "Nenhum",
+        "my_earnings": "Meus Ganhos",
+        "claimed_earnings": "Ganhos Reivindicados",
+        "current_value": "Valor atual",
+        "rainbow_users_have_earned": "Os usuários do Rainbow ganharam",
+        "earn_eth_rewards": "Ganhar Recompensas em ETH",
+        "rewards_explainer": "Toda semana, os maiores ganhadores de pontos semanais receberão uma parte da receita onchain do Rainbow. Colete pontos trocando ou transacionando no Rainbow, usando dapps ou indicando amigos.",
+        "my_points": "Meus Pontos",
+        "refer_friends": "Indicar Amigos",
+        "try_again": "Tente Novamente",
+        "bridge_error": "Sucesso Parcial",
+        "bridge_error_explainer": "Suas recompensas foram reivindicadas com sucesso na Optimism, mas a transferência para %{network} falhou. Se desejar, você pode transferir suas recompensas manualmente usando o recurso Swap."
       },
       "console": {
         "claim_bonus_paragraph": "Você receberá 100 pontos adicionais uma vez que trocar pelo menos $100 através do Rainbow",
@@ -1320,7 +1691,7 @@
         "invalid_referral_code_alert": "Código de indicação inválido. Por favor, verifique seu código e tente novamente.",
         "no_balance_alert": "Para participar do Programa de Pontos, você deve possuir saldo positivo na carteira.",
         "referral_link_is_ready": "Seu link de indicação está pronto",
-        "referral_link_bonus_text": "Tweet seu link de indicação e ganhe 250 pontos extras",
+        "referral_link_bonus_text": "Tweet seu link de referência e ganhe 10% dos pontos ganhos por qualquer pessoa que você indicar",
         "referral_link_bonus_text_extended": "Além disso, você ganhará 10% dos pontos obtidos por qualquer pessoa que você indicar",
         "complete_onboarding": "Concluído",
         "share_to_x": "Compartilhe no X",
@@ -1330,6 +1701,7 @@
         "view_weekly_earnings_counted": "Ganhos semanais contabilizados",
         "view_weekly_earnings_close_button": "Fechar",
         "view_weekly_earnings_retroactive_points": "Pontos Retroativos",
+        "view_weekly_earnings_bonus_points": "Pontos Bônus",
         "view_weekly_earnings_activity": "Sua Atividade",
         "view_weekly_earnings_referral_activity": "Atividade de Indicação",
         "view_weekly_earnings_total_earnings": "Total",
@@ -1661,10 +2033,20 @@
       }
     },
     "positions": {
+      "lp_range_status": {
+        "full_range": "Alcance Completo",
+        "out_of_range": "Fora do Alcance",
+        "in_range": "Dentro do Alcance"
+      },
       "open_dapp": "Abrir 􀮶",
       "deposits": "Depósitos",
       "borrows": "Empréstimos",
-      "rewards": "Recompensas"
+      "stakes": "Apostado",
+      "rewards": "Recompensas",
+      "pools": "Pools"
+    },
+    "profile": {
+      "title": "Atividade"
     },
     "savings": {
       "deposit": "Depósito",
@@ -1700,16 +2082,77 @@
       "no_thanks": "Não, obrigado"
     },
     "settings": {
-      "backup": "Backup",
+      "backup": "Wallets & Backup",
+      "delete_backups": "Excluir todos os backups do %{cloudPlatform}",
+      "confirm_delete_backups": "Confirmar e excluir backups",
+      "manage_backups": "Gerenciar backups de %{cloudPlatformOrEmail}",
+      "confirm_delete_backups_description": "Tem certeza de que deseja excluir os backups da carteira %{cloudPlatform}?",
       "google_account_used": "Conta do Google usada para backups",
       "backup_switch_google_account": "Trocar de conta do Google",
       "backup_sign_out": "Sair",
       "backup_sign_in": "Entrar",
       "backup_loading": "Carregando...",
       "backup_google_account": "Conta do Google",
-      "currency": "Moeda",
+      "currency": {
+        "title": "Moeda",
+        "ETH": {
+          "label": "Ethereum",
+          "code": "ETH"
+        },
+        "USD": {
+          "label": "Dólar Americano",
+          "code": "USD"
+        },
+        "EUR": {
+          "label": "Euro",
+          "code": "EUR"
+        },
+        "GBP": {
+          "label": "Libra Esterlina",
+          "code": "GBP"
+        },
+        "AUD": {
+          "label": "Dólar Australiano",
+          "code": "AUD"
+        },
+        "CNY": {
+          "label": "Yuan Chinês",
+          "code": "CNY"
+        },
+        "KRW": {
+          "label": "Won Sul-Coreano",
+          "code": "KRW"
+        },
+        "JPY": {
+          "label": "Iene Japonês",
+          "code": "JPY"
+        },
+        "RUB": {
+          "label": "Rublo Russo",
+          "code": "RUB"
+        },
+        "INR": {
+          "label": "Rúpia Indiana",
+          "code": "INR"
+        },
+        "TRY": {
+          "label": "Lira Turca",
+          "code": "TRY"
+        },
+        "CAD": {
+          "label": "Dólar Canadense",
+          "code": "CAD"
+        },
+        "NZD": {
+          "label": "Dólar Neozelandês",
+          "code": "NZD"
+        },
+        "ZAR": {
+          "label": "Rand Sul-Africano",
+          "code": "ZAR"
+        }
+      },
       "app_icon": "Ícone do Aplicativo",
-      "dev": "Dev",
       "developer": "Configurações de Desenvolvedor",
       "done": "Concluído",
       "feedback_and_reports": "Feedback e Relatos de Erros",
@@ -1784,6 +2227,45 @@
       "too_many_signup_request": "Muitas solicitações de inscrição, por favor, tente novamente mais tarde"
     },
     "swap": {
+      "actions": {
+        "hold_to_swap": "Segure para Trocar",
+        "hold_to_bridge": "Segure para Transferir",
+        "save": "Salvar",
+        "enter_amount": "Insira um valor",
+        "review": "Revisão",
+        "fetching_prices": "Buscando",
+        "swapping": "Trocando",
+        "select_token": "Selecionar Token",
+        "insufficient_funds": "Fundos insuficientes",
+        "insufficient": "Insuficiente",
+        "quote_error": "Erro na Cotação"
+      },
+      "aggregators": {
+        "rainbow": "Rainbow"
+      },
+      "bridging": "Conectando",
+      "swapping": "Trocando",
+      "max": "Máx",
+      "select": "Selecionar",
+      "token_to_get": "Token a Receber",
+      "token_to_swap": "Token a Trocar",
+      "no_balance": "Sem Saldo",
+      "find_a_token_to_buy": "Encontrar um token para comprar",
+      "search_your_tokens": "Buscar seus tokens",
+      "error_executing_swap": "Erro ao executar a troca",
+      "tokens_input": {
+        "tokens": "Tokens",
+        "sort": "Ordenar",
+        "available": "disponível",
+        "token_balance": "Saldo do token",
+        "networks": "Redes",
+        "filter_by_network": "Filtrar por rede",
+        "switch_networks": "Mudar de Redes",
+        "nothing_found": "Nada encontrado",
+        "nothing_found_description": "Alguns tokens não têm liquidez suficiente para realizar uma %{action} bem-sucedida.",
+        "nothing_found_description_l2": "Alguns tokens não têm liquidez suficiente em layer 2 para realizar uma %{action} bem-sucedida.",
+        "output_quotes_disabled": "Cotações de saída desativadas"
+      },
       "choose_token": "Escolher Token",
       "gas": {
         "custom": "Personalizado",
@@ -1797,6 +2279,7 @@
       },
       "loading": "Carregando...",
       "modal_types": {
+        "bridge": "Ponte",
         "confirm": "Confirmar",
         "deposit": "Depósito",
         "receive": "Receber",
@@ -1805,6 +2288,7 @@
         "withdraw": "Retirar",
         "withdraw_symbol": "Retirar %{symbol}"
       },
+      "unknown": "Desconhecido",
       "warning": {
         "cost": {
           "are_you_sure_title": "Tem certeza?",
@@ -1825,6 +2309,17 @@
         }
       }
     },
+    "token_search": {
+      "section_header": {
+        "recent": "Recente",
+        "popular": "Popular no Rainbow",
+        "favorites": "Favoritos",
+        "bridge": "Ponte",
+        "verified": "Verificado",
+        "unverified": "Não verificado",
+        "on_other_networks": "Em Outras Redes"
+      }
+    },
     "transactions": {
       "actions": {
         "addToContacts": "Adicionar aos Contatos",
@@ -1837,35 +2332,144 @@
       "pending_title": "Pendente",
       "dropped_title": "Desconsiderado",
       "type": {
-        "approved": "Aprovado",
-        "approving": "Aprovando",
-        "bridging": "Pontuando",
-        "bridged": "Ponte concluída",
-        "cancelled": "Cancelado",
-        "cancelling": "Cancelando",
-        "contract interaction": "Interação de contrato",
-        "deposited": "Depositado",
-        "depositing": "Depositando",
-        "dropped": "Desconsiderado",
-        "failed": "Falha",
-        "purchased": "Comprado",
-        "purchasing": "Comprando",
-        "minting": "Cunhando",
-        "minted": "Criado",
-        "received": "Recebido",
-        "receiving": "Recebendo",
-        "self": "Próprio",
-        "sending": "Enviando",
-        "sent": "Enviado",
-        "speeding up": "Acelerando",
-        "selling": "Vendendo",
-        "sold": "Vendido",
-        "swapped": "Troca concluída",
-        "swapping": "Trocando",
-        "unknown": "Desconhecido",
-        "withdrawing": "Retirando",
-        "withdrew": "Retirou"
+        "savings": "Poupanças",
+        "cancelled": "Transação Cancelada",
+        "burn": {
+          "pending": "Queimando",
+          "confirmed": "Queimado",
+          "failed": "Falha na Queima"
+        },
+        "cancel": {
+          "pending": "Cancelando",
+          "confirmed": "Cancelado",
+          "failed": "Falha no Cancelamento"
+        },
+        "speed_up": {
+          "pending": "Acelerando",
+          "confirmed": "Acelerado",
+          "failed": "Falha ao Acelerar"
+        },
+        "send": {
+          "pending": "Enviando",
+          "confirmed": "Enviado",
+          "failed": "Falha no Envio"
+        },
+        "receive": {
+          "pending": "Recebendo",
+          "confirmed": "Recebido",
+          "failed": "Falha ao Receber"
+        },
+        "withdraw": {
+          "pending": "Sacando",
+          "confirmed": "Sacado",
+          "failed": "Saque Falhou"
+        },
+        "deposit": {
+          "pending": "Depositando",
+          "confirmed": "Depositado",
+          "failed": "Depósito Falhou"
+        },
+        "mint": {
+          "pending": "Cunhando",
+          "confirmed": "Criado",
+          "failed": "Cunhagem Falhou"
+        },
+        "approve": {
+          "pending": "Aprovando",
+          "confirmed": "Aprovado",
+          "failed": "Aprovação Falhou"
+        },
+        "contract_interaction": {
+          "pending": "Interação Pendente",
+          "confirmed": "Interagido",
+          "failed": "Interação Falhou"
+        },
+        "launch": {
+          "pending": "Lançando",
+          "confirmed": "Lançado",
+          "failed": "Falha ao Lançar"
+        },
+        "swap": {
+          "pending": "Trocando",
+          "confirmed": "Troca concluída",
+          "failed": "Troca Falhou"
+        },
+        "borrow": {
+          "pending": "Tomando emprestado",
+          "confirmed": "Emprestado",
+          "failed": "Empréstimo falhou"
+        },
+        "claim": {
+          "pending": "Reivindicando",
+          "confirmed": "Reivindicado",
+          "failed": "Reivindicação falhou"
+        },
+        "deployment": {
+          "pending": "Implantando",
+          "confirmed": "Implantado",
+          "failed": "Implantação falhou"
+        },
+        "repay": {
+          "pending": "Pagando",
+          "confirmed": "Pago",
+          "failed": "Pagamento falhou"
+        },
+        "stake": {
+          "pending": "Apostando",
+          "confirmed": "Apostado",
+          "failed": "Aposta falhou"
+        },
+        "unstake": {
+          "pending": "Desapostando",
+          "confirmed": "Desapostado",
+          "failed": "Desaposta falhou"
+        },
+        "purchase": {
+          "pending": "Comprando",
+          "confirmed": "Comprado",
+          "failed": "Falha na Compra"
+        },
+        "revoke": {
+          "pending": "Revogando",
+          "confirmed": "Revogado",
+          "failed": "Revogação Falhou"
+        },
+        "sale": {
+          "pending": "Vendendo",
+          "confirmed": "Vendido",
+          "failed": "Venda Falhou"
+        },
+        "bridge": {
+          "pending": "Conectando",
+          "confirmed": "Ponte concluída",
+          "failed": "Conexão Falhou"
+        },
+        "airdrop": {
+          "pending": "",
+          "confirmed": "Distribuído",
+          "failed": ""
+        },
+        "wrap": {
+          "pending": "Envolvendo",
+          "confirmed": "Envolvido",
+          "failed": "Falha ao Envelopar"
+        },
+        "unwrap": {
+          "pending": "Desenvolvendo",
+          "confirmed": "Desenvolvido",
+          "failed": "Falha ao Desembrulhar"
+        },
+        "bid": {
+          "pending": "Licitando",
+          "confirmed": "Lance",
+          "failed": "Lance Falhou"
+        }
       },
+      "approvals": {
+        "no_allowance": "Sem Permissão",
+        "unlimited": "Ilimitado"
+      },
+      "no_value": "Sem valor",
       "savings": "Poupanças",
       "signed": "Assinado",
       "contract_interaction": "Interacção de Contrato",
@@ -1877,6 +2481,7 @@
       "to": "Para",
       "value": "Valor",
       "hash": "Tx Hash",
+      "you": "Você",
       "network_fee": "Taxa da Rede",
       "hash_copied": "Copiado o hash da transação",
       "address_copied": "Endereço copiado",
@@ -1960,6 +2565,9 @@
       "copied": "Copiado \"%{copiedText}\"",
       "invalid_paste": "Você não pode colar isso aqui"
     },
+    "tokens_tab": {
+      "unknown_token": "Token desconhecido"
+    },
     "hardware_wallets": {
       "pair_your_nano": "Associe seu Nano X",
       "connect_your_ledger": "Conecte seu Ledger Nano X ao Rainbow via Bluetooth. Se esta for a primeira vez, o Rainbow solicitará acesso ao Bluetooth.",
@@ -2015,6 +2623,8 @@
         "delete_confirm": "Tem certeza de que deseja excluir esta carteira?",
         "edit": "Editar Carteira",
         "hide": "Ocultar",
+        "create_wallet_group": "Criar carteira",
+        "create_wallet_group_placeholder": "Grupo da Carteira %{numWalletGroups}",
         "import_wallet": "Adicionar Carteira",
         "input": "Entrada de Transação",
         "notifications": {
@@ -2112,18 +2722,52 @@
         "please_seed_phrase": "Por favor, autentique-se para visualizar a chave privada"
       },
       "back_ups": {
-        "and_1_more_wallet": "E mais 1 carteira",
+        "wallet_count": "%{numAccounts} carteira",
+        "wallet_count_gt_one": "%{numAccounts} carteiras",
         "and_more_wallets": "E %{moreWalletCount} mais carteiras",
+        "create_new_wallet": "Criar uma nova carteira",
+        "create_new_wallet_description": "Criar uma nova carteira usando esta Frase Secreta",
         "backed_up": "Foi feito backup",
         "backed_up_manually": "Backup manual feito",
-        "imported": "Importado"
+        "imported": "Importado",
+        "cloud_backup_title": "Backup em Nuvem",
+        "not_backed_up": "Não foi feito backup",
+        "not_backed_up_to_cloud_message": "Este %{backupType} não está em seu último backup. Faça backup no %{cloudPlatform} agora para poder restaurá-lo caso perca seu dispositivo ou adquira um novo.",
+        "not_backed_up_message": "Este %{backupType} não está respaldado. Faça backup agora para poder restaurá-lo caso perca seu dispositivo ou adquira um novo.",
+        "backed_up_message": "Você optou por salvar este %{backupType} você mesmo. Certifique-se de ter armazenado em um local seguro.",
+        "backed_up_to_cloud_message": "Todas as suas carteiras estão respaldadas no %{cloudPlatform}. Se você perder seu dispositivo ou adquirir um novo, poderá recuperar as carteiras exibidas abaixo.",
+        "cloud_backup_out_of_date_description": "Algumas de suas carteiras não estão em seu último backup. Faça backup no %{cloudPlatform} agora para poder restaurá-las caso perca seu dispositivo ou adquira um novo.",
+        "cloud_backup_description": "Faça backup de suas carteiras com segurança para %{cloudPlatform}, assim poderá restaurá-las caso perca seu dispositivo ou adquira um novo.",
+        "cloud_backup_link": "Saiba mais…",
+        "view_secret_phrase": "Ver Frase Secreta",
+        "view_private_key": "Ver Chave Privada",
+        "copy_wallet_address": "Copiar endereço da carteira"
       },
       "balance_title": "Saldo",
       "buy": "Comprar",
       "change_wallet": {
+        "loading_balance": "Carregando saldo...",
         "balance_eth": "%{balanceEth} ETH",
         "watching": "Observando",
-        "ledger": "Ledger"
+        "ledger": "Ledger",
+        "wallets": "Carteiras",
+        "all_wallets": "Todas as Carteiras",
+        "total_balance": "Saldo Total",
+        "edit_hint_tooltip": {
+          "title": "Personalizar Suas Carteiras",
+          "subtitle": {
+            "prefix": "Toque no",
+            "action": "Editar",
+            "suffix": "botão acima para configurar"
+          }
+        },
+        "address_menu": {
+          "edit": "Editar Carteira",
+          "copy": "Copiar Endereço",
+          "settings": "Configurações da Carteira",
+          "notifications": "Configurações de Notificação",
+          "remove": "Remover Carteira"
+        }
       },
       "connected_apps": "Aplicativos conectados",
       "copy": "Copiar",
@@ -2194,12 +2838,19 @@
       "my_account_address": "Meu endereço da conta:",
       "network_title": "Rede",
       "new": {
+        "choose_wallet_group": {
+          "title": "Escolha o Grupo da Carteira",
+          "description": "Escolha o grupo da carteira no qual você deseja criar uma nova carteira, ou crie um novo."
+        },
+        "new_wallet_group": {
+          "title": "Novo Grupo da Carteira",
+          "description": "Crie um novo grupo de carteiras"
+        },
         "add_wallet_sheet": {
           "options": {
             "cloud": {
-              "description_android": "Se você fez backup da sua carteira anteriormente no Google Drive, toque aqui para restaurá-la.",
-              "description_ios_one_wallet": "Você tem 1 carteira de backup",
-              "description_ios_multiple_wallets": "Você tem %{walletCount} carteiras de backup",
+              "description_restore_sheet": "Se você fez backup anteriormente no %{cloudPlatform}, toque aqui para restaurá-lo.",
+              "description_with_latest_backup_date": "Último backup %{fromNow} às %{time}",
               "title": "Restaurar de %{platform}",
               "no_backups": "Nenhum backup encontrado",
               "no_google_backups": "Não foi possível encontrar nenhum backup no Google Drive. Verifique se você está conectado na conta correta."
@@ -2213,12 +2864,12 @@
               "title": "Conecte sua carteira de hardware"
             },
             "seed": {
-              "description": "Use sua frase de recuperação do Rainbow ou de outra carteira de criptomoeda",
-              "title": "Restaurar com uma frase de recuperação ou chave privada"
+              "description": "Use sua Frase Secreta do Rainbow, MetaMask, ou outra carteira",
+              "title": "Importar uma Frase Secreta ou Chave Privada"
             },
             "watch": {
-              "description": "Acompanhe um endereço público ou nome ENS",
-              "title": "Acompanhe um endereço Ethereum"
+              "description": "Observar um nome ENS ou um endereço público",
+              "title": "Observar carteira"
             }
           },
           "first_wallet": {
@@ -2282,6 +2933,7 @@
         "find_a_code": "Encontre um código para escanear",
         "qr_1_app_connected": "1 aplicativo conectado",
         "qr_multiple_apps_connected": "%{appsConnectedCount} Aplicativos Conectados",
+        "scan_to_connect": "Escanear para conectar",
         "scan_to_pay_or_connect": "Escanear para pagar ou conectar",
         "simulator_mode": "Modo Simulador",
         "sorry_could_not_be_recognized": "Desculpe, este código QR não pôde ser reconhecido.",
@@ -2331,7 +2983,7 @@
           "insufficient_funds": "Oh não! O preço do gás mudou e você não tem mais fundos suficientes para esta transação. Por favor, tente novamente com um valor menor.",
           "generic": "Oh não! Ocorreu um problema ao enviar a transação. Por favor tente novamente."
         },
-        "complete_checks": "Verificar completos",
+        "complete_check": "Concluir as verificações",
         "ens_configuration_options": "Opções de configuração de ENS",
         "confirm": "Confirmar transação",
         "max": "Máx",
@@ -2341,6 +2993,7 @@
         "sending_title": "Enviando",
         "you_own_this_wallet": "Você é o proprietário desta carteira",
         "first_time_send": "Primeiro envio",
+        "previous_send": "%{number} envio anterior",
         "previous_sends": "%{number} envios anteriores"
       },
       "wallet_connect": {
@@ -2358,7 +3011,7 @@
         "no_thanks": "Não, obrigado",
         "message": "Gostaria de copiar manualmente nosso endereço de email de suporte para a sua área de transferência?",
         "title": "Erro ao abrir o cliente de e-mail",
-        "subject": "Suporte Arco-Íris"
+        "subject": "Suporte Rainbow"
       },
       "wallet_alert": {
         "message_support": "Mensagem de Suporte",
@@ -2369,6 +3022,9 @@
       }
     },
     "walletconnect": {
+      "connecting": "Conectando",
+      "loading": "Carregando",
+      "requests": "Pedidos",
       "wants_to_connect": "deseja conectar-se à sua carteira",
       "wants_to_connect_to_network": "quer se conectar à rede %{network}",
       "available_networks": "Redes Disponíveis",
@@ -2414,6 +3070,7 @@
       },
       "menu_options": {
         "disconnect": "Desconectar",
+        "connect": "Conectar",
         "switch_wallet": "Trocar Carteira",
         "switch_network": "Trocar Rede",
         "available_networks": "Redes Disponíveis"
@@ -2460,6 +3117,7 @@
             "unavailable_personal_sign": "Simulação para sinais pessoais ainda não é suportada",
             "unavailable_zora_network": "Simulação em Zora ainda não é suportada",
             "failed_to_simulate": "A simulação falhou, o que sugere que sua transação provavelmente falhará. Isso pode ser um problema com o aplicativo que está usando.",
+            "tx_api_error": "Não conseguimos determinar se sua transação será bem-sucedida ou falhará. Proceda com cautela.",
             "warning": "Nenhum comportamento malicioso conhecido foi detectado, mas esta transação possui características que podem representar um risco para a sua carteira.",
             "malicious": "Assinar esta transação pode resultar na perda de acesso a tudo em sua carteira."
           },
@@ -2499,10 +3157,15 @@
         "buttons": {
           "cancel": "Cancelar",
           "confirm": "􀎽 Enviar Transação",
+          "confirming": "Confirmando",
           "get_native_token": "Pegar %{symbol}",
           "buy_native_token": "Comprar %{symbol}"
         },
         "formatted_dates": {
+          "minute_ago": "minuto atrás",
+          "minutes_ago": "minutos atrás",
+          "hour_ago": "hora atrás",
+          "hours_ago": "horas atrás",
           "today": "Hoje",
           "day_ago": "dia atrás",
           "days_ago": "dias atrás",
@@ -2516,6 +3179,346 @@
     "warning": {
       "user_is_offline": "Conexão offline, por favor verifique sua conexão com a internet",
       "user_is_online": "Conectado! Você está online novamente"
+    },
+    "dapp_browser": {
+      "address_bar": {
+        "input_placeholder": "Pesquisar ou digitar site"
+      },
+      "control_panel": {
+        "connected": "Conectado",
+        "not_connected": "Desconectado",
+        "switch_wallet": "Trocar Carteira",
+        "switch_network": "Trocar Rede",
+        "disconnect": "Desconectar",
+        "favorite": "Favorito",
+        "undo_favorite": "Desfazer",
+        "connect": "Conectar",
+        "swap": "Trocar",
+        "bridge": "Ponte",
+        "more": "Mais"
+      },
+      "error": {
+        "title": "Algo deu errado",
+        "default_msg": "Houve um erro ao carregar a página. Por favor, tente novamente."
+      },
+      "no_wc_needed": {
+        "title": "Ops!",
+        "description": "Parece que você está tentando se conectar a esta dapp via WalletConnect. Isto não é mais necessário com o navegador in-app do Rainbow. Volte e escolha \"MetaMask\" e tudo deve funcionar bem.",
+        "cta": "Entendi"
+      },
+      "provider_error": {
+        "unsupported_chain": "Rede não suportada",
+        "no_active_session": "Você precisa se conectar à dapp antes de tentar trocar de rede"
+      },
+      "homepage": {
+        "trending": "Tendências",
+        "recents": "Recentes",
+        "favorites": "Favoritos"
+      },
+      "search": {
+        "find_apps_and_more": "Encontre aplicativos e mais",
+        "more_results": "Mais Resultados",
+        "search": "Pesquisar"
+      },
+      "menus": {
+        "favorite": "Favorito",
+        "home": "Início",
+        "undo_favorite": "Desfazer Favorito",
+        "remove": "Remover",
+        "forward": "Avançar",
+        "back": "Voltar",
+        "share": "Compartilhar",
+        "close_all_tabs": "Fechar todas as %{numberOfClosableTabs} Abas",
+        "close_both_tabs": "Fechar Ambas as Abas",
+        "close_this_tab": "Fechar Esta Aba",
+        "close_tab": "Fechar Aba",
+        "new_tab": "Nova Aba"
+      }
+    },
+    "trending_tokens": {
+      "all": "Todos",
+      "no_results": {
+        "title": "Nenhum resultado",
+        "body": "Tente procurar em um período de tempo maior ou em uma rede ou categoria diferente."
+      },
+      "and": "e",
+      "and_others": {
+        "one": "e %{count} outro",
+        "other": "e %{count} outros"
+      },
+      "filters": {
+        "categories": {
+          "TRENDING": "Tendências",
+          "RAINBOW": "Rainbow",
+          "NEW": "Novo",
+          "FARCASTER": "Farcaster"
+        },
+        "sort": {
+          "RECOMMENDED": {
+            "label": "Ordenar",
+            "menuOption": "Padrão"
+          },
+          "VOLUME": "Volume",
+          "MARKET_CAP": "Valor de Mercado",
+          "TOP_GAINERS": "Maiores Ganhos",
+          "TOP_LOSERS": "Maiores Perdas"
+        },
+        "time": {
+          "H12": "12 Horas",
+          "H12_ABBREVIATED": "12h",
+          "H24": "24 Horas",
+          "H24_ABBREVIATED": "24h",
+          "D7": "1 Semana",
+          "D3": "3 Dias"
+        }
+      }
+    },
+    "network_selector": {
+      "customize_networks_banner": {
+        "title": "Personalizar Redes",
+        "tap_the": "Toque no",
+        "button_to_set_up": "botão abaixo para configurar"
+      },
+      "drop_here_to_unpin": "Solte Aqui para Desafixar",
+      "edit": "Editar",
+      "network": "Rede",
+      "networks": "Redes",
+      "drag_to_rearrange": "Arraste para Reorganizar",
+      "show_less": "Mostrar Menos",
+      "more": "Mais",
+      "show_more": "Mais Redes",
+      "all_networks": "Todas as redes",
+      "search": "Pesquisar"
+    },
+    "token_launcher": {
+      "airdrop": {
+        "address_or_ens": "Endereço ou ENS",
+        "suggested_users": "USUÁRIOS SUGERIDOS",
+        "airdrop_lists": "LISTAS DE AIRDROP",
+        "max_recipients_reached": "Máximo de %{maxRecipientCount} destinatários atingido"
+      },
+      "image_upload_error": {
+        "title": "Desculpe, houve um erro ao carregar sua imagem.",
+        "subtitle": "Por favor, tente novamente."
+      },
+      "allocation_breakdown": {
+        "my_share": "MINHA PARTE",
+        "airdropping": "REALIZANDO AIRDROP",
+        "start_price": "PREÇO INICIAL",
+        "sections": {
+          "my_share": {
+            "title": "Parte do Criador",
+            "description": "Sua participação pessoal no projeto"
+          },
+          "airdropping": {
+            "title": "Parte do Airdrop",
+            "description": "Distribuído para amigos e apoiadores"
+          },
+          "liquidity_pool": {
+            "title": "Parte do Pool de Liquidez",
+            "description": "Garante negociação suave e liquidez"
+          },
+          "rainbow_share": {
+            "title": "Sobre o Rainbow",
+            "description": "Distribuições Futuras para a Comunidade"
+          }
+        }
+      },
+      "network_field": {
+        "balance": "Saldo: %{balance}",
+        "not_enough_funds": "Fundos insuficientes para lançar um token"
+      },
+      "prebuy": {
+        "balance_after_gas_fee": "Saldo Disponível: %{balance}",
+        "title": "Pré-compre mais tokens"
+      },
+      "review": {
+        "token_allocation": "Alocação de Token",
+        "your_share": "Sua parcela",
+        "airdropping": "Realizando Airdrop",
+        "about": "Sobre",
+        "total_cost": "Custo total",
+        "initial_price": "Preço inicial",
+        "market_cap": "Capitalização de mercado",
+        "total_supply": "Oferta total",
+        "network": "Rede"
+      },
+      "creating": {
+        "deploying": "Implantando %{symbol}..."
+      },
+      "success": {
+        "title": "%{symbol} está ao vivo!",
+        "congrats": "Parabéns, você acabou de lançar %{name} no mundo! Compartilhe para espalhar a vibração."
+      },
+      "input_errors": {
+        "too_long": "Muito longo, amigo.",
+        "invalid_input": "Entrada inválida",
+        "symbol_required": "Símbolo é obrigatório",
+        "name_required": "Nome é obrigatório",
+        "too_big": "Muito grande.",
+        "must_be_greater_than_0": "Deve ser maior que 0",
+        "amount_is_greater_than_balance": "Quantidade é maior que o saldo",
+        "amount_is_greater_than_max_prebuy_amount": "Excede o valor máximo de pré-compra de %{maxPrebuyAmount} %{chainNativeAssetSymbol}",
+        "amount_is_less_than_min_prebuy_amount": "Deve exceder o valor mínimo de pré-compra de %{minPrebuyAmount} %{chainNativeAssetSymbol}",
+        "amount_too_small": "Quantia muito pequena! Tente um pouco mais!"
+      },
+      "titles": {
+        "total_supply": "Oferta total",
+        "ticker": "Símbolo",
+        "name": "Nome",
+        "network": "Rede",
+        "description": "Descrição",
+        "airdrop": "Airdrop para amigos",
+        "required_info": "INFORMAÇÃO OBRIGATÓRIA",
+        "about": "SOBRE",
+        "token_allocation": "ALOCACÃO DE TOKEN",
+        "token_allocation_breakdown": "Resumo da Alocação de Token",
+        "mcap": "MCAP"
+      },
+      "placeholders": {
+        "ticker": "$NAME",
+        "enter_coin_name": "Digite o nome da moeda",
+        "describe_your_coin": "Descreva sua moeda"
+      },
+      "buttons": {
+        "hold_to_create": "Mantenha para Criar",
+        "creating": "Criando...",
+        "share_link": "Compartilhar Link",
+        "token_allocation_info": "Mais Informações",
+        "got_it": "Entendi",
+        "cancel": "Cancelar"
+      },
+      "header": {
+        "new_coin": "Nova Moeda",
+        "review": "Revisão",
+        "creating": "Criando"
+      },
+      "links": {
+        "x": {
+          "name": "X/Twitter",
+          "placeholder": "Nome de Usuário"
+        },
+        "telegram": {
+          "name": "Telegram",
+          "placeholder": "Canal"
+        },
+        "farcaster": {
+          "name": "Farcaster",
+          "placeholder": "Nome de Usuário"
+        },
+        "website": {
+          "name": "Website",
+          "placeholder": "https://pagina-inicial.com"
+        },
+        "other": {
+          "name": "Outro",
+          "placeholder": "https://outro.com"
+        },
+        "add_more": "Adicionar Mais"
+      },
+      "discard_and_exit": "Descartar e Sair",
+      "airdrops_sheet": {
+        "claim_button_text": "Reivindicar",
+        "empty_state_title": "Ainda Sem Airdrops",
+        "title": "Solicitar Moedas do Rainbow"
+      },
+      "cards": {
+        "airdrops": {
+          "subtitle_loading": "CARREGANDO",
+          "subtitle_has_airdrops": "DISPONÍVEL PARA SOLICITAR",
+          "subtitle_no_airdrops": "AINDA SEM AIRDROPS",
+          "title": "Distribuições",
+          "title_singular": "Distribuição"
+        },
+        "launch": {
+          "line_one": "Lançar\n",
+          "line_two": "sua Moeda"
+        }
+      },
+      "claim_airdrop_sheet": {
+        "by": "por",
+        "claiming": "Reivindicando",
+        "created_by": "Criado por %{name}",
+        "gifted_to": "Presenteado para",
+        "hold_to_claim": "Pressione para Solicitar",
+        "hold_to_retry": "Pressione para Tentar Novamente",
+        "successfully_claimed": "Solicitado Com Sucesso",
+        "title": "Solicitar $%{symbol}",
+        "to_claim_on": "para solicitar na %{network}",
+        "view_coin": "Ver Moeda",
+        "you": "Você"
+      },
+      "errors": {
+        "header": "Erro ao lançar o token",
+        "api_request_failed": "Solicitação de API falhou",
+        "api_response_invalid": "Resposta de API inválida",
+        "contract_interaction_failed": "Interação de contrato falhou",
+        "gas_estimation_failed": "Falha na estimativa de gás",
+        "insufficient_funds": "Fundos insuficientes",
+        "submission_details_missing": "Detalhes da submissão faltando",
+        "transaction_rejected": "Transação rejeitada",
+        "transaction_failed": "Falha na transação",
+        "transaction_simulation_failed": "Simulação de transação falhou",
+        "unknown_error": "Erro Desconhecido",
+        "wallet_connection_error": "Erro de conexão da carteira",
+        "invalid_params": "Parâmetros inválidos",
+        "missing_required_param": "Parâmetros obrigatórios ausentes"
+      }
+    },
+    "done": "Concluído",
+    "copy": "Copiar",
+    "paste": "Colar",
+    "market_data": {
+      "vol": "VOL",
+      "price": "PREÇO",
+      "mcap": "MCAP"
+    },
+    "king_of_hill": {
+      "title": "Plataforma de Lançamento",
+      "launch": "Lançar",
+      "current_king": "REI ATUAL",
+      "last_winner": "Último vencedor",
+      "no_previous_winner": "Nenhum vencedor anterior",
+      "round_ends_in": "A rodada termina em",
+      "how_it_works": "Como funciona",
+      "starting_next_round": "Iniciando a próxima rodada",
+      "left": "RESTANTE",
+      "king_of_the_hill": "Rei da Colina",
+      "name": "Nome",
+      "explain_sheet": {
+        "next": "Avançar",
+        "got_it": "Entendi",
+        "steps": {
+          "step_1": {
+            "title": "A corrida está ao vivo",
+            "subtitle_parts": [
+              "O token com o maior",
+              " volume de compra ",
+              "neste momento é o rei atual."
+            ]
+          },
+          "step_2": {
+            "title": "Uma coroa por dia",
+            "subtitle_parts": [
+              "Às",
+              " meia-noite (0:00 UTC), ",
+              "o token líder é coroado o vencedor diário."
+            ]
+          },
+          "step_3": {
+            "title": "Vencer Recompensas",
+            "subtitle_parts": [
+              "Compradores do Rei atual ganham",
+              " 2x pontos."
+            ],
+            "subtitle_two_parts": [
+              "Criadores",
+              " ganham pontos ",
+              "quando são coroados."
+            ]
+          }
+        }
+      }
     }
   }
 }

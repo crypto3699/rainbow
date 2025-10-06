@@ -6,13 +6,14 @@ import { ShimmerAnimation } from '../../animations';
 import ButtonPressAnimation from '../../animations/ButtonPressAnimation';
 import { Icon } from '../../icons';
 import { ImagePreviewOverlayTarget } from '../../images/ImagePreviewOverlay';
-import { useAccountSettings, useOpenENSNFTHandler } from '@/hooks';
+import { useOpenENSNFTHandler } from '@/hooks';
 import { Bleed, Box, Inline, Inset, Text, useForegroundColor } from '@/design-system';
 import { ImgixImage } from '@/components/images';
 import Routes from '@/navigation/routesNames';
 import { useENSAddress } from '@/resources/ens/ensAddressQuery';
 import { CardSize } from '@/components/unique-token/CardSize';
 import { useLegacyNFTs } from '@/resources/nfts';
+import { useAccountAddress } from '@/state/wallets/walletsStore';
 
 export function InfoRowSkeleton() {
   const { colors } = useTheme();
@@ -31,7 +32,6 @@ export function InfoRowSkeleton() {
           color={colors.alpha(colors.blueGreyDark, 0.06)}
           enabled
           gradientColor={colors.alpha(colors.blueGreyDark, 0.06) as any}
-          width={100}
         />
       </Box>
       <Box
@@ -47,12 +47,13 @@ export function InfoRowSkeleton() {
           color={colors.alpha(colors.blueGreyDark, 0.06)}
           enabled
           gradientColor={colors.alpha(colors.blueGreyDark, 0.06) as any}
-          width={150}
         />
       </Box>
     </Inline>
   );
 }
+
+type InfoRowExplainSheetType = 'ens_manager' | 'ens_owner' | 'ens_resolver' | 'ens_configuration' | 'ens_primary_name';
 
 export default function InfoRow({
   ensName,
@@ -69,7 +70,7 @@ export default function InfoRow({
   onSwitchChange,
 }: {
   ensName?: string;
-  explainSheetType?: string;
+  explainSheetType?: InfoRowExplainSheetType;
   icon?: string;
   isImage?: boolean;
   label: string;
@@ -90,7 +91,9 @@ export default function InfoRow({
 
   const { navigate } = useNavigation();
   const handlePressExplain = useCallback(() => {
-    navigate(Routes.EXPLAIN_SHEET, { type: explainSheetType });
+    if (explainSheetType) {
+      navigate(Routes.EXPLAIN_SHEET, { type: explainSheetType });
+    }
   }, [explainSheetType, navigate]);
 
   const explainer = explainSheetType ? (
@@ -174,7 +177,7 @@ export default function InfoRow({
 }
 
 function ImageValue({ ensName, url, value }: { ensName?: string; url?: string; value?: string }) {
-  const { accountAddress } = useAccountSettings();
+  const accountAddress = useAccountAddress();
 
   const { data: address } = useENSAddress({ name: ensName || '' });
 

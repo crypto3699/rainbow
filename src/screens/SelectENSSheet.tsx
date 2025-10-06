@@ -1,5 +1,5 @@
-import { useRoute } from '@react-navigation/native';
-import lang from 'i18n-js';
+import { RouteProp, useRoute } from '@react-navigation/native';
+import * as i18n from '@/languages';
 import React, { useCallback, useMemo } from 'react';
 import { FlatList } from 'react-native-gesture-handler';
 import ButtonPressAnimation from '../components/animations/ButtonPressAnimation';
@@ -13,6 +13,8 @@ import { useTheme } from '@/theme';
 import { deviceUtils } from '@/utils';
 import { ListRenderItem, View } from 'react-native';
 import { BaseEnsDomainFragment } from '@/graphql/__generated__/ens';
+import { RootStackParamList } from '@/navigation/types';
+import Routes from '@/navigation/routesNames';
 
 export const SelectENSSheetHeight = 400;
 
@@ -27,7 +29,7 @@ export default function SelectENSSheet() {
   const secondary06 = useForegroundColor('secondary06 (Deprecated)');
 
   const { goBack } = useNavigation();
-  const { params } = useRoute<any>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.SELECT_ENS_SHEET>>();
 
   const handleSelectENS = useCallback(
     (ensName: string) => {
@@ -94,7 +96,7 @@ export default function SelectENSSheet() {
       <Inset top="6px">
         <Stack space="24px">
           <Heading align="center" color="primary (Deprecated)" size="18px / 21px (Deprecated)" weight="heavy">
-            {lang.t('profiles.select_ens_name')}
+            {i18n.t(i18n.l.profiles.select_ens_name)}
           </Heading>
           {isSuccess && (
             <Bleed bottom={{ custom: scrollEnabled ? 34 : 26 }}>

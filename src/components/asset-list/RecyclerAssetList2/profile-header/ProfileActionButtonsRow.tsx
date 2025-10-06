@@ -1,28 +1,27 @@
+import { ButtonPressAnimation } from '@/components/animations';
+import { CopyFloatingEmojis } from '@/components/floating-emojis';
+import { AccentColorProvider, Box, Column, Columns, Inset, Stack, Text, useColorMode } from '@/design-system';
+import * as i18n from '@/languages';
+import Navigation from '@/navigation/Navigation';
+import Routes from '@/navigation/routesNames';
+import { addressCopiedToastAtom } from '@/recoil/addressCopiedToastAtom';
+import { getIsDamagedWallet, getIsReadOnlyWallet, useAccountAddress } from '@/state/wallets/walletsStore';
+import { watchingAlert } from '@/utils';
+import { navigateToSwaps } from '@/__swaps__/screens/Swap/navigateToSwaps';
+import { analytics } from '@/analytics';
+import { enableActionsOnReadOnlyWallet } from '@/config';
+import showWalletErrorAlert from '@/helpers/support';
+import { useAccountAccentColor } from '@/hooks/useAccountAccentColor';
+import { useRemoteConfig } from '@/model/remoteConfig';
 import Clipboard from '@react-native-clipboard/clipboard';
-import lang from 'i18n-js';
 import * as React from 'react';
 import { PressableProps } from 'react-native';
 import Animated, { useAnimatedStyle, useDerivedValue, withSpring } from 'react-native-reanimated';
-import { ButtonPressAnimation } from '@/components/animations';
-import { CopyFloatingEmojis } from '@/components/floating-emojis';
-import { enableActionsOnReadOnlyWallet, useExperimentalFlag, SWAPS_V2 } from '@/config';
-import { AccentColorProvider, Box, Column, Columns, Inset, Stack, Text, useColorMode } from '@/design-system';
-import { useAccountProfile, useAccountSettings, useWallets } from '@/hooks';
-import { delayNext } from '@/hooks/useMagicAutofocus';
-import { useNavigation } from '@/navigation';
-import { ethereumUtils, watchingAlert } from '@/utils';
-import Routes from '@rainbow-me/routes';
-import showWalletErrorAlert from '@/helpers/support';
-import { analytics } from '@/analytics';
 import { useRecoilState } from 'recoil';
-import { useRemoteConfig } from '@/model/remoteConfig';
-import { useAccountAccentColor } from '@/hooks/useAccountAccentColor';
-import { addressCopiedToastAtom } from '@/recoil/addressCopiedToastAtom';
-import { Network } from '@/networks/types';
 
 export const ProfileActionButtonsRowHeight = 80;
 
-export function ProfileActionButtonsRow() {
+export const ProfileActionButtonsRow = React.memo(function ProfileActionButtonsRow() {
   const { accentColor, loaded: accentColorLoaded } = useAccountAccentColor();
 
   const scale = useDerivedValue(() => (accentColorLoaded ? 1 : 0.9));
@@ -69,7 +68,7 @@ export function ProfileActionButtonsRow() {
             </Column>
             <Column>
               <Animated.View style={[expandStyle]}>
-                <MoreButton />
+                <CopyButton />
               </Animated.View>
             </Column>
           </Columns>
@@ -77,7 +76,7 @@ export function ProfileActionButtonsRow() {
       </Inset>
     </Box>
   );
-}
+});
 
 function ActionButton({
   children,
@@ -140,101 +139,71 @@ function ActionButton({
 }
 
 function BuyButton() {
-  const { navigate } = useNavigation();
-  const { isDamaged } = useWallets();
-
   const handlePress = React.useCallback(() => {
-    if (isDamaged) {
+    if (getIsDamagedWallet()) {
       showWalletErrorAlert();
       return;
     }
 
-    analytics.track('Tapped "Add Cash"', {
-      category: 'home screen',
-    });
+    analytics.track(analytics.event.navigationAddCash, { category: 'home screen' });
 
-    navigate(Routes.ADD_CASH_SHEET);
-  }, [isDamaged, navigate]);
+    Navigation.handleAction(Routes.ADD_CASH_SHEET);
+  }, []);
 
   return (
     <Box>
       <ActionButton icon="􀁌" onPress={handlePress} testID="buy-button">
-        {lang.t('wallet.buy')}
+        {i18n.t(i18n.l.wallet.buy)}
       </ActionButton>
     </Box>
   );
 }
 
 function SwapButton() {
-  const { isReadOnlyWallet } = useWallets();
-  const { accountAddress } = useAccountSettings();
-  const remoteConfig = useRemoteConfig();
-  const swapsV2Enabled = useExperimentalFlag(SWAPS_V2) || remoteConfig.swaps_v2;
-  const { navigate } = useNavigation();
-
   const handlePress = React.useCallback(async () => {
-    if (!isReadOnlyWallet || enableActionsOnReadOnlyWallet) {
-      analytics.track('Tapped "Swap"', {
-        category: 'home screen',
-      });
-
-      android && delayNext();
-      if (swapsV2Enabled) {
-        navigate(Routes.SWAP_NAVIGATOR);
-        return;
-      }
-
-      const mainnetEth = await ethereumUtils.getNativeAssetForNetwork(Network.mainnet, accountAddress);
-      navigate(Routes.EXCHANGE_MODAL, {
-        fromDiscover: true,
-        params: {
-          inputAsset: mainnetEth,
-        },
-        screen: Routes.MAIN_EXCHANGE_SCREEN,
-      });
+    if (!getIsReadOnlyWallet() || enableActionsOnReadOnlyWallet) {
+      analytics.track(analytics.event.navigationSwap, { category: 'home screen' });
+      navigateToSwaps();
     } else {
       watchingAlert();
     }
-  }, [accountAddress, isReadOnlyWallet, navigate, swapsV2Enabled]);
+  }, []);
 
   return (
     <ActionButton icon="􀖅" onPress={handlePress} testID="swap-button">
-      {lang.t('button.swap')}
+      {i18n.t(i18n.l.button.swap)}
     </ActionButton>
   );
 }
 
 function SendButton() {
-  const { isReadOnlyWallet } = useWallets();
-
-  const { navigate } = useNavigation();
-
   const handlePress = React.useCallback(() => {
-    if (!isReadOnlyWallet || enableActionsOnReadOnlyWallet) {
-      analytics.track('Tapped "Send"', {
-        category: 'home screen',
-      });
+    if (!getIsReadOnlyWallet() || enableActionsOnReadOnlyWallet) {
+      analytics.track(analytics.event.navigationSend, { category: 'home screen' });
 
-      navigate(Routes.SEND_FLOW);
+      Navigation.handleAction(Routes.SEND_FLOW);
     } else {
       watchingAlert();
     }
-  }, [navigate, isReadOnlyWallet]);
+  }, []);
 
   return (
     <ActionButton icon="􀈟" onPress={handlePress} testID="send-button">
-      {lang.t('button.send')}
+      {i18n.t(i18n.l.button.send)}
     </ActionButton>
   );
 }
 
-export function MoreButton() {
-  // ////////////////////////////////////////////////////
-  // Handlers
-
+export function CopyButton() {
   const [isToastActive, setToastActive] = useRecoilState(addressCopiedToastAtom);
-  const { accountAddress } = useAccountProfile();
+  const accountAddress = useAccountAddress();
+
   const handlePressCopy = React.useCallback(() => {
+    if (getIsDamagedWallet()) {
+      showWalletErrorAlert();
+      return;
+    }
+
     if (!isToastActive) {
       setToastActive(true);
       setTimeout(() => {
@@ -246,10 +215,9 @@ export function MoreButton() {
 
   return (
     <>
-      {/* @ts-expect-error JavaScript component */}
       <CopyFloatingEmojis textToCopy={accountAddress}>
         <ActionButton onPress={handlePressCopy} icon="􀐅" testID="receive-button">
-          {lang.t('wallet.copy')}
+          {i18n.t(i18n.l.wallet.copy)}
         </ActionButton>
       </CopyFloatingEmojis>
     </>

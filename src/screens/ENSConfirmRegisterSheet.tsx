@@ -1,5 +1,29 @@
-import { useFocusEffect, useRoute } from '@react-navigation/native';
-import lang from 'i18n-js';
+import { ImgixImage } from '@/components/images';
+import { AccentColorProvider, Box, Heading, Inset, Row, Rows, Stack, Text } from '@/design-system';
+import { accentColorAtom, ENS_DOMAIN, ENS_SECONDS_WAIT, REGISTRATION_MODES, REGISTRATION_STEPS } from '@/helpers/ens';
+import {
+  useDimensions,
+  useENSModifiedRegistration,
+  useENSRegistration,
+  useENSRegistrationActionHandler,
+  useENSRegistrationCosts,
+  useENSRegistrationForm,
+  useENSRegistrationStepHandler,
+  useENSSearch,
+} from '@/hooks';
+import { ActionTypes } from '@/hooks/useENSRegistrationActionHandler';
+import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
+import { ChainId, Network } from '@/state/backendNetworks/types';
+import { useAccountProfileInfo } from '@/state/wallets/walletsStore';
+import { ReviewPromptAction } from '@/storage/schema';
+import { colors } from '@/styles';
+import { abbreviateEnsForDisplay } from '@/utils/abbreviations';
+import { handleReviewPromptAction } from '@/utils/reviewAlert';
+import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
+import * as i18n from '@/languages';
 import { isEmpty } from 'lodash';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { InteractionManager, Keyboard } from 'react-native';
@@ -17,28 +41,10 @@ import {
 import { avatarMetadataAtom } from '../components/ens-registration/RegistrationAvatar/RegistrationAvatar';
 import { GasSpeedButton } from '../components/gas';
 import { SheetActionButtonRow, SlackSheet } from '../components/sheet';
-import { abbreviateEnsForDisplay } from '@/utils/abbreviations';
-import { AccentColorProvider, Box, Heading, Inset, Row, Rows, Stack, Text } from '@/design-system';
-import { accentColorAtom, ENS_DOMAIN, ENS_SECONDS_WAIT, REGISTRATION_MODES, REGISTRATION_STEPS } from '@/helpers/ens';
-import {
-  useAccountProfile,
-  useDimensions,
-  useENSModifiedRegistration,
-  useENSRegistration,
-  useENSRegistrationActionHandler,
-  useENSRegistrationCosts,
-  useENSRegistrationForm,
-  useENSRegistrationStepHandler,
-  useENSSearch,
-  useWallets,
-} from '@/hooks';
-import { ImgixImage } from '@/components/images';
-import { useNavigation } from '@/navigation';
-import Routes from '@/navigation/routesNames';
-import { colors } from '@/styles';
-import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
-import { handleReviewPromptAction } from '@/utils/reviewAlert';
-import { ReviewPromptAction } from '@/storage/schema';
+import { useNftsStore } from '@/state/nfts/nfts';
+import { PAGE_SIZE } from '@/state/nfts/createNftsStore';
+import { time } from '@/utils/time';
+import { ENS_NFT_CONTRACT_ADDRESS } from '@/references';
 
 export const ENSConfirmRegisterSheetHeight = 600;
 export const ENSConfirmRenewSheetHeight = 560;
@@ -64,14 +70,12 @@ function TransactionActionRow({
   return (
     <>
       <Box>
-        {/* @ts-expect-error JavaScript component */}
         <SheetActionButtonRow paddingBottom={5}>
-          {/* @ts-expect-error JavaScript component */}
           <HoldToAuthorizeButton
             backgroundColor={accentColor ?? ''}
             disabled={!isSufficientGas || !isValidGas}
             hideInnerBorder
-            label={insufficientEth ? lang.t('profiles.confirm.insufficient_eth') : label}
+            label={insufficientEth ? i18n.t(i18n.l.profiles.confirm.insufficient_eth) : label}
             onLongPress={action}
             parentHorizontalPadding={19}
             showBiometryIcon={!insufficientEth}
@@ -80,10 +84,9 @@ function TransactionActionRow({
         </SheetActionButtonRow>
       </Box>
       <Box alignItems="center" justifyContent="center">
-        {/* @ts-expect-error JavaScript component */}
         <GasSpeedButton
           asset={{ color: accentColor }}
-          currentNetwork="mainnet"
+          chainId={ChainId.mainnet}
           marginBottom={DeviceInfo.hasNotch() ? 0 : undefined}
           theme="light"
         />
@@ -93,7 +96,7 @@ function TransactionActionRow({
 }
 
 export default function ENSConfirmRegisterSheet() {
-  const { params } = useRoute<any>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.ENS_CONFIRM_REGISTER_SHEET>>();
   const { name: ensName, mode } = useENSRegistration();
   const {
     changedRecords,
@@ -104,7 +107,7 @@ export default function ENSConfirmRegisterSheet() {
   const [accentColor, setAccentColor] = useRecoilState(accentColorAtom);
   const avatarMetadata = useRecoilValue(avatarMetadataAtom);
 
-  const avatarImage = avatarMetadata?.path || initialAvatarUrl || params?.externalAvatarUrl || '';
+  const avatarImage = avatarMetadata?.uri || initialAvatarUrl || params?.externalAvatarUrl || '';
   const dominantColor = usePersistentDominantColorFromImage(avatarImage);
 
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function ENSConfirmRegisterSheet() {
   const { navigate, goBack } = useNavigation();
 
   const { blurFields, values } = useENSRegistrationForm();
-  const accountProfile = useAccountProfile();
+  const accountProfile = useAccountProfileInfo();
 
   const avatarUrl = initialAvatarUrl || values.avatar;
 
@@ -153,6 +156,11 @@ export default function ENSConfirmRegisterSheet() {
         navigate(Routes.PROFILE_SCREEN);
       }, 100);
 
+      // revalidate nft data for ens collection
+      const ensCollectionId = `${Network.mainnet}_${ENS_NFT_CONTRACT_ADDRESS}`;
+      useNftsStore.getState().fetchNftCollection(ensCollectionId, true);
+      useNftsStore.getState().fetch({ limit: PAGE_SIZE }, { staleTime: time.seconds(5) });
+
       setTimeout(() => {
         InteractionManager.runAfterInteractions(() => {
           handleReviewPromptAction(ReviewPromptAction.EnsNameRegistration);
@@ -162,13 +170,13 @@ export default function ENSConfirmRegisterSheet() {
   }, [goBack, navigate]);
 
   const stepLabel = useMemo(() => {
-    if (mode === REGISTRATION_MODES.EDIT) return lang.t('profiles.confirm.confirm_updates');
-    if (mode === REGISTRATION_MODES.RENEW) return lang.t('profiles.confirm.extend_registration');
-    if (step === REGISTRATION_STEPS.COMMIT) return lang.t('profiles.confirm.registration_details');
-    if (step === REGISTRATION_STEPS.WAIT_COMMIT_CONFIRMATION) return lang.t('profiles.confirm.requesting_register');
-    if (step === REGISTRATION_STEPS.WAIT_ENS_COMMITMENT) return lang.t('profiles.confirm.reserving_name');
-    if (step === REGISTRATION_STEPS.REGISTER) return lang.t('profiles.confirm.confirm_registration');
-    if (step === REGISTRATION_STEPS.SET_NAME) return lang.t('profiles.confirm.set_name_registration');
+    if (mode === REGISTRATION_MODES.EDIT) return i18n.t(i18n.l.profiles.confirm.confirm_updates);
+    if (mode === REGISTRATION_MODES.RENEW) return i18n.t(i18n.l.profiles.confirm.extend_registration);
+    if (step === REGISTRATION_STEPS.COMMIT) return i18n.t(i18n.l.profiles.confirm.registration_details);
+    if (step === REGISTRATION_STEPS.WAIT_COMMIT_CONFIRMATION) return i18n.t(i18n.l.profiles.confirm.requesting_register);
+    if (step === REGISTRATION_STEPS.WAIT_ENS_COMMITMENT) return i18n.t(i18n.l.profiles.confirm.reserving_name);
+    if (step === REGISTRATION_STEPS.REGISTER) return i18n.t(i18n.l.profiles.confirm.confirm_registration);
+    if (step === REGISTRATION_STEPS.SET_NAME) return i18n.t(i18n.l.profiles.confirm.set_name_registration);
   }, [mode, step]);
 
   const onMountSecondsSinceCommitConfirmed = useMemo(
@@ -205,7 +213,7 @@ export default function ENSConfirmRegisterSheet() {
       [REGISTRATION_STEPS.WAIT_COMMIT_CONFIRMATION]: (
         <WaitCommitmentConfirmationContent
           accentColor={accentColor}
-          action={() => action(accentColor)}
+          action={() => (action as ActionTypes[REGISTRATION_STEPS.WAIT_COMMIT_CONFIRMATION])(accentColor)}
           secondsSinceCommitConfirmed={secondsSinceCommitConfirmed}
         />
       ),
@@ -237,47 +245,47 @@ export default function ENSConfirmRegisterSheet() {
           action={action}
           isSufficientGas={Boolean(registrationCostsData?.isSufficientGasForRegistration && registrationCostsData?.isSufficientGasForStep)}
           isValidGas={Boolean(registrationCostsData?.isValidGas && registrationCostsData?.stepGasLimit)}
-          label={lang.t('profiles.confirm.hold_to_begin')}
+          label={i18n.t(i18n.l.profiles.confirm.hold_to_begin)}
           testID={step}
         />
       ),
       [REGISTRATION_STEPS.REGISTER]: (
         <TransactionActionRow
           accentColor={accentColor}
-          action={() => action(goToProfileScreen)}
+          action={() => (action as ActionTypes[REGISTRATION_STEPS.REGISTER])(goToProfileScreen)}
           isSufficientGas={Boolean(registrationCostsData?.isSufficientGasForStep)}
           isValidGas={Boolean(registrationCostsData?.isValidGas && registrationCostsData?.stepGasLimit)}
-          label={lang.t('profiles.confirm.hold_to_register')}
+          label={i18n.t(i18n.l.profiles.confirm.hold_to_register)}
           testID={step}
         />
       ),
       [REGISTRATION_STEPS.RENEW]: (
         <TransactionActionRow
           accentColor={accentColor}
-          action={() => action(goToProfileScreen)}
+          action={() => (action as ActionTypes[REGISTRATION_STEPS.RENEW])(goToProfileScreen)}
           isSufficientGas={Boolean(registrationCostsData?.isSufficientGasForRegistration && registrationCostsData?.isSufficientGasForStep)}
           isValidGas={Boolean(registrationCostsData?.isValidGas && registrationCostsData?.stepGasLimit)}
-          label={lang.t('profiles.confirm.hold_to_extend')}
+          label={i18n.t(i18n.l.profiles.confirm.hold_to_extend)}
           testID={step}
         />
       ),
       [REGISTRATION_STEPS.EDIT]: (
         <TransactionActionRow
           accentColor={accentColor}
-          action={() => action(goToProfileScreen)}
+          action={() => (action as ActionTypes[REGISTRATION_STEPS.EDIT])(goToProfileScreen)}
           isSufficientGas={Boolean(registrationCostsData?.isSufficientGasForStep)}
           isValidGas={Boolean(registrationCostsData?.isValidGas && registrationCostsData?.stepGasLimit)}
-          label={lang.t('profiles.confirm.hold_to_confirm')}
+          label={i18n.t(i18n.l.profiles.confirm.hold_to_confirm)}
           testID={step}
         />
       ),
       [REGISTRATION_STEPS.SET_NAME]: (
         <TransactionActionRow
           accentColor={accentColor}
-          action={() => action(goToProfileScreen)}
+          action={() => (action as ActionTypes[REGISTRATION_STEPS.SET_NAME])(goToProfileScreen)}
           isSufficientGas={Boolean(registrationCostsData?.isSufficientGasForStep)}
           isValidGas={Boolean(registrationCostsData?.isValidGas && registrationCostsData?.stepGasLimit)}
-          label={lang.t('profiles.confirm.hold_to_confirm')}
+          label={i18n.t(i18n.l.profiles.confirm.hold_to_confirm)}
           testID={step}
         />
       ),
@@ -315,7 +323,7 @@ export default function ENSConfirmRegisterSheet() {
   return (
     <SlackSheet
       additionalTopPadding
-      contentHeight={params.longFormHeight || ENSConfirmRegisterSheetHeight}
+      contentHeight={params?.longFormHeight || ENSConfirmRegisterSheetHeight}
       height="100%"
       scrollEnabled={false}
     >
@@ -325,7 +333,7 @@ export default function ENSConfirmRegisterSheet() {
           paddingTop="19px (Deprecated)"
           paddingVertical="30px (Deprecated)"
           style={{
-            height: params.longFormHeight || ENSConfirmRegisterSheetHeight,
+            height: params?.longFormHeight || ENSConfirmRegisterSheetHeight,
           }}
           testID="ens-confirm-register-sheet"
         >

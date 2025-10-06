@@ -20,12 +20,12 @@ export const findTabScreenshot = (id: string, url?: string): ScreenshotType | nu
 
     if (!Array.isArray(screenshots)) {
       try {
-        logger.error(new RainbowError('Screenshot data is malformed — expected array'), {
+        logger.error(new RainbowError('[DappBrowser]: Screenshot data is malformed — expected array'), {
           screenshots: JSON.stringify(screenshots, null, 2),
         });
-      } catch (e: any) {
-        logger.error(new RainbowError('Screenshot data is malformed — error stringifying'), {
-          message: e.message,
+      } catch (error) {
+        logger.error(new RainbowError('[DappBrowser]: Screenshot data is malformed — error stringifying'), {
+          message: error instanceof Error ? error.message : String(error),
         });
       }
       return null;
@@ -79,7 +79,7 @@ const deletePrunedScreenshotFiles = async (screenshotsToDelete: ScreenshotType[]
     const deletePromises = screenshotsToDelete.map(screenshot => {
       const filePath = `${RNFS.DocumentDirectoryPath}/${screenshot.uri}`;
       return RNFS.unlink(filePath).catch(e => {
-        logger.error(new RainbowError('Error deleting screenshot file'), {
+        logger.error(new RainbowError('[DappBrowser]: Error deleting screenshot file'), {
           message: e.message,
           filePath,
           screenshot: JSON.stringify(screenshot, null, 2),
@@ -87,9 +87,9 @@ const deletePrunedScreenshotFiles = async (screenshotsToDelete: ScreenshotType[]
       });
     });
     await Promise.all(deletePromises);
-  } catch (e: any) {
-    logger.error(new RainbowError('Screenshot file pruning operation failed to complete'), {
-      message: e.message,
+  } catch (error) {
+    logger.error(new RainbowError('[DappBrowser]: Screenshot file pruning operation failed to complete'), {
+      message: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -117,9 +117,9 @@ export const saveScreenshot = async (tempUri: string, tabId: string, timestamp: 
     };
     // Set screenshot for display
     return screenshotWithRNFSPath;
-  } catch (e: any) {
-    logger.error(new RainbowError('Error saving tab screenshot to file system'), {
-      message: e.message,
+  } catch (error) {
+    logger.error(new RainbowError('[DappBrowser]: Error saving tab screenshot to file system'), {
+      message: error instanceof Error ? error.message : String(error),
       screenshotData: {
         tempUri,
         tabId,

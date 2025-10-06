@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigation } from '@/navigation';
 import ConditionalWrap from 'conditional-wrap';
 import { TextColor, globalColors } from '@/design-system/color/palettes';
 import { ImgixImage } from '@/components/images';
@@ -9,11 +8,11 @@ import { NftOffer, SortCriterion } from '@/graphql/__generated__/arc';
 import { AccentColorProvider, Box, Inline, Inset, Text, useBackgroundColor, useColorMode } from '@/design-system';
 import { RainbowError, logger } from '@/logger';
 import { ButtonPressAnimation } from '@/components/animations';
+import Navigation from '@/navigation/Navigation';
 import Routes from '@/navigation/routesNames';
-import { analyticsV2 } from '@/analytics';
+import { analytics } from '@/analytics';
 import { useTheme } from '@/theme';
 import { CardSize } from '@/components/unique-token/CardSize';
-// import { deviceUtils } from '@/utils';
 import * as i18n from '@/languages';
 import { useRecoilValue } from 'recoil';
 import { nftOffersSortAtom } from '@/components/nft-offers/SortMenu';
@@ -21,8 +20,10 @@ import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import RainbowCoinIcon from '@/components/coin-icon/RainbowCoinIcon';
 import { useExternalToken } from '@/resources/assets/externalAssetsQuery';
-import { useAccountSettings } from '@/hooks';
-import { Network } from '@/networks/types';
+import { Network } from '@/state/backendNetworks/types';
+import { AddressOrEth } from '@/__swaps__/types/assets';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 export const CELL_HORIZONTAL_PADDING = 7;
@@ -63,13 +64,13 @@ export const FakeOffer = () => {
 };
 
 export const Offer = ({ offer }: { offer: NftOffer }) => {
-  const { navigate } = useNavigation();
   const { colorMode } = useColorMode();
   const theme = useTheme();
-  const { nativeCurrency } = useAccountSettings();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
+  const offerChainId = useBackendNetworksStore.getState().getChainsIdByName()[offer.network as Network];
   const { data: externalAsset } = useExternalToken({
-    address: offer.paymentToken.address,
-    network: offer.network as Network,
+    address: offer.paymentToken.address as AddressOrEth,
+    chainId: offerChainId,
     currency: nativeCurrency,
   });
 
@@ -78,12 +79,14 @@ export const Offer = ({ offer }: { offer: NftOffer }) => {
 
   const sortCriterion = useRecoilValue(nftOffersSortAtom);
 
-  const [timeRemaining, setTimeRemaining] = useState(offer.validUntil ? Math.max(offer.validUntil * 1000 - Date.now(), 0) : undefined);
+  const [timeRemaining, setTimeRemaining] = useState(() =>
+    offer.validUntil ? Math.max(offer.validUntil * 1000 - Date.now(), 0) : undefined
+  );
 
   useEffect(() => {
     if (offer.validUntil) {
       const interval = setInterval(() => {
-        setTimeRemaining(Math.max(offer.validUntil! * 1000 - Date.now(), 0));
+        setTimeRemaining(Math.max(offer.validUntil * 1000 - Date.now(), 0));
       }, 60000);
       return () => clearInterval(interval);
     }
@@ -139,14 +142,14 @@ export const Offer = ({ offer }: { offer: NftOffer }) => {
     default:
       secondaryTextColor = 'labelTertiary';
       secondaryText = '';
-      logger.error(new RainbowError('NFTOffersCard: invalid sort criterion'));
+      logger.error(new RainbowError('[NFTOffersCard]: invalid sort criterion'));
       break;
   }
 
   return (
     <ButtonPressAnimation
       onPress={() => {
-        analyticsV2.track(analyticsV2.event.nftOffersOpenedSingleOfferSheet, {
+        analytics.track(analytics.event.nftOffersOpenedSingleOfferSheet, {
           entryPoint: 'NFTOffersCard',
           offerValueUSD: offer.grossAmount.usd,
           offerValue: offer.grossAmount.decimal,
@@ -161,7 +164,7 @@ export const Offer = ({ offer }: { offer: NftOffer }) => {
             network: offer.network,
           },
         });
-        navigate(Routes.NFT_SINGLE_OFFER_SHEET, { offer });
+        Navigation.handleAction(Routes.NFT_SINGLE_OFFER_SHEET, { offer });
       }}
       style={{ marginVertical: 10, marginHorizontal: CELL_HORIZONTAL_PADDING }}
     >
@@ -238,11 +241,10 @@ export const Offer = ({ offer }: { offer: NftOffer }) => {
           <RainbowCoinIcon
             size={12}
             icon={externalAsset?.icon_url}
-            network={offer?.network as Network}
+            chainId={offerChainId}
             symbol={offer.paymentToken.symbol}
-            theme={theme}
-            colors={externalAsset?.colors}
-            ignoreBadge
+            color={externalAsset?.colors?.primary || externalAsset?.colors?.fallback || undefined}
+            showBadge={false}
           />
         </View>
         <Text color="label" size="13pt" weight="heavy">

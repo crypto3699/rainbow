@@ -1,97 +1,97 @@
-import { useQuery } from '@tanstack/react-query';
-import { createQueryKey } from '@/react-query';
-import { NFT } from '@/resources/nfts/types';
-import { fetchSimpleHashNFTListing } from '@/resources/nfts/simplehash';
-import { useMemo } from 'react';
+import { QueryFunction, useQuery } from '@tanstack/react-query';
+import { QueryConfigWithSelect, createQueryKey, queryClient } from '@/react-query';
+import { SimpleHashListing } from '@/resources/nfts/simplehash/types';
 import { simpleHashNFTToUniqueAsset } from '@/resources/nfts/simplehash/utils';
-import { useSelector } from 'react-redux';
-import { AppState } from '@/redux/store';
-import { Network } from '@/helpers';
 import { UniqueAsset } from '@/entities';
 import { arcClient } from '@/graphql';
+import { ChainId } from '@/state/backendNetworks/types';
+import { time } from '@/utils/time';
 
-const NFTS_STALE_TIME = 300000; // 5 minutes
-const NFTS_CACHE_TIME_EXTERNAL = 3600000; // 1 hour
-const NFTS_CACHE_TIME_INTERNAL = 604800000; // 1 week
+const NFTS_STALE_TIME = time.minutes(10);
+const NFTS_CACHE_TIME = time.minutes(10);
 
-export const nftsQueryKey = ({ address }: { address: string }) => createQueryKey('nfts', { address }, { persisterVersion: 2 });
+export const nftsQueryKey = ({ address }: { address: string }) => createQueryKey('legacy-nfts', { address }, { persisterVersion: 3 });
+
+export const invalidateAddressNftsQueries = (address: string) => {
+  queryClient.invalidateQueries(nftsQueryKey({ address }));
+};
 
 export const nftListingQueryKey = ({
   contractAddress,
   tokenId,
-  network,
+  chainId,
 }: {
   contractAddress: string;
   tokenId: string;
-  network: Omit<Network, Network.goerli>;
-}) => createQueryKey('nftListing', { contractAddress, tokenId, network });
+  chainId: Omit<ChainId, ChainId.goerli>;
+}) => createQueryKey('nftListing', { contractAddress, tokenId, chainId });
 
-export function useNFTs(): NFT[] {
-  // normal react query where we get new NFT formatted data
-  return [];
+export interface NFTData {
+  nfts: UniqueAsset[];
+  nftIndexMap: Record<string, number>;
 }
 
-export function useLegacyNFTs({ address }: { address: string }) {
-  const { wallets } = useSelector((state: AppState) => state.wallets);
+type NFTQueryKey = ReturnType<typeof nftsQueryKey>;
 
-  const walletAddresses = useMemo(
-    () => (wallets ? Object.values(wallets).flatMap(wallet => wallet.addresses.map(account => account.address)) : []),
-    [wallets]
-  );
-  const isImportedWallet = walletAddresses.includes(address);
+const STABLE_OBJECT = Object.freeze({});
+const STABLE_ARRAY: UniqueAsset[] = [];
 
-  const { data, error, isFetching } = useQuery({
-    queryKey: nftsQueryKey({ address }),
-    queryFn: async () => {
-      const queryResponse = await arcClient.getNFTs({ walletAddress: address });
-      const nfts = queryResponse?.nfts?.map(nft => simpleHashNFTToUniqueAsset(nft, address));
-      return nfts;
-    },
-    staleTime: NFTS_STALE_TIME,
-    retry: 3,
-    cacheTime: isImportedWallet ? NFTS_CACHE_TIME_INTERNAL : NFTS_CACHE_TIME_EXTERNAL,
+export const fetchNFTData: QueryFunction<NFTData, NFTQueryKey> = async ({ queryKey }) => {
+  const [{ address }] = queryKey;
+  const queryResponse = await arcClient.getNFTs({ walletAddress: address });
+
+  const nfts = queryResponse?.nftsV2?.map(nft => simpleHashNFTToUniqueAsset(nft, address));
+
+  const nftIndexMap = nfts?.reduce<Record<string, number>>((acc, nft, index) => {
+    acc[nft.uniqueId.toLowerCase()] = index;
+    return acc;
+  }, {});
+
+  return { nfts: nfts ?? STABLE_ARRAY, nftIndexMap: nftIndexMap ?? STABLE_OBJECT };
+};
+
+const FALLBACK_DATA: NFTData = { nfts: STABLE_ARRAY, nftIndexMap: STABLE_OBJECT };
+
+export const useLegacyNFTs = function useLegacyNFTs<TSelected = NFTData>({
+  address,
+  config,
+}: {
+  address: string;
+  config?: QueryConfigWithSelect<NFTData, unknown, TSelected, NFTQueryKey>;
+}) {
+  const { data, error, isLoading, isInitialLoading } = useQuery(nftsQueryKey({ address }), fetchNFTData, {
+    cacheTime: NFTS_CACHE_TIME,
     enabled: !!address,
+    staleTime: NFTS_STALE_TIME,
+    ...config,
   });
 
-  const nfts = useMemo(() => data ?? [], [data]);
-
-  const nftsMap = useMemo(
-    () =>
-      nfts.reduce(
-        (acc, nft) => {
-          // index by both uniqueId and fullUniqueId bc why not
-          acc[nft.uniqueId] = nft;
-          acc[nft.fullUniqueId] = nft;
-          return acc;
-        },
-        {} as { [key: string]: UniqueAsset }
-      ),
-    [nfts]
-  );
-
   return {
-    data: { nfts, nftsMap },
+    data: (config?.select ? data ?? config.select(FALLBACK_DATA) : data ?? FALLBACK_DATA) as TSelected,
     error,
-    isInitialLoading: !data?.length && isFetching,
+    isLoading,
+    isInitialLoading,
   };
-}
+};
 
-export function useNFTListing({
-  contractAddress,
-  tokenId,
-  network,
-}: {
-  contractAddress: string;
-  tokenId: string;
-  network: Omit<Network, Network.goerli>;
-}) {
-  return useQuery(
-    nftListingQueryKey({ contractAddress, tokenId, network }),
-    async () => (await fetchSimpleHashNFTListing(contractAddress, tokenId, network)) ?? null,
-    {
-      enabled: !!network && !!contractAddress && !!tokenId,
-      staleTime: 0,
-      cacheTime: 0,
-    }
-  );
+const NULL_LISTING: { data: SimpleHashListing | null; error: null; isInitialLoading: false; isLoading: false } = {
+  data: null,
+  error: null,
+  isInitialLoading: false,
+  isLoading: false,
+};
+
+// Relies on SimpleHash API
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function useNFTListing(_: { contractAddress: string; tokenId: string; chainId: Omit<ChainId, ChainId.goerli> }) {
+  return NULL_LISTING;
+  // return useQuery(
+  //   nftListingQueryKey({ contractAddress, tokenId, chainId }),
+  //   async () => (await fetchSimpleHashNFTListing(contractAddress, tokenId, chainId)) ?? null,
+  //   {
+  //     enabled: !!chainId && !!contractAddress && !!tokenId,
+  //     staleTime: time.seconds(30),
+  //     cacheTime: time.seconds(30),
+  //   }
+  // );
 }

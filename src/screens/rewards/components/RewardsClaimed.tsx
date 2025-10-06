@@ -11,8 +11,9 @@ import Routes from '@/navigation/routesNames';
 import { convertAmountAndPriceToNativeDisplay, convertAmountToNativeDisplay } from '@/helpers/utilities';
 import { useSelector } from 'react-redux';
 import { AppState } from '@/redux/store';
-import { analyticsV2 } from '@/analytics';
+import { analytics } from '@/analytics';
 import { formatTokenDisplayValue } from '@/screens/rewards/helpers/formatTokenDisplayValue';
+import { getNumberFormatter } from '@/helpers/intl';
 
 type Props = {
   assetPrice?: number;
@@ -78,10 +79,10 @@ export const RewardsClaimed: React.FC<Props> = ({
   } else {
     const claimed = totalAvailableRewardsInToken - remainingRewards;
     const progress = claimed / totalAvailableRewardsInToken;
-    const claimedTokenFormatted = Math.floor(claimed).toLocaleString('en-US');
+    const claimedTokenFormatted = getNumberFormatter('en-US').format(Math.floor(claimed));
 
     const navigateToAmountsExplainer = () => {
-      analyticsV2.track(analyticsV2.event.rewardsPressedAvailableCard);
+      analytics.track(analytics.event.rewardsPressedAvailableCard);
       navigate(Routes.EXPLAIN_SHEET, { type: 'op_rewards_amount_distributed' });
     };
 

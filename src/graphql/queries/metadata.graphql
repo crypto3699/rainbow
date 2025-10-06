@@ -16,7 +16,7 @@ query getEnsMarquee {
   }
 }
 
-fragment amount on RewardsAmount {
+fragment rewardsAmount on RewardsAmount {
   usd
   token
 }
@@ -50,7 +50,7 @@ query getRewardsDataForWallet($address: String!) {
     ...baseQuery
     earnings {
       total {
-        ...amount
+        ...rewardsAmount
       }
       multiplier {
         amount
@@ -60,7 +60,7 @@ query getRewardsDataForWallet($address: String!) {
         }
       }
       pending {
-        ...amount
+        ...rewardsAmount
       }
       daily {
         day
@@ -73,7 +73,7 @@ query getRewardsDataForWallet($address: String!) {
       actions {
         type
         amount {
-          ...amount
+          ...rewardsAmount
         }
         rewardPercent
       }
@@ -131,7 +131,7 @@ query getdApps {
   }
 }
 
-fragment asset on TransactionSimulationAsset {
+fragment transactionSimulationAsset on TransactionSimulationAsset {
   assetCode
   decimals
   iconURL
@@ -144,21 +144,9 @@ fragment asset on TransactionSimulationAsset {
   status
 }
 
-fragment asset on TransactionSimulationAsset {
-  assetCode
-  decimals
-  iconURL
-  name
-  network
-  symbol
-  type
-  interface
-  tokenId
-  status
-}
 fragment change on TransactionSimulationChange {
   asset {
-    ...asset
+    ...transactionSimulationAsset
   }
   price
   quantity
@@ -202,7 +190,7 @@ query simulateTransactions($chainId: Int!, $transactions: [Transaction!], $domai
       }
       approvals {
         asset {
-          ...asset
+          ...transactionSimulationAsset
         }
         spender {
           ...target
@@ -240,7 +228,7 @@ query simulateMessage($address: String!, $chainId: Int!, $message: Message!, $do
       }
       approvals {
         asset {
-          ...asset
+          ...transactionSimulationAsset
         }
         spender {
           ...target
@@ -268,6 +256,9 @@ query getPointsDataForWallet($address: String!) {
         next
       }
       status
+      rewards {
+        total
+      }
     }
     leaderboard {
       stats {
@@ -295,6 +286,11 @@ query getPointsDataForWallet($address: String!) {
       earnings {
         total
       }
+      rewards {
+        total
+        claimable
+        claimed
+      }
       stats {
         position {
           unranked
@@ -320,8 +316,29 @@ query getPointsDataForWallet($address: String!) {
             }
           }
         }
+        last_period {
+          position {
+            unranked
+            current
+          }
+          earnings {
+            total
+          }
+        }
       }
     }
+  }
+}
+
+mutation claimUserRewards($address: String!) {
+  claimUserRewards(address: $address) {
+    error {
+      type
+      message
+    }
+    chainID
+    uoHash
+    txHash
   }
 }
 
@@ -463,6 +480,15 @@ fragment TokenLinksFragment on TokenLinks {
   homepage {
     ...TokenLinkFragment
   }
+  rainbow {
+    ...TokenLinkFragment
+  }
+  other {
+    ...TokenLinkFragment
+  }
+  farcaster {
+    ...TokenLinkFragment
+  }
   reddit {
     ...TokenLinkFragment
   }
@@ -510,6 +536,7 @@ query externalToken($address: String!, $chainId: Int!, $currency: String) {
     iconUrl
     name
     networks
+    transferable
     price {
       relativeChange24h
       value
@@ -537,13 +564,28 @@ query tokenMetadata($address: String!, $chainId: Int!, $currency: String) {
       relativeChange24h
       value
     }
+    rainbow
+    rainbowTokenDetails {
+      onchainData {
+        creatorAddress
+      }
+    }
     totalSupply
     volume1d
   }
 }
 
-query priceChart($chainId: Int!, $address: String!, $day: Boolean!, $hour: Boolean!, $week: Boolean!, $month: Boolean!, $year: Boolean!) {
-  token(chainID: $chainId, address: $address) {
+query priceChart(
+  $chainId: Int!
+  $address: String!
+  $currency: String
+  $day: Boolean!
+  $hour: Boolean!
+  $week: Boolean!
+  $month: Boolean!
+  $year: Boolean!
+) {
+  token(chainID: $chainId, address: $address, currency: $currency) {
     priceCharts {
       day @include(if: $day) {
         points
@@ -559,6 +601,204 @@ query priceChart($chainId: Int!, $address: String!, $day: Boolean!, $hour: Boole
       }
       year @include(if: $year) {
         points
+      }
+    }
+  }
+}
+
+mutation claimUserRewards($address: String!) {
+  claimUserRewards(address: $address) {
+    error {
+      type
+      message
+    }
+    chainID
+    uoHash
+    txHash
+  }
+}
+
+query trendingDApps($period: DAppRankingPeriod) {
+  dApps(trending: true, period: $period) {
+    name
+    shortName
+    description
+    url
+    iconURL
+    colors {
+      primary
+      fallback
+      shadow
+    }
+    status
+    report {
+      url
+    }
+    trending
+  }
+}
+
+query interactionsWithToken($chainID: Int!, $address: String!, $tokenAddress: String!, $currency: String) {
+  tokenInteractions(chainID: $chainID, address: $address, tokenAddress: $tokenAddress, currency: $currency) {
+    interactedAt
+    chainID
+    direction
+    type
+    amount
+    price
+    transactionHash
+    explorerLabel
+    explorerURL
+  }
+}
+
+query marketStats($chainID: Int!, $address: String!) {
+  stats(chainID: $chainID, address: $address) {
+    bucketCount
+    lastTransaction
+    liquidityPool {
+      address
+      token0Address
+      token1Address
+    }
+    summary {
+      duration
+      start
+      end
+      stats {
+        transactions
+        buys
+        sells
+        volume
+        buyVolume
+        sellVolume
+        uniques
+        buyers
+        sellers
+        priceChangePct
+      }
+    }
+  }
+}
+
+query kingOfTheHill($currency: String) {
+  kingOfTheHill(currency: $currency) {
+    current {
+      token {
+        chainId
+        address
+        decimals
+        name
+        symbol
+        iconUrl
+        colors {
+          primary
+          fallback
+          shadow
+        }
+        marketData {
+          marketCapFDV
+          volume24h
+          holders
+        }
+        marketCap
+        volume1d
+        price {
+          value
+          relativeChange24h
+        }
+        rainbowTokenDetails {
+          onchainData {
+            creatorAddress
+          }
+        }
+      }
+      window {
+        start
+        end
+        durationSeconds
+        interval
+        secondsRemaining
+        isActive
+      }
+      rankingDetails {
+        rankingCriteria
+        rankingCriteriaDesc
+        windowTradingVolume
+        lastUpdated
+      }
+    }
+    lastWinner {
+      token {
+        chainId
+        address
+        decimals
+        name
+        symbol
+        iconUrl
+        colors {
+          primary
+          fallback
+          shadow
+        }
+        marketData {
+          marketCapFDV
+          volume24h
+          holders
+        }
+        marketCap
+        volume1d
+        price {
+          value
+          relativeChange24h
+        }
+      }
+      window {
+        start
+        end
+        durationSeconds
+        interval
+        secondsRemaining
+        isActive
+      }
+      rankingDetails {
+        rankingCriteria
+        rankingCriteriaDesc
+        windowTradingVolume
+        lastUpdated
+      }
+    }
+  }
+  kingOfTheHillLeaderBoard(currency: $currency) {
+    window {
+      start
+      end
+      durationSeconds
+      interval
+      secondsRemaining
+      isActive
+    }
+    rankings {
+      rank
+      windowTradingVolume
+      token {
+        chainId
+        address
+        decimals
+        name
+        symbol
+        iconUrl
+        colors {
+          primary
+          fallback
+          shadow
+        }
+        marketCap
+        volume1d
+        price {
+          value
+          relativeChange24h
+        }
       }
     }
   }

@@ -6,10 +6,10 @@ import ReactNative from 'react-native';
 import Storage from 'react-native-storage';
 // import { debugLayoutAnimations } from './src/config/debug';
 import { mmkvStorageBackend } from '@/handlers/localstorage/mmkvStorageBackend';
-import toLocaleStringPolyfill from '@/helpers/toLocaleStringPolyfill';
-import logger from '@/utils/logger';
+import { logger } from '@/logger';
 import 'fast-text-encoding';
 import globalVariables from './globalVariables';
+import { Event, EventTarget } from 'event-target-shim';
 
 if (typeof BigInt === 'undefined') global.BigInt = require('big-integer');
 
@@ -24,8 +24,6 @@ if (typeof atob === 'undefined') {
     return new Buffer(b64Encoded, 'base64').toString('binary');
   };
 }
-
-toLocaleStringPolyfill();
 
 // https://github.com/facebook/react-native/commit/1049835b504cece42ee43ac5b554687891da1349
 // https://github.com/facebook/react-native/commit/035718ba97bb44c68f2a4ccdd95e537e3d28690
@@ -50,7 +48,7 @@ for (const [key, value] of Object.entries(globalVariables)) {
   Object.defineProperty(global, key, {
     get: () => value,
     set: () => {
-      logger.sentry(`Trying to override internal Rainbow var ${key}`);
+      logger.debug(`[shim]: Trying to override internal Rainbow var ${key}`);
     },
   });
 }
@@ -111,7 +109,7 @@ ReactNative.LayoutAnimation.configureNext = () => null;
 //   debugLayoutAnimations
 // ) {
 //   ReactNative.LayoutAnimation.configureNext = (...args) => {
-//     logger.sentry('LayoutAnimation.configureNext', args);
+//     logger.debug('[shim]: LayoutAnimation.configureNext', args);
 //     oldConfigureNext(...args);
 //   };
 //   ReactNative.LayoutAnimation.configureNext.__shimmed = true;
@@ -125,7 +123,7 @@ if (!ReactNative.InteractionManager._shimmed) {
     if (finishAutomatically) {
       setTimeout(() => {
         ReactNative.InteractionManager.clearInteractionHandle(handle);
-        logger.sentry(`Interaction finished automatically`);
+        logger.debug(`[shim]: Interaction finished automatically`);
       }, 3000);
     }
     return handle;
@@ -157,4 +155,62 @@ if (!description.writable) {
     })(),
     writable: true,
   });
+}
+
+// Polyfills for @nktkas/hyperliquid
+if (!globalThis.EventTarget || !globalThis.Event) {
+  globalThis.EventTarget = EventTarget;
+  globalThis.Event = Event;
+}
+
+if (!globalThis.CustomEvent) {
+  globalThis.CustomEvent = function (type, params) {
+    // eslint-disable-next-line no-param-reassign
+    params = params || {};
+    const event = new Event(type, params);
+    event.detail = params.detail || null;
+    return event;
+  };
+}
+
+if (!AbortSignal.any) {
+  AbortSignal.any = function (signals) {
+    const controller = new AbortController();
+
+    for (const signal of signals) {
+      if (signal.aborted) {
+        controller.abort(signal.reason);
+        return controller.signal;
+      }
+
+      signal.addEventListener(
+        'abort',
+        () => {
+          controller.abort(signal.reason);
+        },
+        { once: true, signal: controller.signal }
+      );
+    }
+
+    return controller.signal;
+  };
+}
+
+if (!AbortSignal.timeout) {
+  AbortSignal.timeout = function (delay) {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), delay);
+    return controller.signal;
+  };
+}
+
+if (!Promise.withResolvers) {
+  Promise.withResolvers = function () {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
 }

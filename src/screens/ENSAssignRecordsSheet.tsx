@@ -1,7 +1,28 @@
+import { AccentColorProvider, Bleed, Box, Cover, Heading, Inline, Inset, Row, Rows, Stack, Text } from '@/design-system';
+import { getSeenOnchainDataDisclaimer, saveSeenOnchainDataDisclaimer } from '@/handlers/localstorage/ens';
+import { accentColorAtom, ENS_RECORDS, REGISTRATION_MODES, TextRecordField, textRecordFields } from '@/helpers/ens';
+import {
+  useDimensions,
+  useENSModifiedRegistration,
+  useENSRecords,
+  useENSRegistration,
+  useENSRegistrationCosts,
+  useENSRegistrationForm,
+  useENSRegistrationStepHandler,
+  useENSSearch,
+  useKeyboardHeight,
+  useWalletSectionsData,
+} from '@/hooks';
+import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import { ENSRoutes } from '@/navigation/RegisterENSNavigator';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
+import { useAccountProfileInfo } from '@/state/wallets/walletsStore';
+import { abbreviateEnsForDisplay } from '@/utils/abbreviations';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { BottomSheetContext } from '@gorhom/bottom-sheet/src/contexts/external';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
-import lang from 'i18n-js';
+import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
+import * as i18n from '@/languages';
 import { isEmpty } from 'lodash';
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { EmitterSubscription, Keyboard, LayoutChangeEvent, ScrollView } from 'react-native';
@@ -16,32 +37,16 @@ import { delayNext } from '../hooks/useMagicAutofocus';
 import { useNavigation } from '../navigation/Navigation';
 import { useTheme } from '../theme/ThemeContext';
 import { ENSConfirmRegisterSheetHeight, ENSConfirmUpdateSheetHeight } from './ENSConfirmRegisterSheet';
-import { abbreviateEnsForDisplay } from '@/utils/abbreviations';
-import { AccentColorProvider, Bleed, Box, Cover, Heading, Inline, Inset, Row, Rows, Stack, Text } from '@/design-system';
-import { getSeenOnchainDataDisclaimer, saveSeenOnchainDataDisclaimer } from '@/handlers/localstorage/ens';
-import { accentColorAtom, ENS_RECORDS, REGISTRATION_MODES, TextRecordField, textRecordFields } from '@/helpers/ens';
-import {
-  useAccountProfile,
-  useDimensions,
-  useENSModifiedRegistration,
-  useENSRecords,
-  useENSRegistration,
-  useENSRegistrationCosts,
-  useENSRegistrationForm,
-  useENSRegistrationStepHandler,
-  useENSSearch,
-  useKeyboardHeight,
-  useWalletSectionsData,
-} from '@/hooks';
-import Routes from '@/navigation/routesNames';
-import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import { IS_ANDROID } from '@/env';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { safeAreaInsetValues } from '@/utils';
 
-const BottomActionHeight = ios ? 281 : 250;
+const BottomActionHeight = 250 + safeAreaInsetValues.bottom;
 const BottomActionHeightSmall = 215;
 const ExtraBottomPadding = 55;
 
 export default function ENSAssignRecordsSheet() {
-  const { params } = useRoute<any>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.REGISTER_ENS_NAVIGATOR>>();
   const { colors } = useTheme();
   const { isSmallPhone } = useDimensions();
   const { name } = useENSRegistration();
@@ -76,7 +81,7 @@ export default function ENSAssignRecordsSheet() {
   const { data: { records } = {} } = useENSRecords(name);
   const isEmptyProfile = isEmpty(records);
 
-  const displayTitleLabel = params.mode !== REGISTRATION_MODES.EDIT || !isLoading;
+  const displayTitleLabel = params?.mode !== REGISTRATION_MODES.EDIT || !isLoading;
 
   useENSRegistrationCosts({
     name,
@@ -105,14 +110,14 @@ export default function ENSAssignRecordsSheet() {
         layout: { y },
       },
     }: LayoutChangeEvent) => {
-      params?.sheetRef.current.scrollTo({ y });
+      params?.sheetRef?.current?.scrollTo({ y });
     },
     [params?.sheetRef]
   );
 
   const handleError = useCallback(
     ({ yOffset }: { yOffset: number }) => {
-      params?.sheetRef.current.scrollTo({ y: yOffset });
+      params?.sheetRef?.current?.scrollTo({ y: yOffset });
     },
     [params?.sheetRef]
   );
@@ -170,7 +175,7 @@ export default function ENSAssignRecordsSheet() {
                 </Heading>
                 <Text align="center" color="accent" size="16px / 22px (Deprecated)" weight="heavy">
                   {displayTitleLabel
-                    ? lang.t(`profiles.${isEmptyProfile && params.mode !== REGISTRATION_MODES.EDIT ? 'create' : 'edit'}.label`)
+                    ? i18n.t(i18n.l.profiles[isEmptyProfile && params?.mode !== REGISTRATION_MODES.EDIT ? 'create' : 'edit'].label)
                     : ''}
                 </Text>
               </Stack>
@@ -198,17 +203,18 @@ export function ENSAssignRecordsBottomActions({
   currentRouteName,
 }: {
   visible: boolean;
-  previousRouteName?: string;
+  previousRouteName?: ENSRoutes;
   currentRouteName: string;
 }) {
   const { navigate, goBack } = useNavigation();
   const { isSmallPhone } = useDimensions();
   const keyboardHeight = useKeyboardHeight();
-  const { accountENS } = useAccountProfile();
+  const { accountENS } = useAccountProfileInfo();
   const { colors } = useTheme();
   const [accentColor, setAccentColor] = useRecoilState(accentColorAtom);
   const { mode, name } = useENSRegistration();
-  const [fromRoute, setFromRoute] = useState(previousRouteName);
+  const insets = useSafeAreaInsets();
+  const [fromRoute, setFromRoute] = useState<ENSRoutes | undefined>(previousRouteName);
   const {
     disabled,
     errors,
@@ -223,7 +229,9 @@ export function ENSAssignRecordsBottomActions({
   const { isSuccess } = useENSModifiedRegistration();
   const handlePressBack = useCallback(() => {
     delayNext();
-    navigate(fromRoute);
+    if (fromRoute) {
+      navigate(fromRoute);
+    }
     setAccentColor(colors.purple);
   }, [colors.purple, fromRoute, navigate, setAccentColor]);
 
@@ -251,7 +259,7 @@ export function ENSAssignRecordsBottomActions({
 
   const navigateToAdditionalRecords = useCallback(() => {
     android && Keyboard.dismiss();
-    navigate(Routes.ENS_ADDITIONAL_RECORDS_SHEET, {});
+    navigate(Routes.ENS_ADDITIONAL_RECORDS_SHEET);
   }, [navigate]);
 
   const [visible, setVisible] = useState(false);
@@ -293,7 +301,7 @@ export function ENSAssignRecordsBottomActions({
         testID="ens-assign-records-sheet"
       >
         <AccentColorProvider color={accentColor}>
-          <Box paddingBottom="19px (Deprecated)" style={{ height: bottomActionHeight }}>
+          <Box paddingBottom={{ custom: insets.bottom }} style={{ height: bottomActionHeight }}>
             {ios ? <Shadow /> : null}
             <Rows>
               <Row>
@@ -307,9 +315,8 @@ export function ENSAssignRecordsBottomActions({
                 </Inset>
               </Row>
               <Row height="content">
-                {/* @ts-expect-error JavaScript component */}
                 <SheetActionButtonRow
-                  {...(android
+                  {...(IS_ANDROID
                     ? {
                         ignorePaddingBottom: true,
                         paddingBottom: 8,
@@ -319,10 +326,10 @@ export function ENSAssignRecordsBottomActions({
                         paddingBottom: isSmallPhone ? 0 : 36,
                       })}
                 >
-                  {hasBackButton && <TintButton onPress={handlePressBack}>{lang.t('profiles.create.back')}</TintButton>}
+                  {hasBackButton && <TintButton onPress={handlePressBack}>{i18n.t(i18n.l.profiles.create.back)}</TintButton>}
                   {isEmptyForm && mode === REGISTRATION_MODES.CREATE ? (
                     <TintButton disabled={disabled} onPress={handlePressContinue} testID="ens-assign-records-skip">
-                      {lang.t('profiles.create.skip')}
+                      {i18n.t(i18n.l.profiles.create.skip)}
                     </TintButton>
                   ) : (
                     <Box>
@@ -330,7 +337,7 @@ export function ENSAssignRecordsBottomActions({
                         <SheetActionButton
                           color={accentColor}
                           disabled={isValidating || !isEmpty(errors)}
-                          label={lang.t('profiles.create.review')}
+                          label={i18n.t(i18n.l.profiles.create.review)}
                           onPress={handlePressContinue}
                           size="big"
                           testID="ens-assign-records-review"
@@ -338,7 +345,7 @@ export function ENSAssignRecordsBottomActions({
                         />
                       ) : (
                         <TintButton onPress={() => goBack()} testID="ens-assign-records-cancel">
-                          {lang.t('profiles.create.cancel')}
+                          {i18n.t(i18n.l.profiles.create.cancel)}
                         </TintButton>
                       )}
                     </Box>
@@ -355,8 +362,8 @@ export function ENSAssignRecordsBottomActions({
 
 function HideKeyboardButton({ color }: { color: string }) {
   const show = useSharedValue(false);
-  const keyboardHideListener = useRef<EmitterSubscription>();
-  const keyboardShowListener = useRef<EmitterSubscription>();
+  const keyboardHideListener = useRef<EmitterSubscription>(undefined);
+  const keyboardShowListener = useRef<EmitterSubscription>(undefined);
 
   useEffect(() => {
     const handleShowKeyboard = () => (show.value = true);

@@ -3,12 +3,12 @@ import { hash } from '@ensdomains/eth-ens-namehash';
 import { BigNumber, BigNumberish } from '@ethersproject/bignumber';
 import { Contract } from '@ethersproject/contracts';
 import { Signer } from '@ethersproject/abstract-signer';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import { atom } from 'recoil';
 import { InlineFieldProps } from '../components/inputs/InlineField';
 import { add, addBuffer, convertAmountAndPriceToNativeDisplay, divide, fromWei, handleSignificantDecimals, multiply } from './utilities';
 import { ENSRegistrationRecords, EthereumAddress } from '@/entities';
-import { getProviderForNetwork, toHex } from '@/handlers/web3';
+import { getProvider, toHex } from '@/handlers/web3';
 import { gweiToWei } from '@/parsers';
 import {
   ENSBaseRegistrarImplementationABI,
@@ -25,6 +25,7 @@ import {
 import { colors } from '@/styles';
 import { labelhash } from '@/utils';
 import { encodeContenthash, isValidContenthash } from '@/utils/contenthash';
+import { ChainId } from '@/state/backendNetworks/types';
 
 export const ENS_SECONDS_WAIT = 60;
 export const ENS_SECONDS_PADDING = 5;
@@ -65,7 +66,7 @@ export enum ENS_RECORDS {
   reddit = 'com.reddit',
   instagram = 'com.instagram',
   snapchat = 'com.snapchat',
-  twitter = 'com.twitter',
+  twitter = 'com.twitter', // correct as of 2025
   telegram = 'org.telegram',
   ensDelegate = 'eth.ens.delegate',
   pronouns = 'pronouns',
@@ -110,8 +111,8 @@ export const textRecordFields = {
       maxLength: 50,
     },
     key: ENS_RECORDS.name,
-    label: lang.t('profiles.create.name'),
-    placeholder: lang.t('profiles.create.name_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.name),
+    placeholder: i18n.t(i18n.l.profiles.create.name_placeholder),
   },
   [ENS_RECORDS.description]: {
     id: 'bio',
@@ -120,8 +121,8 @@ export const textRecordFields = {
       multiline: true,
     },
     key: ENS_RECORDS.description,
-    label: lang.t('profiles.create.bio'),
-    placeholder: lang.t('profiles.create.bio_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.bio),
+    placeholder: i18n.t(i18n.l.profiles.create.bio_placeholder),
   },
   [ENS_RECORDS.url]: {
     id: 'website',
@@ -130,10 +131,10 @@ export const textRecordFields = {
       maxLength: 100,
     },
     key: ENS_RECORDS.url,
-    label: lang.t('profiles.create.website'),
-    placeholder: lang.t('profiles.create.website_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.website),
+    placeholder: i18n.t(i18n.l.profiles.create.website_placeholder),
     validation: {
-      message: lang.t('profiles.create.invalid_website'),
+      message: i18n.t(i18n.l.profiles.create.invalid_website),
       validator: value => /[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/.test(value),
     },
   },
@@ -143,12 +144,12 @@ export const textRecordFields = {
       maxLength: 16,
     },
     key: ENS_RECORDS.twitter,
-    label: lang.t('profiles.create.twitter'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.twitter),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.twitter'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.twitter),
       }),
       validator: value => /^\w*$/.test(value),
     },
@@ -160,10 +161,10 @@ export const textRecordFields = {
       maxLength: 50,
     },
     key: ENS_RECORDS.email,
-    label: lang.t('profiles.create.email'),
-    placeholder: lang.t('profiles.create.email_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.email),
+    placeholder: i18n.t(i18n.l.profiles.create.email_placeholder),
     validation: {
-      message: lang.t('profiles.create.invalid_email'),
+      message: i18n.t(i18n.l.profiles.create.invalid_email),
       validator: value => /^\S+@\S+\.\S+$/.test(value),
     },
   },
@@ -173,12 +174,12 @@ export const textRecordFields = {
       maxLength: 30,
     },
     key: ENS_RECORDS.instagram,
-    label: lang.t('profiles.create.instagram'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.instagram),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.instagram'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.instagram),
       }),
       validator: value => /^([\w.])*$/.test(value),
     },
@@ -189,12 +190,12 @@ export const textRecordFields = {
       maxLength: 50,
     },
     key: ENS_RECORDS.discord,
-    label: lang.t('profiles.create.discord'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.discord),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.discord'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.discord),
       }),
       validator: value => /^(\w)+#[0-9]{4}$/.test(value),
     },
@@ -205,12 +206,12 @@ export const textRecordFields = {
       maxLength: 20,
     },
     key: ENS_RECORDS.github,
-    label: lang.t('profiles.create.github'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.github),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.github'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.github),
       }),
       validator: value => /^([\w.-])*$/.test(value),
     },
@@ -222,12 +223,12 @@ export const textRecordFields = {
       multiline: true,
     },
     key: ENS_RECORDS.BTC,
-    label: lang.t('profiles.create.btc'),
-    placeholder: lang.t('profiles.create.wallet_placeholder', {
-      coin: lang.t('profiles.create.btc'),
+    label: i18n.t(i18n.l.profiles.create.btc),
+    placeholder: i18n.t(i18n.l.profiles.create.wallet_placeholder, {
+      coin: i18n.t(i18n.l.profiles.create.btc),
     }),
     validation: {
-      message: lang.t('profiles.create.invalid_asset', {
+      message: i18n.t(i18n.l.profiles.create.invalid_asset, {
         coin: ENS_RECORDS.BTC,
       }),
       validator: value => validateCoinRecordValue(value, ENS_RECORDS.BTC),
@@ -239,12 +240,12 @@ export const textRecordFields = {
       maxLength: 16,
     },
     key: ENS_RECORDS.snapchat,
-    label: lang.t('profiles.create.snapchat'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.snapchat),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.snapchat'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.snapchat),
       }),
       validator: value => /^([\w.])*$/.test(value),
     },
@@ -255,12 +256,12 @@ export const textRecordFields = {
       maxLength: 30,
     },
     key: ENS_RECORDS.telegram,
-    label: lang.t('profiles.create.telegram'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.telegram),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.telegram'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.telegram),
       }),
       validator: value => /^([\w#.])*$/.test(value),
     },
@@ -271,12 +272,12 @@ export const textRecordFields = {
       maxLength: 30,
     },
     key: ENS_RECORDS.reddit,
-    label: lang.t('profiles.create.reddit'),
-    placeholder: lang.t('profiles.create.username_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.reddit),
+    placeholder: i18n.t(i18n.l.profiles.create.username_placeholder),
     startsWith: '@',
     validation: {
-      message: lang.t('profiles.create.invalid_username', {
-        app: lang.t('profiles.create.reddit'),
+      message: i18n.t(i18n.l.profiles.create.invalid_username, {
+        app: i18n.t(i18n.l.profiles.create.reddit),
       }),
       validator: value => /^([\w#.])*$/.test(value),
     },
@@ -287,8 +288,8 @@ export const textRecordFields = {
       maxLength: 42,
     },
     key: ENS_RECORDS.pronouns,
-    label: lang.t('profiles.create.pronouns'),
-    placeholder: lang.t('profiles.create.pronouns_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.pronouns),
+    placeholder: i18n.t(i18n.l.profiles.create.pronouns_placeholder),
   },
   [ENS_RECORDS.notice]: {
     id: 'notice',
@@ -296,8 +297,8 @@ export const textRecordFields = {
       maxLength: 100,
     },
     key: ENS_RECORDS.notice,
-    label: lang.t('profiles.create.notice'),
-    placeholder: lang.t('profiles.create.notice_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.notice),
+    placeholder: i18n.t(i18n.l.profiles.create.notice_placeholder),
   },
   [ENS_RECORDS.keywords]: {
     id: 'keywords',
@@ -305,8 +306,8 @@ export const textRecordFields = {
       maxLength: 100,
     },
     key: ENS_RECORDS.keywords,
-    label: lang.t('profiles.create.keywords'),
-    placeholder: lang.t('profiles.create.keywords_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.keywords),
+    placeholder: i18n.t(i18n.l.profiles.create.keywords_placeholder),
   },
   [ENS_RECORDS.LTC]: {
     id: 'ltc',
@@ -314,12 +315,12 @@ export const textRecordFields = {
       maxLength: 64,
     },
     key: ENS_RECORDS.LTC,
-    label: lang.t('profiles.create.ltc'),
-    placeholder: lang.t('profiles.create.wallet_placeholder', {
-      coin: lang.t('profiles.create.ltc'),
+    label: i18n.t(i18n.l.profiles.create.ltc),
+    placeholder: i18n.t(i18n.l.profiles.create.wallet_placeholder, {
+      coin: i18n.t(i18n.l.profiles.create.ltc),
     }),
     validation: {
-      message: lang.t('profiles.create.invalid_asset', {
+      message: i18n.t(i18n.l.profiles.create.invalid_asset, {
         coin: ENS_RECORDS.LTC,
       }),
       validator: value => validateCoinRecordValue(value, ENS_RECORDS.LTC),
@@ -331,12 +332,12 @@ export const textRecordFields = {
       maxLength: 34,
     },
     key: ENS_RECORDS.DOGE,
-    label: lang.t('profiles.create.doge'),
-    placeholder: lang.t('profiles.create.wallet_placeholder', {
-      coin: lang.t('profiles.create.doge'),
+    label: i18n.t(i18n.l.profiles.create.doge),
+    placeholder: i18n.t(i18n.l.profiles.create.wallet_placeholder, {
+      coin: i18n.t(i18n.l.profiles.create.doge),
     }),
     validation: {
-      message: lang.t('profiles.create.invalid_asset', {
+      message: i18n.t(i18n.l.profiles.create.invalid_asset, {
         coin: ENS_RECORDS.DOGE,
       }),
       validator: value => validateCoinRecordValue(value, ENS_RECORDS.DOGE),
@@ -346,10 +347,10 @@ export const textRecordFields = {
     id: 'contenthash',
     inputProps: {},
     key: ENS_RECORDS.contenthash,
-    label: lang.t('profiles.create.content'),
-    placeholder: lang.t('profiles.create.content_placeholder'),
+    label: i18n.t(i18n.l.profiles.create.content),
+    placeholder: i18n.t(i18n.l.profiles.create.content_placeholder),
     validation: {
-      message: lang.t('profiles.create.invalid_content_hash'),
+      message: i18n.t(i18n.l.profiles.create.invalid_content_hash),
       validator: value => validateContentHashRecordValue(value),
     },
   },
@@ -367,27 +368,27 @@ export const deprecatedTextRecordFields = {
 export const ENS_DOMAIN = '.eth';
 
 const getENSRegistrarControllerContract = async (wallet?: Signer, registrarAddress?: string) => {
-  const signerOrProvider = wallet || (await getProviderForNetwork());
+  const signerOrProvider = wallet || (await getProvider({ chainId: ChainId.mainnet }));
   return new Contract(registrarAddress || ensETHRegistrarControllerAddress, ENSETHRegistrarControllerABI, signerOrProvider);
 };
 
 const getENSPublicResolverContract = async (wallet?: Signer, resolverAddress?: EthereumAddress) => {
-  const signerOrProvider = wallet || (await getProviderForNetwork());
+  const signerOrProvider = wallet || (await getProvider({ chainId: ChainId.mainnet }));
   return new Contract(resolverAddress || ensPublicResolverAddress, ENSPublicResolverABI, signerOrProvider);
 };
 
 const getENSReverseRegistrarContract = async (wallet?: Signer) => {
-  const signerOrProvider = wallet || (await getProviderForNetwork());
+  const signerOrProvider = wallet || (await getProvider({ chainId: ChainId.mainnet }));
   return new Contract(ensReverseRegistrarAddress, ENSReverseRegistrarABI, signerOrProvider);
 };
 
 const getENSBaseRegistrarImplementationContract = async (wallet?: Signer) => {
-  const signerOrProvider = wallet || (await getProviderForNetwork());
+  const signerOrProvider = wallet || (await getProvider({ chainId: ChainId.mainnet }));
   return new Contract(ensBaseRegistrarImplementationAddress, ENSBaseRegistrarImplementationABI, signerOrProvider);
 };
 
 const getENSRegistryContract = async (wallet?: Signer) => {
-  const signerOrProvider = wallet ?? (await getProviderForNetwork());
+  const signerOrProvider = wallet ?? (await getProvider({ chainId: ChainId.mainnet }));
   return new Contract(ensRegistryAddress, ENSRegistryWithFallbackABI, signerOrProvider);
 };
 
@@ -605,17 +606,11 @@ const formatEstimatedNetworkFee = (
   };
 };
 
-const formatTotalRegistrationCost = (wei: string, nativeCurrency: any, nativeAssetPrice: any, skipDecimals = false) => {
+const formatTotalRegistrationCost = (wei: string, nativeCurrency: any, nativeAssetPrice: any) => {
   const networkFeeInEth = fromWei(wei);
   const eth = handleSignificantDecimals(networkFeeInEth, 3);
 
-  const { amount, display } = convertAmountAndPriceToNativeDisplay(
-    networkFeeInEth,
-    nativeAssetPrice,
-    nativeCurrency,
-    undefined,
-    skipDecimals
-  );
+  const { amount, display } = convertAmountAndPriceToNativeDisplay(networkFeeInEth, nativeAssetPrice, nativeCurrency);
 
   return {
     amount,
@@ -650,13 +645,11 @@ const formatRentPrice = (rentPrice: BigNumberish, duration: number, nativeCurren
   const rentPricePerYear = getRentPricePerYear(rentPriceInETH, duration);
   const rentPricePerYearInWei = divide(rentPrice.toString(), duration);
 
-  const { amount, display } = convertAmountAndPriceToNativeDisplay(rentPriceInETH, nativeAssetPrice, nativeCurrency, undefined, true);
+  const { amount, display } = convertAmountAndPriceToNativeDisplay(rentPriceInETH, nativeAssetPrice, nativeCurrency);
   const { display: displayPerYear, amount: amountPerYear } = convertAmountAndPriceToNativeDisplay(
     rentPricePerYear,
     nativeAssetPrice,
-    nativeCurrency,
-    undefined,
-    true
+    nativeCurrency
   );
 
   return {

@@ -1,107 +1,76 @@
 import React from 'react';
-import * as i18n from '@/languages';
-import Animated, { useAnimatedStyle, useDerivedValue } from 'react-native-reanimated';
-import { AnimatedText, Box, Inline, useForegroundColor } from '@/design-system';
+import Animated, { useAnimatedStyle, useDerivedValue, withSpring } from 'react-native-reanimated';
+import { SPRING_CONFIGS } from '@/components/animations/animationConfigs';
+import { AnimatedText, Box, Inline } from '@/design-system';
 import { useSwapContext } from '@/__swaps__/screens/Swap/providers/swap-provider';
 import { SwapWarningType } from '@/__swaps__/screens/Swap/hooks/useSwapWarning';
+import { DEVICE_WIDTH } from '@/utils/deviceUtils';
 
 export const SwapWarning = () => {
-  const { AnimatedSwapStyles, SwapWarning } = useSwapContext();
-
-  const red = useForegroundColor('red');
-  const orange = useForegroundColor('orange');
-
-  const colorMap = {
-    [SwapWarningType.severe]: red,
-    [SwapWarningType.unknown]: red,
-    [SwapWarningType.long_wait]: orange,
-    [SwapWarningType.none]: orange,
-    [SwapWarningType.high]: orange,
-
-    // swap quote errors
-    [SwapWarningType.no_quote_available]: red,
-    [SwapWarningType.insufficient_liquidity]: red,
-    [SwapWarningType.fee_on_transfer]: red,
-    [SwapWarningType.no_route_found]: red,
-  };
-
-  const warningMessagesPrefix: Record<SwapWarningType, { title: string; subtext: string; addDisplayToTitle?: boolean }> = {
-    [SwapWarningType.none]: {
-      title: '',
-      subtext: '',
-    },
-    [SwapWarningType.high]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.price_impact.you_are_losing)}`,
-      subtext: i18n.t(i18n.l.exchange.price_impact.small_market_try_smaller_amount),
-      addDisplayToTitle: true,
-    },
-    [SwapWarningType.unknown]: {
-      title: `􀇿 ${SwapWarning.swapWarning.value.display}`,
-      subtext: i18n.t(i18n.l.exchange.price_impact.unknown_price.description),
-    },
-    [SwapWarningType.severe]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.price_impact.you_are_losing)}`,
-      subtext: i18n.t(i18n.l.exchange.price_impact.small_market_try_smaller_amount),
-      addDisplayToTitle: true,
-    },
-    [SwapWarningType.long_wait]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.price_impact.long_wait.title)}`,
-      subtext: `${i18n.t(i18n.l.exchange.price_impact.long_wait.description)}`,
-      addDisplayToTitle: true,
-    },
-
-    // swap quote errors
-    [SwapWarningType.no_quote_available]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.quote_errors.no_quote_available)}`,
-      subtext: '',
-    },
-    [SwapWarningType.insufficient_liquidity]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.quote_errors.insufficient_liquidity)}`,
-      subtext: '',
-    },
-    [SwapWarningType.fee_on_transfer]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.quote_errors.fee_on_transfer)}`,
-      subtext: '',
-    },
-    [SwapWarningType.no_route_found]: {
-      title: `􀇿 ${i18n.t(i18n.l.exchange.quote_errors.no_route_found)}`,
-      subtext: '',
-    },
-  };
+  const {
+    AnimatedSwapStyles,
+    SwapSettings: { degenMode },
+    SwapWarning: { swapWarning },
+    isFetching,
+    isQuoteStale,
+  } = useSwapContext();
 
   const warningTitle = useDerivedValue(() => {
-    const potentialTitle = warningMessagesPrefix[SwapWarning.swapWarning.value.type].title;
-    const addDisplayToTitle = warningMessagesPrefix[SwapWarning.swapWarning.value.type].addDisplayToTitle;
-    return addDisplayToTitle ? `${potentialTitle} ${SwapWarning.swapWarning.value.display}` : potentialTitle;
+    if (swapWarning.value.type === SwapWarningType.none) {
+      return '';
+    }
+
+    let title = '';
+    if (swapWarning.value.icon) {
+      title = swapWarning.value.icon;
+    }
+    title += ` ${swapWarning.value.title}`;
+
+    return title;
   });
 
-  const warningSubtext = useDerivedValue(() => {
-    return warningMessagesPrefix[SwapWarning.swapWarning.value.type].subtext;
+  const warningSubtitle = useDerivedValue(() => {
+    if (swapWarning.value.type === SwapWarningType.none || !swapWarning.value.subtitle) {
+      return '';
+    }
+    return swapWarning.value.subtitle;
   });
 
-  const warningStyles = useAnimatedStyle(() => ({
-    color: colorMap[SwapWarning.swapWarning.value.type],
+  const warningTitleStyles = useAnimatedStyle(() => ({
+    color: swapWarning.value.color,
+    opacity: withSpring(isFetching.value || isQuoteStale.value ? 0.4 : 1, SPRING_CONFIGS.sliderConfig),
+    textAlign: degenMode.value ? 'left' : 'center',
   }));
 
-  const warningSubtextStyles = useAnimatedStyle(() => ({
-    display: warningSubtext.value.trim() !== '' ? 'flex' : 'none',
-  }));
+  const warningSubtitleStyles = useAnimatedStyle(() => {
+    return {
+      opacity: withSpring(
+        warningSubtitle.value.trim() === '' ? 0 : isFetching.value || isQuoteStale.value ? 0.4 : 1,
+        SPRING_CONFIGS.sliderConfig
+      ),
+      textAlign: degenMode.value ? 'left' : 'center',
+    };
+  });
+
+  const warningAlignment = useAnimatedStyle(() => {
+    return {
+      alignItems: degenMode.value ? 'flex-start' : 'center',
+    };
+  });
 
   return (
     <Box
       as={Animated.View}
-      alignItems="center"
+      gap={12}
       justifyContent="center"
-      paddingHorizontal="24px"
-      paddingVertical="12px"
-      style={[AnimatedSwapStyles.hideWhenInputsExpandedOrNoPriceImpact, { alignSelf: 'center', position: 'absolute', top: 8 }]}
+      style={[{ maxWidth: DEVICE_WIDTH - 120 - 40 }, AnimatedSwapStyles.hideWhenInputsExpanded, warningAlignment]}
     >
-      <Box as={Animated.View} alignItems="center" height={{ custom: 33 }} gap={6} justifyContent="center" paddingHorizontal="10px">
-        <Inline alignHorizontal="center" alignVertical="center" horizontalSpace="4px" wrap={false}>
-          <AnimatedText style={warningStyles} align="center" size="15pt" weight="heavy" text={warningTitle} />
-        </Inline>
-        <AnimatedText style={warningSubtextStyles} color="labelQuaternary" align="center" size="13pt" weight="bold" text={warningSubtext} />
-      </Box>
+      <AnimatedText style={warningTitleStyles} size="15pt" weight="heavy">
+        {warningTitle}
+      </AnimatedText>
+      <AnimatedText style={warningSubtitleStyles} color="labelQuaternary" size="13pt" weight="bold">
+        {warningSubtitle}
+      </AnimatedText>
     </Box>
   );
 };

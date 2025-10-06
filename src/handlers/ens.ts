@@ -1,33 +1,32 @@
 import { formatsByCoinType, formatsByName } from '@ensdomains/address-encoder';
 import { getAddress } from '@ethersproject/address';
 import { Resolver } from '@ethersproject/providers';
-import { captureException } from '@sentry/react-native';
 import { Duration, sub } from 'date-fns';
 import { isValidAddress, isZeroAddress } from 'ethereumjs-util';
 import { BigNumber } from '@ethersproject/bignumber';
 import { debounce, isEmpty, sortBy } from 'lodash';
-import { fetchENSAvatar, prefetchENSAvatar } from '../hooks/useENSAvatar';
+import { fetchENSAvatar } from '../hooks/useENSAvatar';
 import { prefetchENSCover } from '../hooks/useENSCover';
 import { prefetchENSRecords } from '../hooks/useENSRecords';
-import { ENSActionParameters, RapActionTypes } from '../raps/common';
+import { ENSActionParameters, ENSRapActionType } from '@/raps/common';
 import { getENSData, getNameFromLabelhash, saveENSData } from './localstorage/ens';
-import { estimateGasWithPadding, getProviderForNetwork, TokenStandard } from './web3';
-import { ENSRegistrationRecords, Records, UniqueAsset } from '@/entities';
-import { Network } from '@/helpers';
+import { estimateGasWithPadding, getProvider } from './web3';
+import { AssetType, ENSRegistrationRecords, Records, UniqueAsset } from '@/entities';
 import { ENS_DOMAIN, ENS_RECORDS, ENSRegistrationTransactionType, generateSalt, getENSExecutionDetails, getNameOwner } from '@/helpers/ens';
 import { add } from '@/helpers/utilities';
 import { ImgixImage } from '@/components/images';
 import { ENS_NFT_CONTRACT_ADDRESS, ethUnits } from '@/references';
-import { labelhash, logger, profileUtils } from '@/utils';
+import { labelhash, profileUtils } from '@/utils';
 import { AvatarResolver } from '@/ens-avatar/src';
 import { ensClient } from '@/graphql';
 import { prefetchFirstTransactionTimestamp } from '@/resources/transactions/firstTransactionTimestampQuery';
 import { prefetchENSAddress } from '@/resources/ens/ensAddressQuery';
-import { ENS_MARQUEE_QUERY_KEY } from '@/resources/metadata/ensMarqueeQuery';
-import { queryClient } from '@/react-query';
-import { EnsMarqueeAccount } from '@/graphql/__generated__/metadata';
-import { getEnsMarqueeFallback } from '@/components/ens-registration/IntroMarquee/IntroMarquee';
 import { MimeType, handleNFTImages } from '@/utils/handleNFTImages';
+import store from '@/redux/store';
+import { logger, RainbowError } from '@/logger';
+import { ChainId, Network } from '@/state/backendNetworks/types';
+import { Address } from 'viem';
+import { NftTokenType } from '@/graphql/__generated__/arc';
 
 const DUMMY_RECORDS = {
   description: 'description',
@@ -46,76 +45,42 @@ const buildEnsToken = ({
   tokenId: string;
   name: string;
   imageUrl: string;
-}) => {
+}): UniqueAsset => {
   const { highResUrl: imageUrl, lowResUrl } = handleNFTImages({
     originalUrl: imageUrl_,
     previewUrl: undefined,
     mimeType: MimeType.SVG,
   });
+
   return {
-    acquisition_date: undefined,
-    animation_url: null,
-    asset_contract: {
-      address: contractAddress,
-      name: 'ENS',
-      nft_version: '3.0',
-      schema_name: TokenStandard.ERC721,
-      symbol: 'ENS',
-      total_supply: null,
-    },
-    background: null,
-    collection: {
-      description:
-        'Ethereum Name Service (ENS) domains are secure domain names for the decentralized world. ENS domains provide a way for users to map human readable names to blockchain and non-blockchain resources, like Ethereum addresses, IPFS hashes, or website URLs. ENS domains can be bought and sold on secondary markets.',
-      discord_url: null,
-      external_url: 'https://ens.domains',
-      featured_image_url:
-        'https://lh3.googleusercontent.com/BBj09xD7R4bBtg1lgnAAS9_TfoYXKwMtudlk-0fVljlURaK7BWcARCpkM-1LGNGTAcsGO6V1TgrtmQFvCo8uVYW_QEfASK-9j6Nr=s300',
-      hidden: false,
-      image_url:
-        'https://lh3.googleusercontent.com/0cOqWoYA7xL9CkUjGlxsjreSYBdrUBE0c6EO1COG4XE8UeP-Z30ckqUNiL872zHQHQU5MUNMNhfDpyXIP17hRSC5HQ=s60',
-      name: 'ENS: Ethereum Name Service',
-      short_description: null,
-      slug: 'ens',
-      twitter_username: 'ensdomains',
-    },
-    currentPrice: null,
-    description: `\`${name}\`, an ENS name.`,
-    external_link: `https://app.ens.domains/search/${name}`,
-    familyImage:
-      'https://lh3.googleusercontent.com/0cOqWoYA7xL9CkUjGlxsjreSYBdrUBE0c6EO1COG4XE8UeP-Z30ckqUNiL872zHQHQU5MUNMNhfDpyXIP17hRSC5HQ=s60',
-    familyName: 'ENS',
-    fullUniqueId: `${Network.mainnet}_${contractAddress}_${tokenId}`,
-    id: tokenId,
-    image_original_url: imageUrl,
-    image_thumbnail_url: lowResUrl,
-    image_url: imageUrl,
-    isSendable: true,
-    last_sale: null,
-    lastPrice: null,
-    lastPriceUsd: null,
-    lastSale: undefined,
-    lastSalePaymentToken: null,
-    lowResUrl,
-    marketplaceCollectionUrl: `https://opensea.io/collection/ens?search[sortAscending]=true&search[sortBy]=PRICE&search[toggles][0]=BUY_NOW`,
-    marketplaceId: 'opensea',
-    marketplaceName: 'OpenSea',
     name,
+    description: `\`${name}\`, an ENS name.`,
+    collectionDescription:
+      'Ethereum Name Service (ENS) domains are secure domain names for the decentralized world. ENS domains provide a way for users to map human readable names to blockchain and non-blockchain resources, like Ethereum addresses, IPFS hashes, or website URLs. ENS domains can be bought and sold on secondary markets.',
+    type: AssetType.ens,
     network: Network.mainnet,
-    permalink: '',
-    sell_orders: [],
+    chainId: ChainId.mainnet,
+    contractAddress: contractAddress as Address,
+    backgroundColor: undefined,
+    images: {
+      mimeType: MimeType.SVG,
+      highResUrl: imageUrl,
+      lowResUrl,
+    },
+    tokenId,
+    standard: NftTokenType.Erc721,
+    isSendable: true,
+    uniqueId: `${Network.mainnet}_${contractAddress}_${tokenId}` as UniqueAsset['uniqueId'],
+    collectionUrl: 'https://ens.domains',
+    collectionImageUrl:
+      'https://lh3.googleusercontent.com/0cOqWoYA7xL9CkUjGlxsjreSYBdrUBE0c6EO1COG4XE8UeP-Z30ckqUNiL872zHQHQU5MUNMNhfDpyXIP17hRSC5HQ=s60',
+    collectionName: 'ENS: Ethereum Name Service',
+    marketplaceName: 'OpenSea',
+    marketplaceUrl: 'https://opensea.io/collection/ens?search[sortAscending]=true&search[sortBy]=PRICE&search[toggles][0]=BUY_NOW',
+    twitterUrl: 'https://x.com/ensdomains',
+    websiteUrl: 'https://ens.domains',
     traits: [],
-    type: 'nft',
-    uniqueId: name,
-    urlSuffixForAsset: `${contractAddress}/${tokenId}`,
-    // hacky shit
-    video_url: null,
-    video_properties: null,
-    audio_url: null,
-    audio_properties: null,
-    model_url: null,
-    model_properties: null,
-  } as UniqueAsset;
+  };
 };
 
 export const fetchMetadata = async ({
@@ -137,8 +102,9 @@ export const fetchMetadata = async ({
     const image_url = `https://metadata.ens.domains/mainnet/${contractAddress}/${tokenId}/image`;
     return { image_url, name };
   } catch (error) {
-    logger.sentry('ENS: Error getting ENS metadata', error);
-    captureException(new Error('ENS: Error getting ENS metadata'));
+    logger.error(new RainbowError(`[ENS]: fetchMetadata failed`), {
+      error,
+    });
     throw error;
   }
 };
@@ -175,8 +141,9 @@ export const fetchEnsTokens = async ({
         .filter(<TToken>(token: TToken | null | undefined): token is TToken => !!token) || []
     );
   } catch (error) {
-    logger.sentry('ENS: Error getting ENS unique tokens', error);
-    captureException(new Error('ENS: Error getting ENS unique tokens'));
+    logger.error(new RainbowError(`[ENS]: fetchEnsTokens failed`), {
+      error,
+    });
     return [];
   }
 };
@@ -322,7 +289,7 @@ export const fetchAccountDomains = async (address: string) => {
 
 export const fetchImage = async (imageType: 'avatar' | 'header', ensName: string) => {
   let imageUrl;
-  const provider = await getProviderForNetwork();
+  const provider = getProvider({ chainId: ChainId.mainnet });
   try {
     const avatarResolver = new AvatarResolver(provider);
     imageUrl = await avatarResolver.getImage(ensName, {
@@ -347,7 +314,7 @@ export const fetchRecords = async (ensName: string, { supportedOnly = true }: { 
   const data = response.domains[0] || {};
   const rawRecordKeys = data.resolver?.texts || [];
 
-  const provider = await getProviderForNetwork();
+  const provider = getProvider({ chainId: ChainId.mainnet });
   const resolver = await provider.getResolver(ensName);
   const supportedRecords = Object.values(ENS_RECORDS);
   const recordKeys = (rawRecordKeys as ENS_RECORDS[]).filter(key => (supportedOnly ? supportedRecords.includes(key) : true));
@@ -369,7 +336,7 @@ export const fetchCoinAddresses = async (
   const response = await ensClient.getCoinTypesByName({ name: ensName });
   const data = response.domains[0] || {};
   const supportedRecords = Object.values(ENS_RECORDS);
-  const provider = await getProviderForNetwork();
+  const provider = getProvider({ chainId: ChainId.mainnet });
   const resolver = await provider.getResolver(ensName);
   const rawCoinTypes: number[] = data.resolver?.coinTypes || [];
   const rawCoinTypesNames: string[] = rawCoinTypes.map(type => formatsByCoinType[type].name);
@@ -402,7 +369,7 @@ export const fetchCoinAddresses = async (
 };
 
 export const fetchContenthash = async (ensName: string) => {
-  const provider = await getProviderForNetwork();
+  const provider = getProvider({ chainId: ChainId.mainnet });
   const resolver = await provider.getResolver(ensName);
   const contenthash = await resolver?.getContentHash();
   return contenthash;
@@ -449,7 +416,7 @@ export const fetchRegistration = async (ensName: string) => {
 };
 
 export const fetchPrimary = async (ensName: string) => {
-  const provider = await getProviderForNetwork();
+  const provider = getProvider({ chainId: ChainId.mainnet });
   const address = await provider.resolveName(ensName);
   return {
     address,
@@ -462,24 +429,6 @@ export const fetchAccountPrimary = async (accountAddress: string) => {
     ensName,
   };
 };
-
-export function prefetchENSIntroData() {
-  const ensMarqueeQueryData = queryClient.getQueryData<{
-    ensMarquee: EnsMarqueeAccount[];
-  }>([ENS_MARQUEE_QUERY_KEY]);
-
-  if (ensMarqueeQueryData?.ensMarquee) {
-    const ensMarqueeAccounts = ensMarqueeQueryData.ensMarquee.map((account: EnsMarqueeAccount) => account.name);
-
-    for (const name of ensMarqueeAccounts) {
-      prefetchENSAddress({ name }, { staleTime: Infinity });
-      prefetchENSAvatar(name, { cacheFirst: true });
-      prefetchENSCover(name, { cacheFirst: true });
-      prefetchENSRecords(name, { cacheFirst: true });
-      prefetchFirstTransactionTimestamp({ addressOrName: name });
-    }
-  }
-}
 
 export const estimateENSCommitGasLimit = async ({ name, ownerAddress, duration, rentPrice, salt }: ENSActionParameters) =>
   estimateENSTransactionGasLimit({
@@ -642,8 +591,8 @@ export const estimateENSTransactionGasLimit = async ({
     ...(ownerAddress ? { from: ownerAddress } : {}),
     ...(value ? { value } : {}),
   };
-
-  const gasLimit = await estimateGasWithPadding(txPayload, contract?.estimateGas[type], methodArguments);
+  const provider = getProvider({ chainId: ChainId.mainnet });
+  const gasLimit = await estimateGasWithPadding(txPayload, contract?.estimateGas[type], methodArguments, provider);
   return gasLimit;
 };
 
@@ -655,12 +604,15 @@ export const estimateENSRegistrationGasLimit = async (
   records: Records = DUMMY_RECORDS
 ) => {
   const salt = generateSalt();
+  const { selectedGasFee, gasFeeParamsBySpeed } = store.getState().gas;
   const commitGasLimitPromise = estimateENSCommitGasLimit({
     duration,
     name,
     ownerAddress,
     rentPrice,
     salt,
+    selectedGasFee,
+    gasFeeParamsBySpeed,
   });
 
   const setRecordsGasLimitPromise = estimateENSSetRecordsGasLimit({
@@ -888,13 +840,13 @@ export const getTransactionTypeForRecords = (registrationRecords: ENSRegistratio
 export const getRapActionTypeForTxType = (txType: ENSRegistrationTransactionType) => {
   switch (txType) {
     case ENSRegistrationTransactionType.MULTICALL:
-      return RapActionTypes.multicallENS;
+      return ENSRapActionType.multicallENS;
     case ENSRegistrationTransactionType.SET_ADDR:
-      return RapActionTypes.setAddrENS;
+      return ENSRapActionType.setAddrENS;
     case ENSRegistrationTransactionType.SET_TEXT:
-      return RapActionTypes.setTextENS;
+      return ENSRapActionType.setTextENS;
     case ENSRegistrationTransactionType.SET_CONTENTHASH:
-      return RapActionTypes.setContenthashENS;
+      return ENSRapActionType.setContenthashENS;
     default:
       return null;
   }
@@ -903,7 +855,7 @@ export const getRapActionTypeForTxType = (txType: ENSRegistrationTransactionType
 export const fetchReverseRecord = async (address: string) => {
   try {
     const checksumAddress = getAddress(address);
-    const provider = await getProviderForNetwork();
+    const provider = getProvider({ chainId: ChainId.mainnet });
     const reverseRecord = await provider.lookupAddress(checksumAddress);
     return reverseRecord ?? '';
   } catch (e) {
@@ -913,7 +865,7 @@ export const fetchReverseRecord = async (address: string) => {
 
 export const fetchResolver = async (ensName: string) => {
   try {
-    const provider = await getProviderForNetwork();
+    const provider = getProvider({ chainId: ChainId.mainnet });
     const resolver = await provider.getResolver(ensName);
     return resolver ?? ({} as Resolver);
   } catch (e) {

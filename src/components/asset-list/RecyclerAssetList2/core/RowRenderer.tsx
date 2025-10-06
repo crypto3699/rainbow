@@ -8,8 +8,12 @@ import { ExtendedState } from './RawRecyclerList';
 import {
   AssetsHeaderExtraData,
   CellType,
+  ClaimableExtraData,
+  ClaimablesHeaderExtraData,
   CoinDividerExtraData,
   CoinExtraData,
+  LegacyNFTExtraData,
+  LegacyNFTFamilyExtraData,
   NFTExtraData,
   NFTFamilyExtraData,
   PositionExtraData,
@@ -29,9 +33,14 @@ import { DiscoverMoreButton } from './DiscoverMoreButton';
 import { RotatingLearnCard } from '@/components/cards/RotatingLearnCard';
 import WrappedPosition from '../WrappedPosition';
 import WrappedPositionsListHeader from '../WrappedPositionsListHeader';
-import * as lang from '@/languages';
 import { RemoteCardCarousel } from '@/components/cards/remote-cards';
 import WrappedCollectiblesHeader from '../WrappedCollectiblesHeader';
+import NFTLoadingSkeleton from '../NFTLoadingSkeleton';
+import { NFTEmptyState } from '../NFTEmptyState';
+import { ClaimablesListHeader } from '../ClaimablesListHeader';
+import { Claimable } from '../Claimable';
+import LegacyWrappedNFT from '../LegacyWrappedNFT';
+import LegacyWrappedTokenFamilyHeader from '../LegacyWrappedTokenFamilyHeader';
 
 function rowRenderer(type: CellType, { uid }: { uid: string }, _: unknown, extendedState: ExtendedState) {
   const data = extendedState.additionalData[uid];
@@ -50,10 +59,14 @@ function rowRenderer(type: CellType, { uid }: { uid: string }, _: unknown, exten
     case CellType.EMPTY_ROW:
     case CellType.POSITIONS_SPACE_AFTER:
     case CellType.POSITIONS_SPACE_BEFORE:
+    case CellType.CLAIMABLES_SPACE_AFTER:
+    case CellType.CLAIMABLES_SPACE_BEFORE:
+    case CellType.EMPTY_REMOTE_CARD_CAROUSEL:
       return null;
     case CellType.COIN_DIVIDER:
       return (
         <CoinDivider
+          // @ts-expect-error - untyped js file
           balancesSum={(data as CoinDividerExtraData).value}
           defaultToEditButton={(data as CoinDividerExtraData).defaultToEditButton}
           extendedState={extendedState}
@@ -109,10 +122,7 @@ function rowRenderer(type: CellType, { uid }: { uid: string }, _: unknown, exten
     case CellType.PROFILE_BALANCE_ROW:
       return (
         <ProfileRowWrapper>
-          <ProfileBalanceRow
-            totalValue={(data as AssetsHeaderExtraData).value}
-            isLoadingUserAssets={(data as AssetsHeaderExtraData).isLoadingUserAssets}
-          />
+          <ProfileBalanceRow />
         </ProfileRowWrapper>
       );
     case CellType.PROFILE_NAME_ROW:
@@ -123,10 +133,29 @@ function rowRenderer(type: CellType, { uid }: { uid: string }, _: unknown, exten
       );
     case CellType.NFTS_HEADER:
       return <WrappedCollectiblesHeader />;
+    case CellType.NFTS_LOADING:
+      return <NFTLoadingSkeleton />;
+    case CellType.NFTS_EMPTY:
+      return <NFTEmptyState />;
     case CellType.FAMILY_HEADER: {
-      const { name, image, total } = data as NFTFamilyExtraData;
+      const { name, image, total, uid } = data as NFTFamilyExtraData;
+
       return (
         <WrappedTokenFamilyHeader
+          image={image}
+          name={name}
+          testID={`token-family-header-${name}`}
+          theme={extendedState.theme}
+          total={total}
+          uid={uid}
+        />
+      );
+    }
+    case CellType.LEGACY_FAMILY_HEADER: {
+      const { name, image, total } = data as LegacyNFTFamilyExtraData;
+
+      return (
+        <LegacyWrappedTokenFamilyHeader
           image={image}
           name={name}
           testID={`token-family-header-${name}`}
@@ -135,15 +164,27 @@ function rowRenderer(type: CellType, { uid }: { uid: string }, _: unknown, exten
         />
       );
     }
-    case CellType.NFT: {
-      const { index, uniqueId } = data as NFTExtraData;
-
+    case CellType.LEGACY_NFT: {
+      const { index, uniqueId } = data as LegacyNFTExtraData;
       return (
-        <WrappedNFT
+        <LegacyWrappedNFT
           externalAddress={extendedState.externalAddress}
           onPress={extendedState.onPressUniqueToken}
           placement={index % 2 === 0 ? 'left' : 'right'}
           uniqueId={uniqueId}
+        />
+      );
+    }
+    case CellType.NFT: {
+      const { index, collectionId, uniqueId } = data as NFTExtraData;
+
+      return (
+        <WrappedNFT
+          onPress={extendedState.onPressUniqueToken}
+          placement={index % 2 === 0 ? 'left' : 'right'}
+          index={index}
+          uniqueId={uniqueId}
+          collectionId={collectionId}
         />
       );
     }
@@ -152,9 +193,18 @@ function rowRenderer(type: CellType, { uid }: { uid: string }, _: unknown, exten
       return <WrappedPositionsListHeader total={total} />;
     }
     case CellType.POSITION: {
-      const { uniqueId, index } = data as PositionExtraData;
+      const { position, index } = data as PositionExtraData;
 
-      return <WrappedPosition placement={index % 2 === 0 ? 'left' : 'right'} uniqueId={uniqueId} />;
+      return <WrappedPosition placement={index % 2 === 0 ? 'left' : 'right'} position={position} />;
+    }
+    case CellType.CLAIMABLES_HEADER: {
+      const { total } = data as ClaimablesHeaderExtraData;
+      return <ClaimablesListHeader total={total} />;
+    }
+    case CellType.CLAIMABLE: {
+      const { claimable } = data as ClaimableExtraData;
+
+      return <Claimable claimable={claimable} />;
     }
 
     case CellType.LOADING_ASSETS:

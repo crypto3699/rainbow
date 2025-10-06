@@ -1,42 +1,39 @@
-import { BlurView } from '@react-native-community/blur';
-
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, View } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
-
-import useWallets from '../../hooks/useWallets';
-import Routes from '@/navigation/routesNames';
-
-import ImgixImage from '../../components/images/ImgixImage';
-import { SheetActionButton, SheetActionButtonRow, SlackSheet } from '../../components/sheet';
-import { CardSize } from '../../components/unique-token/CardSize';
+import { analytics } from '@/analytics';
+import { ButtonPressAnimation } from '@/components/animations';
+import Spinner from '@/components/Spinner';
 import { Box, ColorModeProvider, Row, Rows, Stack, Text } from '@/design-system';
-import { useAccountProfile, useDimensions } from '@/hooks';
+import { UniqueAsset } from '@/entities';
+import { IS_ANDROID, IS_IOS } from '@/env';
+import { arcClient } from '@/graphql';
+import { maybeSignUri } from '@/handlers/imgix';
+import { useDimensions } from '@/hooks';
+import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import * as i18n from '@/languages';
 import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
+import { useLegacyNFTs } from '@/resources/nfts';
+import { useAccountAddress, useIsReadOnlyWallet } from '@/state/wallets/walletsStore';
 import styled from '@/styled-thing';
 import { position } from '@/styles';
 import { useTheme } from '@/theme';
 import { watchingAlert } from '@/utils';
-import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
-import { maybeSignUri } from '@/handlers/imgix';
-import { ButtonPressAnimation } from '@/components/animations';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
-import { PoapEvent } from '@/graphql/__generated__/arcDev';
-import { format } from 'date-fns';
-import { arcClient } from '@/graphql';
-import Spinner from '@/components/Spinner';
 import { delay } from '@/utils/delay';
-import { useLegacyNFTs } from '@/resources/nfts';
-import { UniqueAsset } from '@/entities';
-import { IS_IOS } from '@/env';
-import * as i18n from '@/languages';
+import { openInBrowser } from '@/utils/openInBrowser';
 import { PoapMintError } from '@/utils/poaps';
-import { analyticsV2 } from '@/analytics';
-import { event } from '@/analytics/event';
+import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
+import { format } from 'date-fns';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { BlurView } from 'react-native-blur-view';
+import { useSharedValue } from 'react-native-reanimated';
+import ImgixImage from '../../components/images/ImgixImage';
+import { SheetActionButton, SheetActionButtonRow, SlackSheet } from '../../components/sheet';
+import { CardSize } from '../../components/unique-token/CardSize';
 
 const BackgroundBlur = styled(BlurView).attrs({
-  blurAmount: 100,
-  blurType: 'light',
+  blurIntensity: 100,
+  blurStyle: 'light',
 })({
   ...position.coverAsObject,
 });
@@ -60,22 +57,18 @@ const BlurWrapper = styled(View).attrs({
   overflow: 'hidden',
   position: 'absolute',
   width: ({ width }: BlurWrapperProps) => width,
-  ...(android ? { borderTopLeftRadius: 30, borderTopRightRadius: 30 } : {}),
+  ...(IS_ANDROID ? { borderTopLeftRadius: 30, borderTopRightRadius: 30 } : {}),
 });
-
-interface PoapSheetProps {
-  event: PoapEvent;
-}
 
 type PoapClaimStatus = 'none' | 'claiming' | 'claimed' | 'error';
 
 const PoapSheet = () => {
-  const { accountAddress } = useAccountProfile();
+  const accountAddress = useAccountAddress();
   const { height: deviceHeight, width: deviceWidth } = useDimensions();
-  const { navigate, goBack } = useNavigation();
+  const { navigate } = useNavigation();
   const { colors, isDarkMode, lightScheme } = useTheme();
-  const { isReadOnlyWallet } = useWallets();
-  const params = useRoute();
+  const isReadOnlyWallet = useIsReadOnlyWallet();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.POAP_SHEET>>();
   const {
     data: { nfts },
   } = useLegacyNFTs({
@@ -86,7 +79,7 @@ const PoapSheet = () => {
   const [errorCode, setErrorCode] = useState<PoapMintError | undefined>(undefined);
   const [nft, setNft] = useState<UniqueAsset | null>(null);
 
-  const poapEvent: PoapEvent = (params.params as PoapSheetProps)?.event;
+  const poapEvent = params.event;
 
   const poapMintType = poapEvent.secretWord ? 'secretWord' : 'qrHash';
 
@@ -100,7 +93,7 @@ const PoapSheet = () => {
 
   const imageColor = usePersistentDominantColorFromImage(imageUrl) ?? colors.paleBlue;
 
-  const sheetRef = useRef();
+  const sheetRef = useRef(undefined);
   const yPosition = useSharedValue(0);
 
   const claimPoapByQrHash = useCallback(async () => {
@@ -121,7 +114,7 @@ const PoapSheet = () => {
     const errorCode = response.claimPoapByQrHash?.error;
 
     if (isSuccess) {
-      analyticsV2.track(event.poapsMintedPoap, {
+      analytics.track(analytics.event.poapsMintedPoap, {
         eventId: poapEvent.id,
         type: poapMintType,
       });
@@ -153,7 +146,7 @@ const PoapSheet = () => {
     const errorCode = response.claimPoapBySecretWord?.error;
 
     if (isSuccess) {
-      analyticsV2.track(event.poapsMintedPoap, {
+      analytics.track(analytics.event.poapsMintedPoap, {
         eventId: poapEvent.id,
         type: poapMintType,
       });
@@ -189,10 +182,10 @@ const PoapSheet = () => {
         await claimPoapByQrHash();
       }
     }
-  }, [claimPoapByQrHash, claimPoapBySecret, claimStatus, goBack, navigate, nft, poapMintType]);
+  }, [claimPoapByQrHash, claimPoapBySecret, claimStatus, navigate, nft, poapMintType]);
 
   useEffect(() => {
-    const nft = nfts.find(item => item.image_original_url === poapEvent.imageUrl);
+    const nft = nfts.find(item => item.images.highResUrl === poapEvent.imageUrl);
     if (nft) {
       setClaimStatus('claimed');
       setNft(nft);
@@ -209,7 +202,7 @@ const PoapSheet = () => {
   };
 
   useFocusEffect(() => {
-    analyticsV2.track(event.poapsOpenedMintSheet, {
+    analytics.track(analytics.event.poapsOpenedMintSheet, {
       eventId: poapEvent.id,
       type: poapMintType,
     });
@@ -217,7 +210,7 @@ const PoapSheet = () => {
 
   return (
     <>
-      {ios && (
+      {IS_IOS && (
         <BlurWrapper height={deviceHeight} width={deviceWidth}>
           <BackgroundImage>
             <ImgixImage
@@ -231,7 +224,7 @@ const PoapSheet = () => {
         </BlurWrapper>
       )}
       <SlackSheet
-        backgroundColor={isDarkMode ? `rgba(22, 22, 22, ${ios ? 0.4 : 1})` : `rgba(26, 26, 26, ${ios ? 0.4 : 1})`}
+        backgroundColor={isDarkMode ? `rgba(22, 22, 22, ${IS_IOS ? 0.4 : 1})` : `rgba(26, 26, 26, ${IS_IOS ? 0.4 : 1})`}
         height={'100%'}
         ref={sheetRef}
         scrollEnabled
@@ -295,10 +288,10 @@ const PoapSheet = () => {
                 </SheetActionButtonRow>
                 <ButtonPressAnimation
                   onPress={() => {
-                    analyticsV2.track(event.poapsViewedOnPoap, {
+                    analytics.track(analytics.event.poapsViewedOnPoap, {
                       eventId: poapEvent.id,
                     });
-                    Linking.openURL(poapGalleryUrl);
+                    openInBrowser(poapGalleryUrl);
                   }}
                 >
                   <Text size="15pt" color="labelSecondary" weight="bold">

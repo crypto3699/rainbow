@@ -1,25 +1,27 @@
+import { analytics } from '@/analytics';
+import Divider from '@/components/Divider';
+import { ButtonPressAnimation, ScaleButtonZoomableAndroid } from '@/components/animations';
+import { Icon } from '@/components/icons';
+import { useDimensions } from '@/hooks';
+import Routes from '@/navigation/routesNames';
+import ShadowStack from '@/react-native-shadow-stack';
+import { Network } from '@/state/backendNetworks/types';
+import { getIsDamagedWallet, useAccountAddress } from '@/state/wallets/walletsStore';
+import styled from '@/styled-thing';
+import { padding, position } from '@/styles';
+import { openInBrowser } from '@/utils/openInBrowser';
+import { useRoute } from '@react-navigation/native';
 import { captureMessage } from '@sentry/react-native';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { Fragment, useCallback } from 'react';
-import { Linking, View } from 'react-native';
+import { View } from 'react-native';
 import networkInfo from '../helpers/networkInfo';
-import networkTypes from '../helpers/networkTypes';
 import showWalletErrorAlert from '../helpers/support';
 import { useNavigation } from '../navigation/Navigation';
 import { useTheme } from '../theme/ThemeContext';
 import { deviceUtils, magicMemo } from '../utils';
-import Divider from './Divider';
-import { ButtonPressAnimation, ScaleButtonZoomableAndroid } from './animations';
-import { Icon } from './icons';
 import { Centered, Row, RowWithMargins } from './layout';
 import { Text } from './text';
-import { analyticsV2 } from '@/analytics';
-import { useAccountSettings, useDimensions, useWallets } from '@/hooks';
-import Routes from '@/navigation/routesNames';
-import styled from '@/styled-thing';
-import { padding, position } from '@/styles';
-import ShadowStack from '@/react-native-shadow-stack';
-import { useRoute } from '@react-navigation/native';
 
 const ContainerWidth = 261;
 
@@ -122,8 +124,6 @@ const AmountButtonWrapper = styled(Row).attrs({
   ...(android && { width: isVeryNarrowPhone ? 95 : 100 }),
 });
 
-const onAddFromFaucet = accountAddress => Linking.openURL(`https://faucet.paradigm.xyz/?addr=${accountAddress}`);
-
 const InnerBPA = android ? ButtonPressAnimation : ({ children }) => children;
 
 const Wrapper = android ? ScaleButtonZoomableAndroid : AmountBPA;
@@ -172,16 +172,16 @@ const AmountButton = ({ amount, backgroundColor, color, onPress }) => {
 };
 
 const AddFundsInterstitial = ({ network }) => {
+  const onAddFromFaucet = accountAddress => openInBrowser(`https://faucet.paradigm.xyz/?addr=${accountAddress}`);
   const { isSmallPhone } = useDimensions();
   const { navigate } = useNavigation();
-  const { isDamaged } = useWallets();
-  const { accountAddress } = useAccountSettings();
+  const accountAddress = useAccountAddress();
   const { colors } = useTheme();
   const { name: routeName } = useRoute();
 
   const handlePressAmount = useCallback(
     amount => {
-      if (isDamaged) {
+      if (getIsDamagedWallet()) {
         showWalletErrorAlert();
         captureMessage('Damaged wallet preventing add cash');
         return;
@@ -191,31 +191,31 @@ const AddFundsInterstitial = ({ network }) => {
         params: !isNaN(amount) ? { amount } : null,
         screen: Routes.ADD_CASH_SCREEN_NAVIGATOR,
       });
-      analyticsV2.track(analyticsV2.event.buyButtonPressed, {
+      analytics.track(analytics.event.buyButtonPressed, {
         amount,
         componentName: 'AddFundsInterstitial',
         newWallet: true,
         routeName,
       });
     },
-    [isDamaged, navigate, routeName, accountAddress]
+    [navigate, routeName]
   );
 
   const addFundsToAccountAddress = useCallback(() => onAddFromFaucet(accountAddress), [accountAddress]);
 
   const handlePressCopyAddress = useCallback(() => {
-    if (isDamaged) {
+    if (getIsDamagedWallet()) {
       showWalletErrorAlert();
       return;
     }
     navigate(Routes.RECEIVE_MODAL);
-  }, [navigate, isDamaged]);
+  }, [navigate]);
 
   return (
     <Container isSmallPhone={isSmallPhone}>
-      {network === networkTypes.mainnet ? (
+      {network === Network.mainnet ? (
         <Fragment>
-          <Title>{ios ? lang.t('add_funds.to_get_started_ios') : lang.t('add_funds.to_get_started_android')}</Title>
+          <Title>{ios ? i18n.t(i18n.l.add_funds.to_get_started_ios) : i18n.t(i18n.l.add_funds.to_get_started_android)}</Title>
           <Row justify="space-between" marginVertical={30}>
             <AmountButton amount={100} backgroundColor={colors.swapPurple} color={colors.neonSkyblue} onPress={handlePressAmount} />
             <AmountButton amount={200} backgroundColor={colors.swapPurple} color={colors.neonSkyblue} onPress={handlePressAmount} />
@@ -225,34 +225,34 @@ const AddFundsInterstitial = ({ network }) => {
             <InterstitialButton onPress={handlePressAmount} radiusAndroid={23}>
               <InterstitialButtonContent>
                 <Text align="center" color={colors.alpha(colors.blueGreyDark, 0.6)} lineHeight="loose" size="large" weight="bold">
-                  {`􀍡 ${lang.t('wallet.add_cash.interstitial.other_amount')}`}
+                  {`􀍡 ${i18n.t(i18n.l.wallet.add_cash.interstitial.other_amount)}`}
                 </Text>
               </InterstitialButtonContent>
             </InterstitialButton>
           </InterstitialButtonRow>
           {!isSmallPhone && <InterstitialDivider />}
-          <Subtitle isSmallPhone={isSmallPhone}>{lang.t('add_funds.eth.or_send_eth')}</Subtitle>
+          <Subtitle isSmallPhone={isSmallPhone}>{i18n.t(i18n.l.add_funds.eth.or_send_eth)}</Subtitle>
 
-          <Paragraph>{lang.t('add_funds.eth.send_from_another_source')}</Paragraph>
+          <Paragraph>{i18n.t(i18n.l.add_funds.eth.send_from_another_source)}</Paragraph>
         </Fragment>
       ) : (
         <Fragment>
           <Title>
-            {lang.t('add_funds.test_eth.request_test_eth', {
+            {i18n.t(i18n.l.add_funds.test_eth.request_test_eth, {
               testnetName: networkInfo[network]?.name,
             })}
           </Title>
           <Row marginTop={30}>
             <InterstitialButton onPress={addFundsToAccountAddress}>
               <Text align="center" color={colors.alpha(colors.blueGreyDark, 0.6)} lineHeight="loose" size="large" weight="bold">
-                􀎬 {lang.t('add_funds.test_eth.add_from_faucet')}
+                􀎬 {i18n.t(i18n.l.add_funds.test_eth.add_from_faucet)}
               </Text>
             </InterstitialButton>
           </Row>
           {!isSmallPhone && <InterstitialDivider />}
-          <Subtitle isSmallPhone={isSmallPhone}>{lang.t('add_funds.test_eth.or_send_test_eth')}</Subtitle>
+          <Subtitle isSmallPhone={isSmallPhone}>{i18n.t(i18n.l.add_funds.test_eth.or_send_test_eth)}</Subtitle>
           <Paragraph>
-            {lang.t('add_funds.test_eth.send_test_eth_from_another_source', {
+            {i18n.t(i18n.l.add_funds.test_eth.send_test_eth_from_another_source, {
               testnetName: networkInfo[network]?.name,
             })}
           </Paragraph>
@@ -262,7 +262,7 @@ const AddFundsInterstitial = ({ network }) => {
         <CopyAddressButtonContent>
           <Icon color={colors.appleBlue} marginTop={0.5} name="copy" size={19} />
           <Text align="center" color={colors.appleBlue} lineHeight="loose" size="large" weight="bold">
-            {lang.t('wallet.settings.copy_address')}
+            {i18n.t(i18n.l.wallet.settings.copy_address)}
           </Text>
         </CopyAddressButtonContent>
       </CopyAddressButton>

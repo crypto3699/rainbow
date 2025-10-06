@@ -1,8 +1,8 @@
 import React from 'react';
 import Animated, {
   Easing,
+  SharedValue,
   interpolateColor,
-  useAnimatedGestureHandler,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
@@ -10,9 +10,14 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-
-import { Box, Columns, HitSlop, Separator, Text, useColorMode, useForegroundColor } from '@/design-system';
-import { opacity, stripCommas } from '@/__swaps__/utils/swaps';
+import { triggerHaptics } from 'react-native-turbo-haptics';
+import { supportedNativeCurrencies } from '@/references';
+import { TIMING_CONFIGS } from '@/components/animations/animationConfigs';
+import { Bleed, Box, Columns, HitSlop, Separator, Text, useColorMode, useForegroundColor } from '@/design-system';
+import { IS_IOS } from '@/env';
+import { equalWorklet } from '@/safe-math/SafeMath';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
+import { colors } from '@/styles';
 import {
   CUSTOM_KEYBOARD_HEIGHT,
   LIGHT_SEPARATOR_COLOR,
@@ -20,135 +25,214 @@ import {
   LONG_PRESS_REPEAT_DURATION,
   SEPARATOR_COLOR,
   THICK_BORDER_WIDTH,
-  buttonPressConfig,
-  fadeConfig,
 } from '@/__swaps__/screens/Swap/constants';
-import { LongPressGestureHandler, LongPressGestureHandlerGestureEvent } from 'react-native-gesture-handler';
-import { ButtonPressAnimation } from '@/components/animations';
-import { colors } from '@/styles';
 import { NavigationSteps, useSwapContext } from '@/__swaps__/screens/Swap/providers/swap-provider';
+import { InputKeys } from '@/__swaps__/types/swap';
+import { opacityWorklet, stripNonDecimalNumbers } from '@/__swaps__/utils/swaps';
+import { GestureHandlerButton } from './GestureHandlerButton';
 
 type numberPadCharacter = number | 'backspace' | '.';
 
+const getFormattedInputKey = (inputKey: InputKeys) => {
+  'worklet';
+  switch (inputKey) {
+    case 'inputAmount':
+      return 'formattedInputAmount';
+    case 'inputNativeValue':
+      return 'formattedInputNativeValue';
+    case 'outputAmount':
+      return 'formattedOutputAmount';
+    case 'outputNativeValue':
+      return 'formattedOutputNativeValue';
+  }
+};
+
 export const SwapNumberPad = () => {
   const { isDarkMode } = useColorMode();
-  const { focusedInput, SwapInputController, reviewProgress } = useSwapContext();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
+  const {
+    SwapInputController,
+    configProgress,
+    focusedInput,
+    internalSelectedInputAsset,
+    internalSelectedOutputAsset,
+    isQuoteStale,
+    outputQuotesAreDisabled,
+  } = useSwapContext();
+
+  const { inputMethod, inputNativePrice, inputValues, outputNativePrice, quoteFetchingInterval } = SwapInputController;
 
   const longPressTimer = useSharedValue(0);
+
+  const removeFormatting = (inputKey: InputKeys) => {
+    'worklet';
+    return stripNonDecimalNumbers(SwapInputController[getFormattedInputKey(inputKey)].value);
+  };
+
+  const ignoreChange = ({ currentValue, addingDecimal = false }: { currentValue?: string; addingDecimal?: boolean }) => {
+    'worklet';
+    const inputKey = focusedInput.value;
+
+    // ignore when: outputQuotesAreDisabled and we are updating the output amount or output native value
+    if ((inputKey === 'outputAmount' || inputKey === 'outputNativeValue') && outputQuotesAreDisabled.value) {
+      return true;
+    }
+
+    // ignore when: number of entered decimal places exceeds max precision
+    if (inputKey === 'inputAmount' || (inputKey === 'outputAmount' && currentValue?.includes('.'))) {
+      const isInputFocused = inputKey === 'inputAmount';
+      const currentDecimals = currentValue?.split('.')?.[1]?.length ?? -1;
+      const maxDecimals = (isInputFocused ? internalSelectedInputAsset.value?.decimals : internalSelectedOutputAsset.value?.decimals) ?? 18;
+      if (currentDecimals >= maxDecimals) return true;
+    }
+
+    // ignore when: corresponding asset does not have a price and we are updating native inputs
+    if ((inputKey === 'outputNativeValue' && !outputNativePrice.value) || (inputKey === 'inputNativeValue' && !inputNativePrice.value)) {
+      return true;
+    }
+
+    // ignore when: decimals exceed native currency decimals
+    if (currentValue) {
+      const currentValueDecimals = currentValue.split('.')?.[1]?.length ?? -1;
+      const nativeCurrencyDecimals = supportedNativeCurrencies[nativeCurrency].decimals;
+
+      const isNativePlaceholderValue = equalWorklet(currentValue, 0) && inputMethod.value !== inputKey;
+
+      if (addingDecimal && nativeCurrencyDecimals === 0) {
+        return true;
+      } else if (
+        (inputKey === 'inputNativeValue' || inputKey === 'outputNativeValue') &&
+        !isNativePlaceholderValue &&
+        currentValueDecimals >= nativeCurrencyDecimals
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const addNumber = (number?: number) => {
     'worklet';
     const inputKey = focusedInput.value;
-    if (SwapInputController.inputMethod.value !== inputKey) {
-      SwapInputController.inputMethod.value = inputKey;
+    const currentValue = removeFormatting(inputKey);
 
-      if (typeof SwapInputController.inputValues.value[inputKey] === 'number') {
-        SwapInputController.inputValues.modify(value => {
-          return {
-            ...value,
-            [inputKey]:
-              inputKey === 'inputAmount'
-                ? stripCommas(SwapInputController.formattedInputAmount.value)
-                : stripCommas(SwapInputController.formattedOutputAmount.value),
-          };
-        });
-      }
+    if (ignoreChange({ currentValue })) return;
+
+    // Immediately stop the quote fetching interval
+    quoteFetchingInterval.stop();
+
+    const currentInputMethod = inputMethod.value;
+
+    const isNativePlaceholderValue =
+      equalWorklet(currentValue, 0) &&
+      currentInputMethod !== inputKey &&
+      (inputKey === 'inputNativeValue' || inputKey === 'outputNativeValue');
+
+    const newValue = currentValue === '0' || isNativePlaceholderValue ? `${number}` : `${currentValue}${number}`;
+
+    // For a uint256, the maximum value is:
+    // 2e256 − 1 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+    // This value has 78 digits.
+    if (newValue.length > 78) return;
+
+    // Make the quote stale only when the number in the input actually changes
+    if (Number(newValue) !== 0 && !(currentValue.includes('.') && number === 0)) {
+      isQuoteStale.value = 1;
     }
-    const currentValue = SwapInputController.inputValues.value[inputKey];
-    const newValue = currentValue === 0 || currentValue === '0' ? `${number}` : `${currentValue}${number}`;
 
-    SwapInputController.inputValues.modify(value => {
-      return {
-        ...value,
-        [inputKey]: newValue,
-      };
-    });
+    if (currentInputMethod !== inputKey) {
+      inputMethod.value = inputKey;
+    }
+
+    inputValues.modify(value => ({
+      ...value,
+      [inputKey]: newValue,
+    }));
   };
 
   const addDecimalPoint = () => {
     'worklet';
     const inputKey = focusedInput.value;
-    const currentValue = SwapInputController.inputValues.value[inputKey].toString();
-    if (!currentValue.includes('.')) {
-      if (SwapInputController.inputMethod.value !== inputKey) {
-        SwapInputController.inputMethod.value = inputKey;
+    const currentValue = removeFormatting(inputKey);
 
-        SwapInputController.inputValues.modify(values => {
-          return {
-            ...values,
-            [inputKey]:
-              inputKey === 'inputAmount'
-                ? stripCommas(SwapInputController.formattedInputAmount.value)
-                : stripCommas(SwapInputController.formattedOutputAmount.value),
-          };
-        });
+    if (ignoreChange({ currentValue, addingDecimal: true })) {
+      return;
+    }
+
+    if (!currentValue.includes('.')) {
+      if (inputMethod.value !== inputKey) {
+        inputMethod.value = inputKey;
       }
 
       const newValue = `${currentValue}.`;
 
-      SwapInputController.inputValues.modify(values => {
-        return {
-          ...values,
-          [inputKey]: newValue,
-        };
-      });
+      inputValues.modify(values => ({
+        ...values,
+        [inputKey]: newValue,
+      }));
     }
   };
 
   const deleteLastCharacter = () => {
     'worklet';
-    const inputKey = focusedInput.value;
-    if (SwapInputController.inputMethod.value !== inputKey) {
-      SwapInputController.inputMethod.value = inputKey;
 
-      SwapInputController.inputValues.modify(values => {
-        return {
-          ...values,
-          [inputKey]:
-            inputKey === 'inputAmount'
-              ? stripCommas(SwapInputController.formattedInputAmount.value)
-              : stripCommas(SwapInputController.formattedOutputAmount.value),
-        };
-      });
+    if (ignoreChange({})) {
+      return;
     }
-    const currentValue = SwapInputController.inputValues.value[inputKey].toString();
+
+    const inputKey = focusedInput.value;
+
+    if (inputMethod.value !== inputKey) {
+      inputMethod.value = inputKey;
+    }
+
+    const currentValue = removeFormatting(inputKey);
     // Handle deletion, ensuring a placeholder zero remains if the entire number is deleted
     const newValue = currentValue.length > 1 ? currentValue.slice(0, -1) : 0;
+
+    // Make the quote stale only when the number in the input actually changes
+    if (!currentValue.endsWith('.') && !equalWorklet(currentValue, newValue)) {
+      isQuoteStale.value = 1;
+    }
+
     if (newValue === 0) {
-      SwapInputController.inputValues.modify(values => {
-        return {
-          ...values,
-          inputAmount: 0,
-          inputNativeValue: 0,
-          outputAmount: 0,
-          outputNativeValue: 0,
-        };
-      });
+      inputValues.modify(values => ({
+        ...values,
+        inputAmount: 0,
+        inputNativeValue: 0,
+        outputAmount: 0,
+        outputNativeValue: 0,
+      }));
     } else {
-      SwapInputController.inputValues.modify(values => {
-        return {
-          ...values,
-          [inputKey]: newValue,
-        };
-      });
+      inputValues.modify(values => ({
+        ...values,
+        [inputKey]: newValue,
+      }));
     }
   };
 
   const numpadContainerStyles = useAnimatedStyle(() => {
     return {
-      opacity: reviewProgress.value === NavigationSteps.SHOW_REVIEW ? withTiming(0, fadeConfig) : withTiming(1, fadeConfig),
+      opacity:
+        configProgress.value === NavigationSteps.SHOW_REVIEW ||
+        configProgress.value === NavigationSteps.SHOW_GAS ||
+        configProgress.value === NavigationSteps.SHOW_SETTINGS
+          ? withTiming(0, TIMING_CONFIGS.fadeConfig)
+          : withTiming(1, TIMING_CONFIGS.fadeConfig),
     };
   });
 
   return (
     <Box as={Animated.View} style={numpadContainerStyles} height={{ custom: CUSTOM_KEYBOARD_HEIGHT }} paddingHorizontal="6px" width="full">
       <Box style={{ gap: 6 }} width="full">
-        <Separator
-          color={{
-            custom: isDarkMode ? SEPARATOR_COLOR : LIGHT_SEPARATOR_COLOR,
-          }}
-          thickness={1}
-        />
+        <Bleed horizontal="6px">
+          <Separator
+            color={{
+              custom: isDarkMode ? SEPARATOR_COLOR : LIGHT_SEPARATOR_COLOR,
+            }}
+            thickness={1}
+          />
+        </Bleed>
         <Columns space="6px">
           <NumberPadKey char={1} onPressWorklet={addNumber} />
           <NumberPadKey char={2} onPressWorklet={addNumber} />
@@ -182,17 +266,21 @@ const NumberPadKey = ({
   transparent,
 }: {
   char: numberPadCharacter;
-  longPressTimer?: Animated.SharedValue<number>;
+  longPressTimer?: SharedValue<number>;
   onPressWorklet: (number?: number) => void;
   small?: boolean;
   transparent?: boolean;
 }) => {
+  const {
+    SwapInputController: { inputValues },
+    focusedInput,
+  } = useSwapContext();
   const { isDarkMode } = useColorMode();
 
   const pressProgress = useSharedValue(0);
 
   const scale = useDerivedValue(() => {
-    return withTiming(pressProgress.value === 1 ? 0.95 : 1, buttonPressConfig);
+    return withTiming(pressProgress.value === 1 ? 0.95 : 1, TIMING_CONFIGS.buttonPressConfig);
   });
 
   const backgroundColorProgress = useDerivedValue(() => {
@@ -208,36 +296,6 @@ const NumberPadKey = ({
   const separatorSecondary = useForegroundColor('separatorSecondary');
   const separatorTertiary = useForegroundColor('separatorTertiary');
 
-  // TODO: Refactor to use GestureDetector
-  const onLongPress = useAnimatedGestureHandler<LongPressGestureHandlerGestureEvent>({
-    onActive: (_, context: { alreadyTriggered?: boolean }) => {
-      if (!context.alreadyTriggered) {
-        pressProgress.value = 1;
-        if (typeof char === 'number') {
-          onPressWorklet(char);
-        } else {
-          onPressWorklet();
-        }
-
-        if (longPressTimer !== undefined && char === 'backspace') {
-          longPressTimer.value = 0;
-          longPressTimer.value = withTiming(10, { duration: 10000, easing: Easing.linear });
-        } else {
-          pressProgress.value = withDelay(500, withTiming(0, { duration: 0 }));
-        }
-      }
-
-      context.alreadyTriggered = true;
-    },
-    onFinish: (_, context: { alreadyTriggered?: boolean }) => {
-      pressProgress.value = 0;
-      if (longPressTimer !== undefined) {
-        longPressTimer.value = 0;
-      }
-      context.alreadyTriggered = false;
-    },
-  });
-
   useAnimatedReaction(
     () => Math.floor(((longPressTimer?.value ?? 0) * 1000) / LONG_PRESS_REPEAT_DURATION),
     (current, previous) => {
@@ -248,7 +306,12 @@ const NumberPadKey = ({
         current > previous &&
         current > Math.floor(LONG_PRESS_DELAY_DURATION / LONG_PRESS_REPEAT_DURATION)
       ) {
-        onPressWorklet();
+        const inputValue = inputValues.value[focusedInput.value];
+
+        if (inputValue !== 0) {
+          triggerHaptics('selection');
+          onPressWorklet();
+        }
       } else if (longPressTimer !== undefined) {
         longPressTimer.value === 0;
       }
@@ -260,7 +323,7 @@ const NumberPadKey = ({
     const fill = isDarkMode ? separatorSecondary : 'rgba(255, 255, 255, 0.72)';
     const pressedFill = isDarkMode ? separator : 'rgba(255, 255, 255, 1)';
 
-    const backgroundColor = transparent ? 'transparent' : fill;
+    const backgroundColor = transparent ? opacityWorklet(fill, 0) : fill;
     const pressedColor = transparent ? fill : pressedFill;
 
     return {
@@ -274,46 +337,62 @@ const NumberPadKey = ({
   }, [isDarkMode]);
 
   return (
-    // @ts-expect-error
-    <LongPressGestureHandler
-      // This 0.1ms activation delay gives ButtonPressAnimation time to trigger
-      // haptic feedback natively before the LongPressGestureHandler takes over
-      minDurationMs={0.1}
-      onGestureEvent={onLongPress}
-      shouldCancelWhenOutside
-    >
-      <Animated.View accessible accessibilityRole="button">
-        <HitSlop space="3px">
-          <ButtonPressAnimation scaleTo={1} useLateHaptic={false}>
-            <Box
-              alignItems="center"
-              as={Animated.View}
-              borderRadius={8}
-              height={{ custom: 46 }}
-              justifyContent="center"
-              style={[
-                !transparent && {
-                  borderColor: isDarkMode ? separatorTertiary : 'transparent',
-                  borderCurve: 'continuous',
-                  borderWidth: THICK_BORDER_WIDTH,
-                  shadowColor: isDarkMode ? 'transparent' : colors.dark,
-                  shadowOffset: {
-                    width: 0,
-                    height: isDarkMode ? 4 : 4,
-                  },
-                  shadowOpacity: isDarkMode ? 0 : 0.1,
-                  shadowRadius: 6,
-                },
-                pressStyle,
-              ]}
-            >
-              <Text align="center" color="label" size={small ? '22pt' : '26pt'} weight="semibold">
-                {char === 'backspace' ? '􀆛' : char}
-              </Text>
-            </Box>
-          </ButtonPressAnimation>
-        </HitSlop>
-      </Animated.View>
-    </LongPressGestureHandler>
+    <HitSlop space="3px">
+      <GestureHandlerButton
+        disableScale
+        longPressDuration={0}
+        onLongPressEndWorklet={() => {
+          'worklet';
+          pressProgress.value = 0;
+          if (longPressTimer !== undefined) {
+            longPressTimer.value = 0;
+          }
+        }}
+        onLongPressWorklet={() => {
+          'worklet';
+          pressProgress.value = 1;
+          if (typeof char === 'number') {
+            onPressWorklet(char);
+          } else {
+            onPressWorklet();
+          }
+
+          if (longPressTimer !== undefined && char === 'backspace') {
+            longPressTimer.value = 0;
+            longPressTimer.value = withTiming(10, { duration: 10000, easing: Easing.linear });
+          } else {
+            pressProgress.value = withDelay(500, withTiming(0, { duration: 0 }));
+          }
+        }}
+      >
+        <Animated.View
+          style={[
+            !transparent && {
+              borderColor: isDarkMode ? separatorTertiary : 'transparent',
+              borderCurve: 'continuous',
+              borderWidth: IS_IOS ? THICK_BORDER_WIDTH : 0,
+              shadowColor: isDarkMode ? 'transparent' : colors.dark,
+              shadowOffset: {
+                width: 0,
+                height: isDarkMode ? 4 : 4,
+              },
+              shadowOpacity: isDarkMode ? 0 : 0.1,
+              shadowRadius: 6,
+            },
+            {
+              alignItems: 'center',
+              borderRadius: 8,
+              height: 46,
+              justifyContent: 'center',
+            },
+            pressStyle,
+          ]}
+        >
+          <Text align="center" color="label" size={small ? '22pt' : '26pt'} weight="semibold">
+            {char === 'backspace' ? '􀆛' : char}
+          </Text>
+        </Animated.View>
+      </GestureHandlerButton>
+    </HitSlop>
   );
 };

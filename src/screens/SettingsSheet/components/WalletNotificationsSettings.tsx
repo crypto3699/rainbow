@@ -1,4 +1,4 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Switch } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, withTiming } from 'react-native-reanimated';
@@ -11,93 +11,88 @@ import {
   WalletNotificationRelationship,
   WalletNotificationTopic,
   WalletNotificationTopicType,
-  toggleGroupNotifications,
-  toggleTopicForWallet,
   updateGroupSettings,
   useWalletGroupNotificationSettings,
   WalletNotificationSettings,
 } from '@/notifications/settings';
+import { toggleGroupNotifications, toggleTopicForWallet } from '@/notifications/settings/settings';
 import { SettingsLoadingIndicator } from '@/screens/SettingsSheet/components/SettingsLoadingIndicator';
 import { showNotificationSubscriptionErrorAlert, showOfflineAlert } from '@/screens/SettingsSheet/components/notificationAlerts';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { updateSettingsForWalletWithAddress } from '@/notifications/settings/storage';
+import { DEFAULT_ENABLED_TOPIC_SETTINGS } from '@/notifications/settings/constants';
+import { RootStackParamList } from '@/navigation/types';
+import Routes from '@/navigation/routesNames';
 
 const makeTopicRowsData = (colors: ThemeContextProps['colors']) => [
   {
     topic: WalletNotificationTopic.SENT,
     icon: '􀈟',
     iconColor: colors.appleBlue,
-    text: lang.t('settings.notifications_section.sent'),
+    text: i18n.t(i18n.l.settings.notifications_section.sent),
   },
   {
     topic: WalletNotificationTopic.RECEIVED,
     icon: '􀅀',
     iconColor: colors.green,
-    text: lang.t('settings.notifications_section.received'),
+    text: i18n.t(i18n.l.settings.notifications_section.received),
   },
   {
     topic: WalletNotificationTopic.PURCHASED,
     icon: '􀑉',
     iconColor: colors.pink,
 
-    text: lang.t('settings.notifications_section.purchased'),
+    text: i18n.t(i18n.l.settings.notifications_section.purchased),
   },
   {
     topic: WalletNotificationTopic.SOLD,
     icon: '􀋡',
     iconColor: colors.orange,
-    text: lang.t('settings.notifications_section.sold'),
+    text: i18n.t(i18n.l.settings.notifications_section.sold),
   },
   {
     topic: WalletNotificationTopic.MINTED,
     icon: '􀆿',
     iconColor: colors.yellowOrange,
-    text: lang.t('settings.notifications_section.minted'),
+    text: i18n.t(i18n.l.settings.notifications_section.minted),
   },
   {
     topic: WalletNotificationTopic.SWAPPED,
     icon: '􀖅',
     iconColor: colors.swapPurple,
-    text: lang.t('settings.notifications_section.swapped'),
+    text: i18n.t(i18n.l.settings.notifications_section.swapped),
   },
   {
     topic: WalletNotificationTopic.APPROVALS,
     icon: '􀁢',
     iconColor: colors.green,
-    text: lang.t('settings.notifications_section.approvals'),
+    text: i18n.t(i18n.l.settings.notifications_section.approvals),
   },
   {
     topic: WalletNotificationTopic.OTHER,
     icon: '􀍡',
     iconColor: colors.blueGreyDark60,
-    text: lang.t('settings.notifications_section.other'),
+    text: i18n.t(i18n.l.settings.notifications_section.other),
   },
 ];
-
-type RouteParams = {
-  WalletNotificationsSettings: {
-    address: string;
-    notificationSettings: WalletNotificationSettings;
-  };
-};
 
 const WalletNotificationsSettings = () => {
   const { colors } = useTheme();
   const topicRowsData = useMemo(() => makeTopicRowsData(colors), [colors]);
-  const route = useRoute<RouteProp<RouteParams, 'WalletNotificationsSettings'>>();
+  const route = useRoute<RouteProp<RootStackParamList, typeof Routes.WALLET_NOTIFICATIONS_SETTINGS>>();
   const { isConnected } = useNetInfo();
   const { address, notificationSettings } = route.params;
 
   const [notifications, setNotificationSettings] = useState<WalletNotificationSettings>(notificationSettings);
   const updateSettings = useCallback(
     (options: Partial<WalletNotificationSettings>) => {
-      const newSettingsForWallet = updateSettingsForWalletWithAddress(address, options);
-
-      if (newSettingsForWallet) {
-        setNotificationSettings(newSettingsForWallet);
-      }
+      const newSettingsForWallet = {
+        ...notifications,
+        ...options,
+      };
+      setNotificationSettings(newSettingsForWallet);
+      setTopicState(newSettingsForWallet.topics);
     },
-    [address]
+    [address, notifications]
   );
 
   const { lastOwnedWalletEnabled, lastWatchedWalletEnabled, ownerEnabled, watcherEnabled } = useWalletGroupNotificationSettings();
@@ -107,7 +102,7 @@ const WalletNotificationsSettings = () => {
     const notificationsSectionEnabled = ownedWallet ? ownerEnabled : watcherEnabled;
     const lastWalletEnabled = ownedWallet ? lastOwnedWalletEnabled : lastWatchedWalletEnabled;
     return {
-      notificationsEnabled: notificationsSectionEnabled && notifications.enabled,
+      notificationsEnabled: notifications.enabled,
       notificationsSectionEnabled,
       lastWalletEnabled,
     };
@@ -127,54 +122,51 @@ const WalletNotificationsSettings = () => {
   // this states controls which we are currently updating
   const [topicSubscriptionInProgress, setTopicSubscriptionInProgress] = useState<WalletNotificationTopicType | null>(null);
 
-  const toggleAllowNotifications = useCallback(() => {
+  const toggleAllowNotifications = useCallback(async () => {
     if (!isConnected) {
       showOfflineAlert();
       return;
     }
     setAllState(prev => ({ status: !prev.status, loading: true }));
-    toggleGroupNotifications([notifications], notifications.type, !notificationsEnabled)
-      .then(() => {
-        if (!notificationsSectionEnabled || (notificationsSectionEnabled && lastWalletEnabled)) {
-          updateGroupSettings({
-            [notifications.type]: !notificationsEnabled,
-          });
-        }
-        updateSettings({
-          enabled: !notificationsEnabled,
+    const success = await toggleGroupNotifications([notifications], !notificationsEnabled);
+    if (success) {
+      if (!notificationsSectionEnabled || (notificationsSectionEnabled && lastWalletEnabled)) {
+        updateGroupSettings({
+          [notifications.type]: !notificationsEnabled,
         });
-        setAllState(prev => ({ ...prev, loading: false }));
-      })
-      .catch(() => {
-        showNotificationSubscriptionErrorAlert();
-        setAllState(prev => ({ status: !prev.status, loading: false }));
+      }
+      updateSettings({
+        enabled: !notificationsEnabled,
+        topics: notificationsEnabled ? {} : DEFAULT_ENABLED_TOPIC_SETTINGS,
       });
+      setAllState(prev => ({ ...prev, loading: false }));
+    } else {
+      showNotificationSubscriptionErrorAlert();
+      setAllState(prev => ({ status: !prev.status, loading: false }));
+    }
   }, [notificationsSectionEnabled, lastWalletEnabled, updateSettings, notificationsEnabled, notifications, isConnected]);
 
   const toggleTopic = useCallback(
-    (topic: WalletNotificationTopicType) => {
+    async (topic: WalletNotificationTopicType) => {
       if (!isConnected) {
         showOfflineAlert();
         return;
       }
       toggleStateForTopic(topic);
       setTopicSubscriptionInProgress(topic);
-      toggleTopicForWallet(notifications.type, notifications.address, topic, !notifications?.topics[topic])
-        .then(() => {
-          updateSettings({
-            topics: {
-              ...notifications.topics,
-              [topic]: !notifications?.topics[topic],
-            },
-          });
-        })
-        .catch(() => {
-          showNotificationSubscriptionErrorAlert();
-          toggleStateForTopic(topic);
-        })
-        .finally(() => {
-          setTopicSubscriptionInProgress(null);
+      const success = await toggleTopicForWallet(notifications.address, topic, !notifications?.topics[topic]);
+      if (success) {
+        updateSettings({
+          topics: {
+            ...notifications.topics,
+            [topic]: !notifications?.topics[topic],
+          },
         });
+      } else {
+        showNotificationSubscriptionErrorAlert();
+        toggleStateForTopic(topic);
+      }
+      setTopicSubscriptionInProgress(null);
     },
     [notifications, updateSettings, isConnected]
   );
@@ -242,7 +234,7 @@ const WalletNotificationsSettings = () => {
             </>
           }
           size={52}
-          titleComponent={<MenuItem.Title text={lang.t('settings.notifications_section.allow_notifications')} weight="bold" />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.allow_notifications)} weight="bold" />}
         />
       </Menu>
       <Animated.View style={animatedStyle}>

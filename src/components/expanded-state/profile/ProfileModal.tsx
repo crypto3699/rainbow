@@ -1,7 +1,7 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useRef } from 'react';
 import { View } from 'react-native';
-import Divider from '../../Divider';
+import Divider from '@/components/Divider';
 import { ButtonPressAnimation } from '../../animations';
 import { BiometricButtonContent } from '../../buttons';
 import CopyTooltip from '../../copy-tooltip';
@@ -57,18 +57,19 @@ const Container = styled(ProfileModalContainer).attrs({
 });
 
 type ProfileModalProps = {
-  address: string;
-  imageAvatar: string;
-  emojiAvatar: string;
-  accentColor: string;
-  toggleSubmitButtonIcon: boolean;
-  toggleAvatar: boolean;
+  address?: string;
+  imageAvatar?: string;
+  emojiAvatar?: string;
+  accentColor?: string;
+  toggleSubmitButtonIcon?: boolean;
+  toggleAvatar?: boolean;
   handleSubmit: () => void;
   onChange: (value: string) => void;
   inputValue: string;
   handleCancel: () => void;
   submitButtonText: string;
   placeholder: string;
+  disableChangeAvatar?: boolean;
 };
 
 const ProfileModal = ({
@@ -84,6 +85,7 @@ const ProfileModal = ({
   handleCancel,
   submitButtonText,
   placeholder,
+  disableChangeAvatar,
 }: ProfileModalProps) => {
   const { colors, isDarkMode } = useTheme();
   const inputRef = useRef<any>(null);
@@ -99,6 +101,7 @@ const ProfileModal = ({
               image={imageAvatar}
               isAvatarPickerAvailable={false}
               onPress={null}
+              disableChangeAvatar={disableChangeAvatar}
               overlayStyles={null}
               showcaseAccountColor={isDarkMode ? colors.trueBlack : colors.dark}
               showcaseAccountSymbol={null}
@@ -110,6 +113,7 @@ const ProfileModal = ({
               isAvatarPickerAvailable={false}
               onPress={null}
               overlayStyles={null}
+              disableChangeAvatar={disableChangeAvatar}
               showcaseAccountColor={accentColor}
               showcaseAccountSymbol={emojiAvatar}
             />
@@ -128,7 +132,7 @@ const ProfileModal = ({
           <CopyTooltip
             onHide={handleTriggerFocusInput}
             textToCopy={address}
-            tooltipText={lang.t('wallet.settings.copy_address_capitalized')}
+            tooltipText={i18n.t(i18n.l.wallet.settings.copy_address_capitalized)}
           >
             <ProfileAddressText address={address} />
           </CopyTooltip>
@@ -146,7 +150,7 @@ const ProfileModal = ({
             weight="medium"
             {...(android && { lineHeight: 21 })}
           >
-            {lang.t('button.cancel')}
+            {i18n.t(i18n.l.button.cancel)}
           </ProfileButtonText>
         </ProfileButton>
       </ColumnWithDividers>

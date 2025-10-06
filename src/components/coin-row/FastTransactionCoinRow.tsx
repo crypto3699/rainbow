@@ -1,91 +1,24 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ButtonPressAnimation } from '../animations';
 import FastTransactionStatusBadge from './FastTransactionStatusBadge';
 import { Bleed, Box, Inline, Text, globalColors, useForegroundColor } from '@/design-system';
-import { NativeCurrencyKey, RainbowTransaction } from '@/entities';
+import { NativeCurrencyKey, RainbowTransaction, TransactionStatus, TransactionType } from '@/entities';
 import { ThemeContextProps } from '@/theme';
 import { useNavigation } from '@/navigation';
 import Routes from '@rainbow-me/routes';
 import { ImgixImage } from '../images';
 import { CardSize } from '../unique-token/CardSize';
-import { ChainBadge } from '../coin-icon';
-import { Network } from '@/networks/types';
+import { ChainId } from '@/state/backendNetworks/types';
 import { address } from '@/utils/abbreviations';
-import { TransactionType } from '@/resources/transactions/types';
-import {
-  convertAmountAndPriceToNativeDisplay,
-  convertAmountToBalanceDisplay,
-  convertRawAmountToBalance,
-  greaterThan,
-} from '@/helpers/utilities';
 import { TwoCoinsIcon } from '../coin-icon/TwoCoinsIcon';
 import Spinner from '../Spinner';
-import * as lang from '@/languages';
-import RainbowCoinIcon from '../coin-icon/RainbowCoinIcon';
 
-export const getApprovalLabel = ({ approvalAmount, asset, type }: Pick<RainbowTransaction, 'type' | 'asset' | 'approvalAmount'>) => {
-  if (!approvalAmount || !asset) return;
-  if (approvalAmount === 'UNLIMITED') return lang.t(lang.l.transactions.approvals.unlimited);
-  if (type === 'revoke') return lang.t(lang.l.transactions.approvals.no_allowance);
-  const amountDisplay = convertRawAmountToBalance(
-    approvalAmount,
-    { decimals: asset?.decimals, symbol: asset?.symbol },
-    undefined,
-    true
-  )?.display;
-  return amountDisplay || '';
-};
+import RainbowCoinIcon from '@/components/coin-icon/RainbowCoinIcon';
+import { ChainImage } from '../coin-icon/ChainImage';
+import { useSuperTokenStore } from '@/screens/token-launcher/state/rainbowSuperTokenStore';
+import { activityValues, useTransactionLaunchToken } from '@/helpers/transactions';
 
-const approvalTypeValues = (transaction: RainbowTransaction) => {
-  const { asset, approvalAmount } = transaction;
-
-  if (!asset || !approvalAmount) return;
-  transaction.protocol;
-  return [transaction.protocol || '', getApprovalLabel(transaction)];
-};
-
-const swapTypeValues = (changes: RainbowTransaction['changes']) => {
-  const tokenIn = changes?.filter(c => c?.direction === 'in')[0];
-  const tokenOut = changes?.filter(c => c?.direction === 'out')[0];
-
-  if (!tokenIn?.asset.balance?.amount || !tokenOut?.asset.balance?.amount) return;
-
-  const valueOut = `${convertAmountToBalanceDisplay(tokenOut?.asset.balance?.amount, { ...tokenOut?.asset })}`;
-  const valueIn = `+${convertAmountToBalanceDisplay(tokenIn?.asset.balance?.amount, { ...tokenIn?.asset })}`;
-
-  return [valueOut, valueIn];
-};
-
-const activityValues = (transaction: RainbowTransaction, nativeCurrency: NativeCurrencyKey) => {
-  const { changes, direction, type } = transaction;
-  if (['swap', 'wrap', 'unwrap'].includes(type)) return swapTypeValues(changes);
-  if (['approve', 'revoke'].includes(type)) return approvalTypeValues(transaction);
-
-  const asset = changes?.filter(c => c?.direction === direction && c?.asset.type !== 'nft')[0]?.asset;
-  let valueSymbol = direction === 'out' ? '-' : '+';
-
-  if (type === 'send') {
-    valueSymbol = '-';
-  }
-  if (type === 'receive') {
-    valueSymbol = '+';
-  }
-
-  if (!asset) return;
-
-  const { balance } = asset;
-  if (balance?.amount === '0') return;
-
-  const assetValue = convertAmountToBalanceDisplay(balance?.amount || '0', asset);
-
-  const nativeBalance = convertAmountAndPriceToNativeDisplay(balance?.amount || '0', asset?.price?.value || '0', nativeCurrency);
-  const assetNativeValue = greaterThan(nativeBalance.amount, '0')
-    ? `${valueSymbol}${nativeBalance?.display}`
-    : lang.t(lang.l.transactions.no_value);
-
-  return greaterThan(nativeBalance.amount, '0') ? [`${assetValue}`, assetNativeValue] : [assetNativeValue, `${valueSymbol}${assetValue}`];
-};
 const getIconTopMargin = (type: TransactionType) => {
   switch (type) {
     case 'swap':
@@ -123,6 +56,7 @@ const activityTypeIcon: Record<TransactionType, string> = {
   claim: '􀄩',
   borrow: '􀄩',
   deployment: '􀄩',
+  launch: '􀓎',
 };
 
 export const ActivityTypeIcon = ({
@@ -132,8 +66,7 @@ export const ActivityTypeIcon = ({
   transaction: Pick<RainbowTransaction, 'status' | 'type'>;
   color: string;
 }) => {
-  // if (status === 'pending') return null;
-  if (status === 'pending') {
+  if (status === TransactionStatus.pending) {
     return <Spinner color={color} size={11} style={{ marginTop: -1, paddingRight: 2 }} />;
   }
 
@@ -164,6 +97,8 @@ const BottomRow = React.memo(function BottomRow({
   nativeCurrency: NativeCurrencyKey;
   theme: ThemeContextProps;
 }) {
+  const launchToken = useTransactionLaunchToken(transaction);
+
   const { type, to, asset } = transaction;
   const separatorSecondary = useForegroundColor('separatorSecondary');
 
@@ -172,6 +107,10 @@ const BottomRow = React.memo(function BottomRow({
   if (type === 'contract_interaction' && to) {
     description = transaction.contract?.name || address(to, 6, 4);
     tag = transaction.description;
+  }
+
+  if (type === 'launch' && launchToken) {
+    description = launchToken?.name;
   }
 
   if (transaction?.type === 'mint') {
@@ -191,7 +130,7 @@ const BottomRow = React.memo(function BottomRow({
     .filter(Boolean).length;
   if (nftChangesAmount) tag = nftChangesAmount.toString();
 
-  const [topValue, bottomValue] = activityValues(transaction, nativeCurrency) ?? [];
+  const [, bottomValue] = activityValues(transaction, nativeCurrency) ?? [];
 
   return (
     <View style={sx.bottomRow}>
@@ -246,44 +185,42 @@ export const ActivityIcon = ({
   size?: 40 | 20 | 14 | 16;
   theme: ThemeContextProps;
 }) => {
+  const rainbowSuperToken = useMemo(() => {
+    if (transaction?.type === 'launch') {
+      return useSuperTokenStore.getState().getSuperTokenByTransactionHash(transaction.hash);
+    }
+    return undefined;
+  }, [transaction.hash, transaction.type]);
+
   if (['wrap', 'unwrap', 'swap'].includes(transaction?.type)) {
     const inAsset = transaction?.changes?.find(a => a?.direction === 'in')?.asset;
     const outAsset = transaction?.changes?.find(a => a?.direction === 'out')?.asset;
 
-    if (!!inAsset?.icon_url && !!outAsset?.icon_url) return <TwoCoinsIcon over={inAsset} under={outAsset} badge={badge} />;
+    if (!!inAsset?.icon_url && !!outAsset?.icon_url)
+      return <TwoCoinsIcon over={inAsset} under={outAsset} badge={badge && transaction.chainId !== ChainId.mainnet} />;
   }
-  if (transaction?.contract?.iconUrl) {
+
+  let contractIconUrl = transaction?.contract?.iconUrl;
+  let coinIconUrl = transaction?.asset?.icon_url;
+  if (transaction?.type === 'launch') {
+    if (rainbowSuperToken) {
+      if (transaction.asset?.colors && rainbowSuperToken?.color) {
+        transaction.asset.colors.primary = rainbowSuperToken?.color;
+      }
+      coinIconUrl = rainbowSuperToken?.imageUrl;
+    }
+    contractIconUrl = undefined;
+  }
+
+  if (contractIconUrl) {
     return (
-      <View
-        style={{
-          shadowColor: globalColors.grey100,
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.02,
-          shadowRadius: 3,
-          overflow: 'visible',
-        }}
-      >
-        <View
-          style={{
-            shadowColor: !transaction?.asset?.color ? globalColors.grey100 : transaction.asset.color,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.24,
-            shadowRadius: 9,
-          }}
-        >
-          <ImgixImage
-            size={CardSize}
-            style={{
-              width: size,
-              height: size,
-              borderRadius: 10,
-            }}
-            source={{
-              uri: transaction?.contract?.iconUrl,
-            }}
-          />
-        </View>
-        {transaction.network !== Network.mainnet && <ChainBadge network={transaction.network} badgeYPosition={0} />}
+      <View style={sx.iconContainer}>
+        <RainbowCoinIcon
+          icon={contractIconUrl}
+          chainId={transaction?.asset?.chainId || ChainId.mainnet}
+          symbol={transaction?.asset?.symbol || ''}
+          color={transaction?.asset?.colors?.primary || transaction?.asset?.colors?.fallback || undefined}
+        />
       </View>
     );
   }
@@ -326,7 +263,7 @@ export const ActivityIcon = ({
             shadowRadius: 9,
           }}
         >
-          {/* @ts-ignore local nft assets have diff types */}
+          {/* @ts-expect-error local nft assets have diff types */}
           {transaction.asset.icon_url || transaction.asset.image_url ? (
             <ImgixImage
               size={CardSize}
@@ -336,7 +273,7 @@ export const ActivityIcon = ({
                 borderRadius: 10,
               }}
               source={{
-                // @ts-ignore local nft assets have diff types
+                // @ts-expect-error local nft assets have diff types
                 uri: transaction.asset.icon_url || transaction.asset.image_url,
               }}
             />
@@ -356,7 +293,7 @@ export const ActivityIcon = ({
             </Box>
           )}
         </View>
-        {transaction.network !== Network.mainnet && <ChainBadge network={transaction.network} badgeYPosition={0} />}
+        <ChainImage badgeXPosition={-10} chainId={transaction.chainId} showBadge={badge && transaction.chainId !== ChainId.mainnet} />
       </View>
     );
   }
@@ -364,12 +301,10 @@ export const ActivityIcon = ({
   return (
     <View style={sx.iconContainer}>
       <RainbowCoinIcon
-        size={40}
-        icon={transaction?.asset?.icon_url}
-        network={transaction?.asset?.network || Network.mainnet}
+        icon={coinIconUrl}
+        chainId={transaction?.asset?.chainId || ChainId.mainnet}
         symbol={transaction?.asset?.symbol || ''}
-        theme={theme}
-        colors={transaction?.asset?.colors}
+        color={transaction?.asset?.colors?.primary || transaction?.asset?.colors?.fallback || undefined}
       />
     </View>
   );
@@ -385,21 +320,21 @@ export default React.memo(function TransactionCoinRow({
   theme: ThemeContextProps;
 }) {
   const { colors } = theme;
-  const navigation = useNavigation();
+  const { navigate } = useNavigation();
 
   const onPress = useCallback(() => {
-    navigation.navigate(Routes.TRANSACTION_DETAILS, {
+    navigate(Routes.TRANSACTION_DETAILS, {
       transaction: item,
     });
-  }, [item, navigation]);
+  }, [item, navigate]);
 
-  const [topValue, bottomValue] = activityValues(item, nativeCurrency) ?? [];
+  const [topValue] = activityValues(item, nativeCurrency) ?? [];
 
   return (
-    <ButtonPressAnimation onPress={onPress} scaleTo={0.96} uniqueId={`${item.hash}-${item.network}`}>
+    <ButtonPressAnimation onPress={onPress} scaleTo={0.96} uniqueId={`${item.hash}-${item.chainId}`}>
       <View style={sx.wholeRow} testID={`${item.title}-${item.description}-${item.balance?.display}`}>
         <View style={sx.icon}>
-          <ActivityIcon size={40} transaction={item} theme={theme} />
+          <ActivityIcon transaction={item} theme={theme} />
         </View>
 
         <View style={sx.column}>

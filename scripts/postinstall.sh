@@ -31,6 +31,19 @@ fi
 if [ -e .env ]; then
   source .env
 
+  function rewrite_xcode_configs_native_prefix {
+    VALUE=$( cat .env | { grep "$1" || true; } )
+    if [ -n "$VALUE" ]; then
+      echo "$VALUE" | sed "s/$1/NATIVE_$1/" >> ./ios/debug.xcconfig
+      echo "$VALUE" | sed "s/$1/NATIVE_$1/" >> ./ios/release.xcconfig
+      echo "$VALUE" | sed "s/$1/NATIVE_$1/" >> ./ios/localrelease.xcconfig
+      echo "$VALUE" | sed "s/$1/NATIVE_$1/" >> ./ios/staging.xcconfig
+    else
+      echo "$1 not found in .env";
+      exit 1;
+    fi
+  }
+
   function rewrite_xcode_configs {
     VALUE=$( cat .env | { grep "$1" || true; } )
     if [ -n "$VALUE" ]; then
@@ -50,7 +63,7 @@ if [ -e .env ]; then
     rewrite_xcode_configs "BRANCH"
     rewrite_xcode_configs "GOOGLE"
     rewrite_xcode_configs "CODE_PUSH_DEPLOYMENT_KEY_IOS"
-
+    rewrite_xcode_configs_native_prefix "METADATA_BASE_URL"
     # Override Google Services API Key
     if [ -n "$GOOGLE_SERVICE_API_KEY" ]; then
       sed -i''-e "s/\$(GOOGLE_SERVICE_API_KEY)/$GOOGLE_SERVICE_API_KEY/" ./ios/Frameworks/GoogleService-Info.plist
@@ -98,8 +111,9 @@ git update-index --assume-unchanged "ios/Internals/ios/Internals-Bridging-Header
 git update-index --assume-unchanged "ios/Extras.json"
 git update-index --assume-unchanged "android/app/src/main/res/raw/extras.json"
 git update-index --assume-unchanged "android/app/src/main/java/me/rainbow/NativeModules/Internals/InternalModule.java"
-git update-index --assume-unchanged "android/app/src/main/java/me/rainbow/MainActivity.java"
+git update-index --assume-unchanged "android/app/src/main/java/me/rainbow/MainActivity.kt"
 git update-index --assume-unchanged "src/components/DappBrowser/DappBrowserWebview.tsx"
+git update-index --assume-unchanged "src/graphql/config.js"
 
 
 # Specifying ONLY the node packages that we need to install via browserify

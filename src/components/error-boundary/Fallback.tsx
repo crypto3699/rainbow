@@ -1,13 +1,12 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React from 'react';
 import { View } from 'react-native';
-import RNExitApp from 'react-native-exit-app';
 import { Centered } from '../layout';
 import { SheetActionButton } from '../sheet';
 import Text from '../text/Text';
 import styled from '@/styled-thing';
-import { useTheme } from '@/theme';
-import logger from '@/utils/logger';
+import { RainbowError, logger } from '@/logger';
+import { Colors } from '@/styles';
 
 const Spacer = styled(View)({
   height: ({ height }: { height: number }) => height,
@@ -25,30 +24,43 @@ const Message = styled(View)({
   textAlign: 'center',
 });
 
-export default function Fallback() {
-  const { colors } = useTheme();
+export default function Fallback({
+  colors,
+  error,
+  componentStack,
+  resetError,
+}: {
+  colors: Colors;
+  error: unknown;
+  componentStack: string;
+  resetError: () => void;
+}) {
   const handleRestart = () => {
-    logger.sentry('Restarting app after Error Boundary catch');
-    RNExitApp.exitApp();
+    logger.error(new RainbowError('[ErrorBoundary]: RainbowAppRestartFromErrorBoundary', error), {
+      data: {
+        componentStack,
+      },
+    });
+    resetError();
   };
   return (
     <Container>
       <Message>
         <Centered>
           <Text align="center" color={colors.dark} size="bigger" weight="heavy">
-            {lang.t('error_boundary.error_boundary_oops')} 😅
+            {i18n.t(i18n.l.error_boundary.error_boundary_oops)} 😅
           </Text>
         </Centered>
         <Spacer height={15} />
         <Centered>
           <Text align="center" color={colors.alpha(colors.blueGreyDark, 0.7)} lineHeight="loose" size="large" weight="bold">
-            {lang.t('error_boundary.something_went_wrong')}
+            {i18n.t(i18n.l.error_boundary.something_went_wrong)}
           </Text>
         </Centered>
         <Spacer height={21} />
         <Centered>
           <Text align="center" color={colors.alpha(colors.blueGreyDark, 0.7)} lineHeight="loose" size="large" weight="bold">
-            {lang.t('error_boundary.wallets_are_safe')}
+            {i18n.t(i18n.l.error_boundary.wallets_are_safe)}
           </Text>
         </Centered>
         <Spacer height={33} />
@@ -56,7 +68,7 @@ export default function Fallback() {
           <SheetActionButton
             color={colors.alpha(colors.appleBlue, 0.06)}
             isTransparent
-            label={`🌈 ${lang.t('error_boundary.restart_rainbow')}`}
+            label={`🌈 ${i18n.t(i18n.l.error_boundary.restart_rainbow)}`}
             onPress={handleRestart}
             size="big"
             textColor={colors.appleBlue}

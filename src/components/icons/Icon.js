@@ -6,6 +6,7 @@ import ApplePayIcon from './svg/ApplePayIcon';
 import ArrowBackIcon from './svg/ArrowBack';
 import ArrowCircledIcon from './svg/ArrowCircledIcon';
 import ArrowIcon from './svg/ArrowIcon';
+import { Asterisk } from './svg/Asterisk';
 import AvatarIcon from './svg/AvatarIcon';
 import BTCIcon from './svg/BTCIcon';
 import BackspaceIcon from './svg/BackspaceIcon';
@@ -67,6 +68,7 @@ import SnapchatIcon from './svg/SnapchatIcon';
 import SpinnerIcon from './svg/SpinnerIcon';
 import StarIcon from './svg/StarIcon';
 import SwapIcon from './svg/SwapIcon';
+import { XIcon } from './svg/XIcon';
 import { TabActivity } from './svg/TabActivity';
 import { TabActivityInner } from './svg/TabActivityInner';
 import { TabActivityInnerFill } from './svg/TabActivityInnerFill';
@@ -85,18 +87,21 @@ import { TabDappBrowserInnerFill } from './svg/TabDappBrowserInnerFill';
 import TelegramIcon from './svg/TelegramIcon';
 import ThreeDotsIcon from './svg/ThreeDotsIcon';
 import TouchIdIcon from './svg/TouchIdIcon';
-import TwitterIcon from './svg/TwitterIcon';
 import WalletConnectIcon from './svg/WalletConnectIcon';
 import WalletSwitcherCaret from './svg/WalletSwitcherCaret';
 import WarningCircledIcon from './svg/WarningCircledIcon';
 import WarningIcon from './svg/WarningIcon';
+import { FarcasterIcon } from './svg/FarcasterIcon';
 import BridgeIcon from './svg/BridgeIcon';
+import { DragHandlerIcon } from './svg/DragHandlerIcon';
+import { TabKingOfTheHill } from './svg/TabKingOfTheHill';
 
 const IconTypes = {
   applePay: ApplePayIcon,
   arrow: ArrowIcon,
   arrowBack: ArrowBackIcon,
   arrowCircled: ArrowCircledIcon,
+  asterisk: Asterisk,
   avatar: AvatarIcon,
   backspace: BackspaceIcon,
   bridge: BridgeIcon,
@@ -118,6 +123,7 @@ const IconTypes = {
   dogeCoin: DOGEIcon,
   dot: DotIcon,
   doubleCaret: DoubleCaretIcon,
+  dragHandler: DragHandlerIcon,
   emojiActivities: EmojiActivitiesIcon,
   emojiAnimals: EmojiAnimalsIcon,
   emojiFlags: EmojiFlagsIcon,
@@ -178,18 +184,21 @@ const IconTypes = {
   tabDappBrowser: TabDappBrowser,
   tabDappBrowserInner: TabDappBrowserInner,
   tabDappBrowserInnerFill: TabDappBrowserInnerFill,
+  tabKingOfTheHill: TabKingOfTheHill,
   telegram: TelegramIcon,
   threeDots: ThreeDotsIcon,
   touchid: TouchIdIcon,
-  twitter: TwitterIcon,
   walletConnect: WalletConnectIcon,
   walletSwitcherCaret: WalletSwitcherCaret,
   warning: WarningIcon,
   warningCircled: WarningCircledIcon,
+  farcaster: FarcasterIcon,
+  x: XIcon,
 };
 
 const Icon = ({ name, testID, ...props }, ref) => {
   const IconElement = IconTypes[name] || Flex;
+  // TODO: This should either be removed or add the useTheme hook import it currently does nothing
   const { colors } = useTheme();
   return <IconElement {...props} colors={colors} name={name} ref={ref} testID={testID} />;
 };

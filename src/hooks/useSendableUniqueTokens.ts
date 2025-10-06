@@ -1,26 +1,38 @@
 import { groupBy } from 'lodash';
-import { useAccountSettings } from '.';
+import { useAccountAddress } from '@/state/wallets/walletsStore';
 import { useLegacyNFTs } from '@/resources/nfts';
+import { useMemo } from 'react';
 
-export default function useSendableUniqueTokens() {
-  const { accountAddress } = useAccountSettings();
+export default function useUniqueTokens() {
+  const accountAddress = useAccountAddress();
   const {
     data: { nfts: uniqueTokens },
-  } = useLegacyNFTs({ address: accountAddress });
+    isLoading: isFetchingNfts,
+  } = useLegacyNFTs({
+    address: accountAddress,
+    config: {
+      enabled: !!accountAddress,
+    },
+  });
 
-  const sendableUniqueTokens = uniqueTokens?.filter((uniqueToken: any) => uniqueToken.isSendable);
-  const grouped = groupBy(sendableUniqueTokens, token => token.familyName);
-  const families = Object.keys(grouped).sort();
-  let sendableTokens = [];
-  for (let i = 0; i < families.length; i++) {
-    let newObject = {};
-    newObject = {
-      data: grouped[families[i]],
-      familyId: i,
-      familyImage: grouped[families[i]][0].familyImage,
-      name: families[i],
-    };
-    sendableTokens.push(newObject);
-  }
-  return { sendableUniqueTokens: sendableTokens, uniqueTokens };
+  const sendableUniqueTokens = useMemo(() => {
+    if (!uniqueTokens?.length) return [];
+
+    const sendableTokens = uniqueTokens.filter(uniqueToken => uniqueToken.isSendable);
+    const grouped = groupBy(sendableTokens, token => token.collectionName);
+    const families = Object.keys(grouped).sort();
+
+    return families.map((family, index) => ({
+      data: grouped[family],
+      familyId: index,
+      familyImage: grouped[family][0].collectionImageUrl ?? null,
+      name: family,
+    }));
+  }, [uniqueTokens]);
+
+  return {
+    sendableUniqueTokens,
+    uniqueTokens,
+    isFetchingNfts,
+  };
 }

@@ -6,7 +6,7 @@ ios/GoogleService-Info.plist
 ios/ReaHeader.h
 ios/AppDelegate.pch
 .DS_Store
-ios/Pods/
+**/Pods/
 ios/*dSYM.zip
 ios/debug.xcconfig
 ios/release.xcconfig
@@ -32,6 +32,7 @@ DerivedData
 *.hmap
 *.ipa
 *.xcuserstate
+**/.xcode.env.local
 project.xcworkspace
 ios/main.jsbundle.map
 src/config/debug.ts
@@ -42,6 +43,7 @@ build/
 android/app/src/main/java/me/rainbow/NativeModules/Internals/
 .idea
 .gradle
+.kotlin
 local.properties
 *.iml
 android/app/google-services.json
@@ -108,14 +110,38 @@ coverage-ts
 src/languages/types-generated.d.ts
 __generated__/
 
+# graphql codegen
+src/graphql/config.js
+
 # Test Coverage
 coverage
-
-# VSCode
-.vscode/
 
 # Zed
 .zed/
 
 # Webpack
 InjectedJSBundle.js.LICENSE.txt
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+src/references/networks.json
+# Expo
+.expo
+dist/
+web-build/
+
+# Sentry
+.sentry/
+
+# E2E CI
+e2e-artifacts/
+anvil.log
+
+.rnef/
+.rock/

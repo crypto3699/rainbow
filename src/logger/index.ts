@@ -7,7 +7,7 @@ import * as env from '@/env';
 import { DebugContext } from '@/logger/debugContext';
 import { device } from '@/storage';
 import { push } from '@/logger/logDump';
-import { getExperimetalFlag, LOG_PUSH } from '@/config/experimental';
+import { getExperimentalFlag, LOG_PUSH } from '@/config/experimental';
 
 export enum LogLevel {
   Debug = 'debug',
@@ -90,7 +90,7 @@ function withColor([x, y]: [number, number]) {
  * A developer setting that pushes log lines to an array in-memory so that
  * they can be "dumped" or copied out of the app and analyzed.
  */
-const LOG_PUSH_ENABLED = getExperimetalFlag(LOG_PUSH);
+const LOG_PUSH_ENABLED = getExperimentalFlag(LOG_PUSH);
 
 /**
  * Used in dev mode to nicely log to the console
@@ -175,8 +175,28 @@ export const sentryTransport: Transport = (level: LogLevel, message, { type, tag
     });
   }
 };
+export class RainbowError extends Error {
+  constructor(message: string, cause?: Error | unknown, options: ErrorOptions = {}) {
+    if (cause !== undefined) {
+      // eslint-disable-next-line no-param-reassign
+      options = { ...options, cause };
+    }
+    super(message, options);
+    this.name = this.constructor.name;
+  }
 
-export class RainbowError extends Error {}
+  toString() {
+    if (this.cause) {
+      return `${super.toString()} ↠ ${this.cause.toString()}`;
+    }
+    return super.toString();
+  }
+}
+
+export function ensureError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  return new Error(String(error));
+}
 
 /**
  * Main class. Defaults are provided in the constructor so that subclasses are
@@ -267,7 +287,7 @@ export class Logger {
  *   `logger.debug(message[, metadata, debugContext])`
  *   `logger.info(message[, metadata])`
  *   `logger.warn(message[, metadata])`
- *   `logger.error(error[, metadata])`
+ *   `logger.error(RainbowError[, metadata])`
  *   `logger.disable()`
  *   `logger.enable()`
  */

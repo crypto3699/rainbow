@@ -1,25 +1,21 @@
-import React from 'react';
-import { useTheme } from '@/theme';
-import { AccentColorProvider, Box, useBackgroundColor } from '@/design-system';
+import { opacity } from '@/__swaps__/utils/swaps';
 import { ShimmerAnimation } from '@/components/animations';
+import { AccentColorProvider, Box, useBackgroundColor, useColorMode } from '@/design-system';
+import React from 'react';
+import { DimensionValue } from 'react-native';
 
-export const Skeleton = ({ width, height }: { width: number; height: number }) => {
-  const { isDarkMode, colors } = useTheme();
+export const Skeleton = ({ width, height }: { width: DimensionValue; height: DimensionValue }) => {
+  const { isDarkMode } = useColorMode();
 
-  const surfaceSecondaryElevated = useBackgroundColor('surfaceSecondaryElevated');
-  const surfaceSecondary = useBackgroundColor('surfaceSecondary');
-
-  const skeletonColor = isDarkMode ? surfaceSecondaryElevated : surfaceSecondary;
+  const fill = useBackgroundColor('fill');
+  const fillSecondary = useBackgroundColor('fillSecondary');
+  const shimmerColor = opacity(fill, isDarkMode ? 0.025 : 0.06);
+  const skeletonColor = isDarkMode ? opacity('#191A1C', 0.7) : fillSecondary;
 
   return (
     <AccentColorProvider color={skeletonColor}>
-      <Box background="accent" height={{ custom: height }} width={{ custom: width }} borderRadius={18} style={{ overflow: 'hidden' }}>
-        <ShimmerAnimation
-          color={colors.alpha(colors.blueGreyDark, 0.06)}
-          width={width}
-          // @ts-ignore
-          gradientColor={colors.alpha(colors.blueGreyDark, 0.06)}
-        />
+      <Box background="accent" borderRadius={18} style={{ overflow: 'hidden', width, height }}>
+        <ShimmerAnimation color={shimmerColor} gradientColor={shimmerColor} />
       </Box>
     </AccentColorProvider>
   );

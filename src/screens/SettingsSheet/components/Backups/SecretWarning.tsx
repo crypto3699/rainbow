@@ -1,39 +1,27 @@
+import { SheetActionButton } from '@/components/sheet';
+import { Bleed, Box, Column, Columns, Inset, Stack, Text } from '@/design-system';
+import { TextColor } from '@/design-system/color/palettes';
+import { IS_ANDROID } from '@/env';
 import React, { useCallback } from 'react';
 
-import { useDimensions, useWallets } from '@/hooks';
+import { useDimensions } from '@/hooks';
 import { useNavigation } from '@/navigation';
 
-import * as i18n from '@/languages';
-import WalletBackupTypes from '@/helpers/walletBackupTypes';
 import WalletTypes from '@/helpers/walletTypes';
-
-import { SheetActionButton } from '@/components/sheet';
-import { Box, Inset, Stack, Text, Bleed, Column, Columns } from '@/design-system';
-
+import * as i18n from '@/languages';
 import { sharedCoolModalTopOffset } from '@/navigation/config';
-
-import { IS_ANDROID } from '@/env';
-import { TextColor } from '@/design-system/color/palettes';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
+import { useWallets } from '@/state/wallets/walletsStore';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { SETTINGS_BACKUP_ROUTES } from './routes';
 
 const MIN_HEIGHT = 740;
 
-type SecretWarningPageParams = {
-  SecretWarningPage: {
-    title: string;
-    walletId: string;
-    privateKeyAddress?: string;
-    isBackingUp?: boolean;
-    backupType?: keyof typeof WalletBackupTypes;
-  };
-};
-
 const SecretWarningPage = () => {
   const { height: deviceHeight } = useDimensions();
-  const { wallets } = useWallets();
+  const wallets = useWallets();
   const { navigate } = useNavigation();
-  const { params } = useRoute<RouteProp<SecretWarningPageParams, 'SecretWarningPage'>>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.SECRET_WARNING>>();
 
   const { walletId, privateKeyAddress, isBackingUp, backupType, title } = params;
 
@@ -44,7 +32,7 @@ const SecretWarningPage = () => {
       : i18n.t(i18n.l.back_up.secret.private_key_title);
 
   const handleViewSecretPhrase = useCallback(() => {
-    navigate(SETTINGS_BACKUP_ROUTES.SHOW_SECRET, {
+    navigate(Routes.SHOW_SECRET, {
       title,
       privateKeyAddress,
       isBackingUp,
@@ -133,7 +121,13 @@ const SecretWarningPage = () => {
         </Stack>
       </Inset>
 
-      <Box position="absolute" bottom={{ custom: IS_ANDROID ? 40 : 20 }} alignItems="center" style={{ paddingHorizontal: 24 }}>
+      <Box
+        testID={'show-secret-button'}
+        position="absolute"
+        bottom={{ custom: IS_ANDROID ? 40 : 20 }}
+        alignItems="center"
+        style={{ paddingHorizontal: 24 }}
+      >
         <SheetActionButton
           label={i18n.t(i18n.l.back_up.warning.button, {
             typeName: secretText,

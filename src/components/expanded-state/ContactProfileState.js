@@ -1,4 +1,4 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Keyboard } from 'react-native';
 import { useNavigation } from '../../navigation/Navigation';
@@ -7,7 +7,7 @@ import { magicMemo } from '../../utils';
 import ProfileModal from './profile/ProfileModal';
 import useExperimentalFlag, { PROFILES } from '@/config/experimentalHooks';
 import { removeFirstEmojiFromString, returnStringFirstEmoji } from '@/helpers/emojiHandler';
-import { useAccountSettings, useContacts, useENSAvatar } from '@/hooks';
+import { useContacts, useENSAvatar } from '@/hooks';
 import { addressHashedColorIndex, addressHashedEmoji } from '@/utils/profileUtils';
 import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
 
@@ -24,20 +24,18 @@ const ContactProfileState = ({ address, color, contact, ens, nickname }) => {
 
   const colorIndex = useMemo(() => color || addressHashedColorIndex(address) || 0, [address, color]);
 
-  const { network } = useAccountSettings();
-
   const handleAddContact = useCallback(() => {
     const nickname = profilesEnabled ? value : (emoji ? `${emoji} ${value}` : value).trim();
     if (value?.length > 0) {
-      onAddOrUpdateContacts(address, nickname, colors.avatarBackgrounds[colorIndex || 0], network, ens);
+      Keyboard.dismiss();
+      onAddOrUpdateContacts(address, nickname, colors.avatarBackgrounds[colorIndex || 0], ens);
       goBack();
     }
-    android && Keyboard.dismiss();
-  }, [address, colorIndex, colors.avatarBackgrounds, emoji, ens, goBack, network, onAddOrUpdateContacts, profilesEnabled, value]);
+  }, [address, colorIndex, colors.avatarBackgrounds, emoji, ens, goBack, onAddOrUpdateContacts, profilesEnabled, value]);
 
   const handleCancel = useCallback(() => {
+    Keyboard.dismiss();
     goBack();
-    android && Keyboard.dismiss();
   }, [goBack]);
 
   const { data: avatar } = useENSAvatar(ens, { enabled: Boolean(ens) });
@@ -57,9 +55,9 @@ const ContactProfileState = ({ address, color, contact, ens, nickname }) => {
       imageAvatar={avatarUrl}
       inputValue={value}
       onChange={setValue}
-      placeholder={lang.t('contacts.input_placeholder')}
+      placeholder={i18n.t(i18n.l.contacts.input_placeholder)}
       profileName={ens}
-      submitButtonText={lang.t('contacts.options.add')}
+      submitButtonText={i18n.t(i18n.l.contacts.options.add)}
       toggleAvatar
       toggleSubmitButtonIcon={false}
     />

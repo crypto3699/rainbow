@@ -1,53 +1,38 @@
-import { useQuery } from '@tanstack/react-query';
-import { createQueryKey, queryClient } from '@/react-query';
-import remoteConfig from '@react-native-firebase/remote-config';
-import {
-  ARBITRUM_MAINNET_RPC,
-  DATA_API_KEY,
-  DATA_ENDPOINT,
-  DATA_ORIGIN,
-  ETHEREUM_GOERLI_RPC,
-  ETHEREUM_GOERLI_RPC_DEV,
-  ETHEREUM_MAINNET_RPC,
-  ETHEREUM_MAINNET_RPC_DEV,
-  OPTIMISM_MAINNET_RPC,
-  POLYGON_MAINNET_RPC,
-  BASE_MAINNET_RPC,
-  BASE_MAINNET_RPC_DEV,
-  BSC_MAINNET_RPC,
-  ZORA_MAINNET_RPC,
-  AVALANCHE_MAINNET_RPC,
-  AVALANCHE_MAINNET_RPC_DEV,
-  BLAST_MAINNET_RPC,
-  DEGEN_MAINNET_RPC,
-} from 'react-native-dotenv';
+import remoteConfig, { FirebaseRemoteConfigTypes } from '@react-native-firebase/remote-config';
+import { dequal } from 'dequal';
+import { IS_DEV } from '@/env';
+import isTestFlight from '@/helpers/isTestFlight';
+import { CURRENT_APP_VERSION } from '@/hooks/useAppVersion';
 import { RainbowError, logger } from '@/logger';
-import { getNetwork, saveNetwork } from '@/handlers/localstorage/globalSettings';
-import { web3SetHttpProvider } from '@/handlers/web3';
+import { ChainId, Network } from '@/state/backendNetworks/types';
+import { createQueryStore } from '@/state/internal/createQueryStore';
 import { delay } from '@/utils/delay';
+import { time } from '@/utils/time';
+import { shallowEqual } from '@/worklets/comparisons';
 
-export interface RainbowConfig extends Record<string, string | boolean | number> {
-  arbitrum_mainnet_rpc: string;
-  bsc_mainnet_rpc: string;
-  data_api_key: string;
-  data_endpoint: string;
-  data_origin: string;
-  default_slippage_bips: string;
-  ethereum_goerli_rpc: string;
-  ethereum_mainnet_rpc: string;
-  f2c_enabled: boolean;
-  flashbots_enabled: boolean;
+// ============ RainbowConfig ================================================== //
+
+const REMOTE_CONFIG_VERSION = digitsOnly(CURRENT_APP_VERSION);
+
+export interface RainbowConfig extends Record<string, string | boolean | number | Record<string, number> | number[]> {
+  /* Objects */
+  default_slippage_bips: Record<string, number>;
+  default_slippage_bips_chainId: Record<string, number>;
+
+  /* Arrays */
+  rewards_claim_networks: number[];
+
+  /* Strings */
   op_nft_network: string;
-  op_rewards_enabled: boolean;
-  optimism_mainnet_rpc: string;
-  polygon_mainnet_rpc: string;
-  zora_mainnet_rpc: string;
-  base_mainnet_rpc: string;
-  avalanche_mainnet_rpc: string;
-  degen_mainnet_rpc: string;
-  blast_mainnet_rpc: string;
-  swagg_enabled: boolean;
+
+  /* Numbers */
   trace_call_block_number_offset: number;
+  trending_tokens_limit: number;
+
+  /* Booleans */
+  f2c_enabled: boolean;
+  op_rewards_enabled: boolean;
+  swagg_enabled: boolean;
   profiles_enabled: boolean;
 
   arbitrum_enabled: boolean;
@@ -86,42 +71,91 @@ export interface RainbowConfig extends Record<string, string | boolean | number>
   remote_promo_enabled: boolean;
   points_notifications_toggle: boolean;
   dapp_browser: boolean;
-  swaps_v2: boolean;
+  idfa_check_enabled: boolean;
+  rewards_enabled: boolean;
+
+  degen_mode: boolean;
+  featured_results: boolean;
+  claimables: boolean;
+  nfts_enabled: boolean;
+
+  trending_tokens_enabled: boolean;
+  new_discover_cards_enabled: boolean;
+  rainbow_trending_tokens_list_enabled: boolean;
+  prince_of_the_hill_enabled: boolean;
+  king_of_the_hill_enabled: boolean;
+  candlestick_charts_enabled: boolean;
+  rainbow_toasts_enabled: boolean;
+  king_of_the_hill2_enabled: boolean;
 }
 
-export const DEFAULT_CONFIG: RainbowConfig = {
-  arbitrum_mainnet_rpc: ARBITRUM_MAINNET_RPC,
-  data_api_key: DATA_API_KEY,
-  data_endpoint: DATA_ENDPOINT || 'wss://api-v4.zerion.io',
-  data_origin: DATA_ORIGIN,
-  default_slippage_bips: JSON.stringify({
-    arbitrum: 200,
-    mainnet: 100,
-    optimism: 200,
-    polygon: 200,
-    bsc: 200,
-    base: 200,
-    zora: 200,
-    avalanche: 200,
-    blast: 200,
-    degen: 200,
-  }),
-  ethereum_goerli_rpc: __DEV__ ? ETHEREUM_GOERLI_RPC_DEV : ETHEREUM_GOERLI_RPC,
-  ethereum_mainnet_rpc: __DEV__ ? ETHEREUM_MAINNET_RPC_DEV : ETHEREUM_MAINNET_RPC,
-  f2c_enabled: true,
-  flashbots_enabled: true,
+const Bips = {
+  [100]: 100,
+  [200]: 200,
+  default: 500,
+};
+
+export const DEFAULT_SLIPPAGE_BIPS_CHAINID = {
+  [ChainId.apechain]: Bips.default,
+  [ChainId.arbitrum]: Bips.default,
+  [ChainId.avalanche]: Bips.default,
+  [ChainId.base]: Bips.default,
+  [ChainId.blast]: Bips.default,
+  [ChainId.bsc]: Bips['200'],
+  [ChainId.degen]: Bips.default,
+  [ChainId.gnosis]: Bips.default,
+  [ChainId.gravity]: Bips.default,
+  [ChainId.ink]: Bips.default,
+  [ChainId.linea]: Bips.default,
+  [ChainId.mainnet]: Bips['100'],
+  [ChainId.optimism]: Bips.default,
+  [ChainId.polygon]: Bips['200'],
+  [ChainId.sanko]: Bips.default,
+  [ChainId.scroll]: Bips.default,
+  [ChainId.zksync]: Bips.default,
+  [ChainId.zora]: Bips.default,
+};
+
+export const DEFAULT_SLIPPAGE_BIPS = {
+  [Network.apechain]: Bips.default,
+  [Network.arbitrum]: Bips.default,
+  [Network.avalanche]: Bips.default,
+  [Network.base]: Bips.default,
+  [Network.blast]: Bips.default,
+  [Network.bsc]: Bips['200'],
+  [Network.degen]: Bips.default,
+  [Network.gnosis]: Bips.default,
+  [Network.gravity]: Bips.default,
+  [Network.ink]: Bips.default,
+  [Network.linea]: Bips.default,
+  [Network.mainnet]: Bips['100'],
+  [Network.optimism]: Bips.default,
+  [Network.polygon]: Bips['200'],
+  [Network.sanko]: Bips.default,
+  [Network.scroll]: Bips.default,
+  [Network.zksync]: Bips.default,
+  [Network.zora]: Bips.default,
+};
+
+export const DEFAULT_CONFIG = {
+  /* Objects */
+  default_slippage_bips: DEFAULT_SLIPPAGE_BIPS,
+  default_slippage_bips_chainId: DEFAULT_SLIPPAGE_BIPS_CHAINID,
+
+  /* Arrays */
+  rewards_claim_networks: [ChainId.optimism],
+
+  /* Strings */
   op_nft_network: 'op-mainnet',
-  op_rewards_enabled: false,
-  optimism_mainnet_rpc: OPTIMISM_MAINNET_RPC,
-  polygon_mainnet_rpc: POLYGON_MAINNET_RPC,
-  bsc_mainnet_rpc: BSC_MAINNET_RPC,
-  zora_mainnet_rpc: ZORA_MAINNET_RPC,
-  base_mainnet_rpc: __DEV__ ? BASE_MAINNET_RPC_DEV : BASE_MAINNET_RPC,
-  avalanche_mainnet_rpc: __DEV__ ? AVALANCHE_MAINNET_RPC_DEV : AVALANCHE_MAINNET_RPC,
-  degen_mainnet_rpc: DEGEN_MAINNET_RPC,
-  blast_mainnet_rpc: BLAST_MAINNET_RPC,
-  swagg_enabled: true,
+
+  /* Numbers */
   trace_call_block_number_offset: 20,
+  trending_tokens_limit: 10,
+
+  /* Booleans */
+  f2c_enabled: true,
+  op_rewards_enabled: false,
+  swagg_enabled: true,
   profiles_enabled: true,
 
   arbitrum_enabled: true,
@@ -136,7 +170,6 @@ export const DEFAULT_CONFIG: RainbowConfig = {
   degen_enabled: true,
 
   mainnet_enabled: true,
-
   goerli_enabled: true,
 
   arbitrum_tx_enabled: true,
@@ -149,118 +182,217 @@ export const DEFAULT_CONFIG: RainbowConfig = {
   avalanche_tx_enabled: true,
   degen_tx_enabled: true,
   blast_tx_enabled: true,
-
   mainnet_tx_enabled: true,
-
   goerli_tx_enabled: true,
 
-  base_swaps_enabled: false,
-  blast_swaps_enabled: false,
+  base_swaps_enabled: true,
+  blast_swaps_enabled: true,
   mints_enabled: true,
   points_enabled: true,
   points_fully_enabled: true,
   rpc_proxy_enabled: true,
-  remote_cards_enabled: false,
+  remote_cards_enabled: true,
   remote_promo_enabled: false,
   points_notifications_toggle: true,
-  dapp_browser: false,
-  swaps_v2: false,
+  dapp_browser: true,
+  idfa_check_enabled: false,
+  rewards_enabled: true,
+
+  degen_mode: true,
+  featured_results: true,
+  claimables: true,
+  nfts_enabled: true,
+
+  trending_tokens_enabled: false,
+  new_discover_cards_enabled: false,
+  rainbow_trending_tokens_list_enabled: false,
+  king_of_the_hill2_enabled: false,
+  king_of_the_hill_enabled: false,
+  prince_of_the_hill_enabled: false,
+  candlestick_charts_enabled: IS_DEV || isTestFlight || false,
+  rainbow_toasts_enabled: IS_DEV || isTestFlight || false,
+} as const satisfies Readonly<RainbowConfig>;
+
+type RemoteConfigKey = keyof typeof DEFAULT_CONFIG;
+
+// ============ Firebase Defaults ============================================== //
+
+type StringifiedFirebaseDefaults = Readonly<{
+  default_slippage_bips: string;
+  default_slippage_bips_chainId: string;
+  rewards_claim_networks: string;
+}>;
+
+const STRINGIFIED_FIREBASE_DEFAULTS: StringifiedFirebaseDefaults = {
+  default_slippage_bips: JSON.stringify(DEFAULT_CONFIG.default_slippage_bips),
+  default_slippage_bips_chainId: JSON.stringify(DEFAULT_CONFIG.default_slippage_bips_chainId),
+  rewards_claim_networks: JSON.stringify(DEFAULT_CONFIG.rewards_claim_networks),
 };
 
-export async function fetchRemoteConfig(): Promise<RainbowConfig> {
-  const config: RainbowConfig = { ...DEFAULT_CONFIG };
-  try {
-    await remoteConfig().fetchAndActivate();
-    logger.debug('Remote config fetched successfully');
-    const parameters = remoteConfig().getAll();
-    Object.entries(parameters).forEach($ => {
-      const [key, entry] = $;
-      if (key === 'default_slippage_bips') {
-        config[key] = JSON.parse(entry.asString());
-      } else if (
-        key === 'flashbots_enabled' ||
-        key === 'f2c_enabled' ||
-        key === 'swagg_enabled' ||
-        key === 'op_rewards_enabled' ||
-        key === 'profiles_enabled' ||
-        key === 'mainnet_tx_enabled' ||
-        key === 'arbitrum_tx_enabled' ||
-        key === 'bsc_tx_enabled' ||
-        key === 'polygon_tx_enabled' ||
-        key === 'optimism_tx_enabled' ||
-        key === 'zora_tx_enabled' ||
-        key === 'base_tx_enabled' ||
-        key === 'degen_tx_enabled' ||
-        key === 'blast_tx_enabled' ||
-        key === 'avalanche_tx_enabled' ||
-        key === 'op_chains_tx_enabled' ||
-        key === 'goerli_tx_enabled' ||
-        key === 'mainnet_enabled' ||
-        key === 'arbitrum_enabled' ||
-        key === 'bsc_enabled' ||
-        key === 'polygon_enabled' ||
-        key === 'optimism_enabled' ||
-        key === 'zora_enabled' ||
-        key === 'base_enabled' ||
-        key === 'degen_enabled' ||
-        key === 'blast_enabled' ||
-        key === 'avalanche_enabled' ||
-        key === 'op_chains_enabled' ||
-        key === 'goerli_enabled' ||
-        key === 'base_swaps_enabled' ||
-        key === 'mints_enabled' ||
-        key === 'points_enabled' ||
-        key === 'points_fully_enabled' ||
-        key === 'rpc_proxy_enabled' ||
-        key === 'remote_promo_enabled' ||
-        key === 'remote_cards_enabled' ||
-        key === 'points_notifications_toggle' ||
-        key === 'dapp_browser' ||
-        key === 'swaps_v2'
-      ) {
-        config[key] = entry.asBoolean();
-      } else {
-        config[key] = entry.asString();
-      }
-    });
-    return config;
-  } catch (e) {
-    logger.error(new RainbowError('Failed to fetch remote config'), {
-      error: e,
-    });
-    throw e;
-  } finally {
-    logger.debug(`Current remote config:\n${JSON.stringify(config, null, 2)}`);
-    const currentNetwork = await getNetwork();
-    web3SetHttpProvider(currentNetwork);
-    saveNetwork(currentNetwork);
+type FirebaseConfigDefaults = Omit<RainbowConfig, keyof StringifiedFirebaseDefaults> &
+  StringifiedFirebaseDefaults &
+  FirebaseRemoteConfigTypes.ConfigDefaults;
+
+/**
+ * Builds the payload for `rc.setDefaults` with stringified objects.
+ */
+function getFirebaseDefaults(): FirebaseConfigDefaults {
+  return { ...DEFAULT_CONFIG, ...STRINGIFIED_FIREBASE_DEFAULTS };
+}
+
+// ============ Remote Config Store ============================================ //
+
+interface RemoteConfigState {
+  config: RainbowConfig;
+  lastFetchedVersion: number;
+  getRemoteConfigKey: <K extends RemoteConfigKey>(key: K) => RainbowConfig[K];
+}
+
+export const useRemoteConfigStore = createQueryStore<RainbowConfig, never, RemoteConfigState>(
+  {
+    fetcher: fetchRemoteConfig,
+    retryDelay: (retryCount: number) => Math.min(retryCount > 1 ? 2 ** retryCount * 1_000 : 1_000, 30_000),
+    setData: ({ data, set }) =>
+      set(state => {
+        const configChanged = !dequal(state.config, data);
+        const versionChanged = state.lastFetchedVersion !== REMOTE_CONFIG_VERSION;
+
+        return configChanged || versionChanged
+          ? {
+              config: configChanged ? data : state.config,
+              lastFetchedVersion: REMOTE_CONFIG_VERSION,
+            }
+          : state;
+      }),
+
+    cacheTime: time.weeks(1),
+    maxRetries: 3,
+    staleTime: time.minutes(10),
+  },
+
+  (_, get) => ({
+    config: DEFAULT_CONFIG,
+    lastFetchedVersion: 0,
+    getRemoteConfigKey: key => get().config[key],
+  }),
+
+  { storageKey: 'remoteConfig' }
+);
+
+// ============ Public Methods ================================================= //
+
+export async function initializeRemoteConfig(): Promise<void> {
+  const { fetch, lastFetchedVersion } = useRemoteConfigStore.getState();
+  if (lastFetchedVersion !== REMOTE_CONFIG_VERSION) {
+    await Promise.race([fetch(undefined, { force: true }), delay(time.seconds(3))]);
+  } else {
+    requestIdleCallback(() => fetch(undefined, { force: true }), { timeout: time.seconds(5) });
   }
 }
 
-const remoteConfigQueryKey = createQueryKey('remoteConfig', {});
-
-const QUERY_PARAMS = {
-  queryKey: remoteConfigQueryKey,
-  queryFn: fetchRemoteConfig,
-  staleTime: 600_000, // 10 minutes,
-  placeholderData: DEFAULT_CONFIG,
-  retry: 3,
-  retryDelay: (attempt: number) => Math.min(attempt > 1 ? 2 ** attempt * 1000 : 1000, 30 * 1000),
-};
-
-export async function initializeRemoteConfig(): Promise<void> {
-  await remoteConfig().setConfigSettings({
-    minimumFetchIntervalMillis: 120_000,
-  });
-  await remoteConfig().setDefaults(DEFAULT_CONFIG);
-  await Promise.race([queryClient.prefetchQuery(QUERY_PARAMS), delay(3000)]);
-}
-
 export function getRemoteConfig(): RainbowConfig {
-  return queryClient.getQueryData(remoteConfigQueryKey) ?? DEFAULT_CONFIG;
+  return useRemoteConfigStore.getState().config;
 }
 
-export function useRemoteConfig(): RainbowConfig {
-  const query = useQuery<RainbowConfig>(QUERY_PARAMS);
-  return query?.data ?? DEFAULT_CONFIG;
+export function useRemoteConfig(): RainbowConfig;
+export function useRemoteConfig<const K extends readonly RemoteConfigKey[]>(...keys: K): Pick<RainbowConfig, K[number]>;
+export function useRemoteConfig<const K extends readonly RemoteConfigKey[]>(...keys: K): RainbowConfig | Pick<RainbowConfig, K[number]> {
+  return useRemoteConfigStore(
+    state => (keys.length ? selectRemoteConfigKeys(state, keys) : state.config),
+    keys.length ? shallowEqual : undefined
+  );
+}
+
+// ============ Fetcher ======================================================== //
+
+const PARSERS = buildParsers(DEFAULT_CONFIG);
+let hasInitializedRemoteConfig = false;
+
+async function fetchRemoteConfig(): Promise<RainbowConfig> {
+  const rc = remoteConfig();
+  const newConfig: RainbowConfig = { ...DEFAULT_CONFIG };
+
+  if (!hasInitializedRemoteConfig) {
+    await Promise.all([rc.setConfigSettings({ minimumFetchIntervalMillis: time.minutes(2) }), rc.setDefaults(getFirebaseDefaults())]).then(
+      () => {
+        hasInitializedRemoteConfig = true;
+      }
+    );
+  }
+
+  await rc.fetchAndActivate();
+  const params = rc.getAll();
+
+  for (const key of Object.keys(PARSERS)) {
+    const configValue = params[key];
+    if (configValue !== undefined) newConfig[key] = PARSERS[key](configValue);
+  }
+
+  return newConfig;
+}
+
+// ============ Helper Functions =============================================== //
+
+/**
+ * Converts a string to a number by removing non-numeric characters.
+ * @param string - The string to convert.
+ * @returns The number that results from removing non-numeric characters, or 0 if the resulting string is empty.
+ */
+function digitsOnly(string: string): number {
+  const numeric = string.replace(/\D+/g, '');
+  return numeric.length ? Number(numeric) : 0;
+}
+
+type Parser<K extends keyof RainbowConfig = keyof RainbowConfig> = (value: FirebaseRemoteConfigTypes.ConfigValue) => RainbowConfig[K];
+type Parsers = { [K in keyof RainbowConfig]: Parser<K> };
+
+function buildParsers(defaults: RainbowConfig): Parsers {
+  const parseFunctions = {
+    boolean: v => v.asBoolean(),
+    number: v => v.asNumber(),
+    string: v => v.asString(),
+  } satisfies Record<string, Parser>;
+
+  const parsers: Partial<Parsers> = {};
+
+  for (const key in defaults) {
+    const defaultValue = defaults[key];
+    if (defaultValue === undefined) continue;
+    let parser: Parser<typeof key>;
+
+    switch (typeof defaultValue) {
+      case 'boolean':
+        parser = parseFunctions.boolean;
+        break;
+      case 'number':
+        parser = parseFunctions.number;
+        break;
+      case 'string':
+        parser = parseFunctions.string;
+        break;
+      default:
+        parser = v => {
+          try {
+            return JSON.parse(v.asString());
+          } catch (error) {
+            logger.error(new RainbowError(`Error parsing remote config value for key: ${key}`, error));
+            return defaultValue;
+          }
+        };
+    }
+
+    parsers[key] = parser;
+  }
+
+  return parsers as Parsers;
+}
+
+function selectRemoteConfigKeys<const K extends RemoteConfigKey>(
+  state: RemoteConfigState,
+  keys: readonly K[] | undefined
+): RainbowConfig | Pick<RainbowConfig, K> {
+  if (!keys) return state.config;
+  const result: Partial<RainbowConfig> = {};
+  for (const key of keys) result[key] = state.config[key];
+  return result as Pick<RainbowConfig, K>;
 }

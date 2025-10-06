@@ -1,9 +1,9 @@
 import React, { Fragment, useMemo } from 'react';
-import { PressableProps, TouchableWithoutFeedback } from 'react-native';
+import { PressableProps, TouchableWithoutFeedback, StyleSheet } from 'react-native';
 import { buildAssetUniqueIdentifier } from '../../helpers/assets';
 import { useTheme } from '../../theme/ThemeContext';
-import { deviceUtils, getUniqueTokenType, magicMemo } from '../../utils';
-import Divider from '../Divider';
+import { deviceUtils, magicMemo } from '../../utils';
+import Divider from '@/components/Divider';
 import { ButtonPressAnimation } from '../animations';
 import { RequestVendorLogoIcon } from '../coin-icon';
 import { Centered } from '../layout';
@@ -15,9 +15,9 @@ import svgToPngIfNeeded from '@/handlers/svgs';
 import { padding } from '@/styles';
 
 const dividerHeight = 22;
-const isSmallPhone = android || deviceUtils.dimensions.height <= 667;
+const isSmallPhone = deviceUtils.dimensions.height <= 667;
 const isTinyPhone = deviceUtils.dimensions.height <= 568;
-const selectedHeight = isTinyPhone ? 50 : android || isSmallPhone ? 64 : 70;
+const selectedHeight = isTinyPhone ? 50 : isSmallPhone ? 64 : 70;
 
 const selectedStyles = {
   height: selectedHeight,
@@ -39,35 +39,27 @@ const BottomRow = ({ selected, subtitle }: { selected: boolean; subtitle: string
   );
 };
 
-const TopRow = ({ id, name, selected }: { id: number; name: string; selected: boolean }) => {
+const TopRow = ({ tokenId, name, selected }: { tokenId: string; name: string; selected: boolean }) => {
   const { colors } = useTheme();
 
   return (
     <CoinName color={colors.dark} size={selected ? 'large' : 'lmedium'} weight={selected ? 'bold' : 'regular'}>
-      {name || `#${id}`}
+      {name || `#${tokenId}`}
     </CoinName>
   );
 };
 
 const UniqueTokenCoinIcon = magicMemo(
   asset => {
-    const {
-      collection: { name },
-      background,
-      image_thumbnail_url,
-      image_url,
-      selected,
-      shouldPrioritizeImageLoading,
-      ...props
-    } = asset;
+    const { collectionName, backgroundColor, images, selected, shouldPrioritizeImageLoading, ...props } = asset;
     const { colors } = useTheme();
-    const imageUrl = svgToPngIfNeeded(image_thumbnail_url || image_url, true);
+    const imageUrl = svgToPngIfNeeded(images.lowResUrl || images.highResUrl, true);
     return (
       <Centered>
         <RequestVendorLogoIcon
-          backgroundColor={background || colors.lightestGrey}
+          backgroundColor={backgroundColor || colors.lightestGrey}
           borderRadius={10}
-          dappName={name}
+          dappName={collectionName}
           imageUrl={imageUrl}
           noShadow={selected}
           shouldPrioritizeImageLoading={shouldPrioritizeImageLoading}
@@ -77,7 +69,7 @@ const UniqueTokenCoinIcon = magicMemo(
       </Centered>
     );
   },
-  ['background', 'image_thumbnail_url']
+  ['backgroundColor', 'images.lowResUrl', 'images.highResUrl']
 );
 
 const CollectiblesSendRow = React.memo(
@@ -99,14 +91,7 @@ const CollectiblesSendRow = React.memo(
   }) => {
     const { colors } = useTheme();
 
-    const uniqueTokenType = getUniqueTokenType(item);
-    const isENS = uniqueTokenType === 'ENS';
-
-    const subtitle = useMemo(
-      () => (item.name && !isENS ? `${item.collection.name} #${item.id}` : item.collection.name),
-
-      [isENS, item.collection.name, item.id, item.name]
-    );
+    const subtitle = useMemo(() => (item.name ? item.name : item.collectionName), [item.collectionName, item.name]);
 
     const Wrapper = disablePressAnimation ? TouchableWithoutFeedback : ButtonPressAnimation;
 
@@ -114,7 +99,6 @@ const CollectiblesSendRow = React.memo(
       <Fragment>
         {isFirstRow && (
           <Centered height={dividerHeight}>
-            {/* @ts-expect-error JavaScript component */}
             <Divider color={colors.rowDividerLight} />
           </Centered>
         )}

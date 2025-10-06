@@ -85,7 +85,7 @@ function splitPositionStyles(style: ViewStyle) {
   ];
 }
 
-export const ApplyShadow = React.forwardRef(({ backgroundColor, children: child, shadows }: ApplyShadowProps, ref: React.Ref<any>) => {
+export const ApplyShadow = ({ backgroundColor, children: child, shadows }: ApplyShadowProps) => {
   if (!shadows) return child;
 
   const [parentStyles, childStyles] = splitPositionStyles(StyleSheet.flatten(child.props.style) || {});
@@ -96,15 +96,17 @@ export const ApplyShadow = React.forwardRef(({ backgroundColor, children: child,
   };
 
   return (
-    <View ref={ref} style={parentStyles}>
-      {(ios || web) && <IOSShadow backgroundColor={backgroundColor} shadows={iosShadows} style={childStyles} />}
-      {android && <AndroidShadow backgroundColor={backgroundColor} shadow={shadows.android} style={childStyles} />}
+    <View style={parentStyles}>
+      {(ios || web) && <IOSShadow backgroundColor={backgroundColor} shadows={iosShadows} style={[childStyles, { overflow: 'visible' }]} />}
+      {android && (
+        <AndroidShadow backgroundColor={backgroundColor} shadow={shadows.android} style={[childStyles, { overflow: 'visible' }]} />
+      )}
 
       {React.cloneElement(child, {
         style: [{ flex: 1 }, childStyles, android ? androidChildStyles : undefined],
       })}
     </View>
   );
-});
+};
 
 ApplyShadow.displayName = 'ApplyShadow';

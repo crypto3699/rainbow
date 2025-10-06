@@ -4,12 +4,12 @@
  */
 import { event } from '../event';
 
-export const analyticsV2 = {
+export const analytics = {
   identify: jest.fn(),
   screen: jest.fn(),
   track: jest.fn(),
   setDeviceId: jest.fn(),
-  setCurrentWalletAddressHash: jest.fn(),
+  setWalletContext: jest.fn(),
   enable: jest.fn(),
   disable: jest.fn(),
   event,

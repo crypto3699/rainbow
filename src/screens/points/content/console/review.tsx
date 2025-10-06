@@ -1,20 +1,21 @@
-import React, { useState } from 'react';
+import { analytics } from '@/analytics';
 import { AnimatePresence } from '@/components/animations/AnimatePresence';
-import Paragraph from '../../components/Paragraph';
-import Line from '../../components/Line';
-import { AnimatedText } from '../../components/AnimatedText';
-import { textColors } from '../../constants';
-import * as i18n from '@/languages';
-import { useAccountProfile } from '@/hooks';
-import { abbreviateEnsForDisplay, address as formatAddress } from '@/utils/abbreviations';
-import { NeonButton } from '../../components/NeonButton';
-import LineBreak from '../../components/LineBreak';
 import { Bleed, Box, Stack } from '@/design-system';
+import * as i18n from '@/languages';
 import { useNavigation } from '@/navigation';
-import { analyticsV2 } from '@/analytics';
+import { useAccountAddress, useAccountProfileInfo } from '@/state/wallets/walletsStore';
+import { abbreviateEnsForDisplay, address as formatAddress } from '@/utils/abbreviations';
+import React, { useState } from 'react';
+import { AnimatedText } from '../../components/AnimatedText';
+import { Line } from '../../components/Line';
+import { LineBreak } from '../../components/LineBreak';
+import { NeonButton } from '../../components/NeonButton';
+import { Paragraph } from '../../components/Paragraph';
+import { textColors } from '../../constants';
 
 export const Review = () => {
-  const { accountENS, accountAddress } = useAccountProfile();
+  const { accountENS } = useAccountProfileInfo();
+  const accountAddress = useAccountAddress();
   const { goBack } = useNavigation();
 
   const [showDoneButton, setShowDoneButton] = useState(false);
@@ -72,7 +73,7 @@ export const Review = () => {
             color="#FEC101"
             label={i18n.t(i18n.l.points.console.complete_onboarding)}
             onPress={() => {
-              analyticsV2.track(analyticsV2.event.pointsOnboardingScreenPressedDoneButton);
+              analytics.track(analytics.event.pointsOnboardingScreenPressedDoneButton);
               goBack();
             }}
           />

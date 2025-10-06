@@ -6,29 +6,32 @@ import {
   getInternetCredentials,
   getSupportedBiometryType as originalGetSupportedBiometryType,
   hasInternetCredentials,
-  Options,
   resetInternetCredentials,
   setInternetCredentials,
   UserCredentials,
   BIOMETRY_TYPE,
   requestSharedWebCredentials,
   setSharedWebCredentials as originalSetSharedWebCredentials,
+  isPasscodeAuthAvailable as originalIsPasscodeAuthAvailable,
   SharedWebCredentials,
+  SetOptions,
+  GetOptions,
+  STORAGE_TYPE,
 } from 'react-native-keychain';
 import { MMKV } from 'react-native-mmkv';
 
 import * as keychainConstants from '@/utils/keychainConstants';
 import AesEncryptor from '@/handlers/aesEncryption';
 import { delay } from '@/utils/delay';
-import { IS_DEV, IS_ANDROID } from '@/env';
+import { IS_DEV, IS_ANDROID, IS_IOS } from '@/env';
 import { logger, RainbowError } from '@/logger';
-import { authenticateWithPINAndCreateIfNeeded, authenticateWithPIN } from '@/handlers/authentication';
+import { authenticateWithPINAndCreateIfNeeded, authenticateWithPIN, shouldAuthenticateWithPIN } from '@/handlers/authentication';
 
 export const encryptor = new AesEncryptor();
 
 const EXEMPT_ENCRYPTED_KEYS = [keychainConstants.pinKey, keychainConstants.signingWallet, keychainConstants.signingWalletAddress];
 
-export type KeychainOptions = Options & {
+export type KeychainOptions<T> = T & {
   /**
    * If we already have the user's pin in memory, pass it here to prevent
    * another authentication prompt and lookup.
@@ -57,7 +60,7 @@ const cache = new MMKV({
   id: 'rainbowKeychainLocalStorage',
 });
 
-export const publicAccessControlOptions: Options = {
+export const publicAccessControlOptions: SetOptions = {
   accessible: ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
@@ -66,12 +69,12 @@ export const publicAccessControlOptions: Options = {
  * encrypted, we'll prompt the user to authenticate with their PIN and then
  * decrypt the data.
  */
-export async function get(key: string, options: KeychainOptions = {}): Promise<Result<string>> {
-  logger.debug(`keychain: get`, { key }, logger.DebugContext.keychain);
+export async function get(key: string, options: KeychainOptions<GetOptions> = {}): Promise<Result<string>> {
+  logger.debug(`[keychain]: get`, { key }, logger.DebugContext.keychain);
 
   async function _get(attempts = 0): Promise<Result<string>> {
     if (attempts > 0) {
-      logger.debug(`keychain: get attempt ${attempts}`, { key }, logger.DebugContext.keychain);
+      logger.debug(`[keychain]: get attempt ${attempts}`, { key }, logger.DebugContext.keychain);
     }
 
     let data = cache.getString(key);
@@ -93,28 +96,29 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
            * want to decrypt those here.
            */
           if (IS_ANDROID && result.password.includes('cipher') && !EXEMPT_ENCRYPTED_KEYS.includes(key)) {
-            logger.debug(`keychain: decrypting private data on Android`, {}, logger.DebugContext.keychain);
+            logger.debug(`[keychain]: decrypting private data on Android`, {}, logger.DebugContext.keychain);
 
             const pin = options.androidEncryptionPin || (await authenticateWithPIN());
-            !!pin && logger.log('keychain: using pin to decrypt cipher');
+            !!pin && logger.log('[keychain]: using pin to decrypt cipher');
             const decryptedValue = await encryptor.decrypt(pin, result.password);
 
             if (decryptedValue) {
-              logger.log('keychain: decrypted value');
+              logger.log('[keychain]: decrypted value');
               data = decryptedValue;
             } else {
-              logger.error(new RainbowError(`keychain: failed to decrypt private data on Android`));
+              logger.error(new RainbowError(`[keychain]: failed to decrypt private data on Android`));
             }
           } else {
             data = result.password;
           }
         }
       } catch (e: any) {
-        logger.log(`keychain: _get() failed`, {
+        logger.log(`[keychain]: _get() failed`, {
           extra: {
             error: e.toString(),
           },
         });
+
         switch (e.toString()) {
           /*
            * Can happen if the user initially had biometrics enabled, installed
@@ -124,7 +128,7 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
            * will fail because the library can't authenticate.
            */
           case 'Error: code: 11, msg: No fingerprints enrolled.': {
-            logger.warn(`keychain: no fingerprints enrolled, user may have disabled biometrics`, {});
+            logger.warn(`[keychain]: no fingerprints enrolled, user may have disabled biometrics`, {});
 
             return {
               value: undefined,
@@ -132,7 +136,7 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
             };
           }
           case 'Error: code: 7, msg: Too many attempts. Try again later.': {
-            logger.warn(`keychain: too many attempts`, {});
+            logger.warn(`[keychain]: too many attempts`, {});
 
             return {
               value: undefined,
@@ -140,7 +144,7 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
             };
           }
           case 'Error: User canceled the operation.': {
-            logger.warn(`keychain: user canceled (temp)`, {});
+            logger.warn(`[keychain]: user canceled (temp)`, {});
 
             return {
               value: undefined,
@@ -148,7 +152,7 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
             };
           }
           case 'Error: Wrapped error: User not authenticated': {
-            logger.warn(`keychain: user not authenticated (temp)`, {});
+            logger.warn(`[keychain]: user not authenticated (temp)`, {});
 
             return {
               value: undefined,
@@ -156,7 +160,7 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
             };
           }
           case 'Error: The user name or passphrase you entered is not correct.': {
-            logger.warn(`keychain: incorrect password (temp)`, {});
+            logger.warn(`[keychain]: incorrect password (temp)`, {});
 
             if (attempts > 2) {
               return {
@@ -170,14 +174,21 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
             return _get(attempts + 1);
           }
           default: {
-            logger.error(new RainbowError(`keychain: _get() handled unknown error`), {
-              message: e.toString(),
-            });
-
-            return {
-              value: undefined,
-              error: ErrorType.Unknown,
-            };
+            // Avoid logging user cancelled operations
+            if (e.toString().includes('code: 10') || e.toString().includes('code: 13')) {
+              return {
+                value: undefined,
+                error: ErrorType.UserCanceled,
+              };
+            } else {
+              logger.error(new RainbowError(`[keychain]: _get() handled unknown error`), {
+                message: e.toString(),
+              });
+              return {
+                value: undefined,
+                error: ErrorType.Unknown,
+              };
+            }
           }
         }
       }
@@ -200,15 +211,15 @@ export async function get(key: string, options: KeychainOptions = {}): Promise<R
 /**
  * Set a value on the keychain
  */
-export async function set(key: string, value: string, options: KeychainOptions = {}): Promise<void> {
-  logger.debug(`keychain: set`, { key }, logger.DebugContext.keychain);
+export async function set(key: string, value: string, options: KeychainOptions<SetOptions> = {}): Promise<void> {
+  logger.debug(`[keychain]: set`, { key }, logger.DebugContext.keychain);
 
   // only save public data to mmkv
   // private data has accessControl
   if (!options.accessControl) {
     cache.set(key, value);
-  } else if (options.accessControl && IS_ANDROID && !(await getSupportedBiometryType())) {
-    logger.debug(`keychain: encrypting private data on android`, { key, options }, logger.DebugContext.keychain);
+  } else if (options.accessControl && (await shouldAuthenticateWithPIN())) {
+    logger.debug(`[keychain]: encrypting private data on android`, { key, options }, logger.DebugContext.keychain);
 
     const pin = options.androidEncryptionPin || (await authenticateWithPINAndCreateIfNeeded());
     const encryptedValue = await encryptor.encrypt(pin, value);
@@ -216,7 +227,7 @@ export async function set(key: string, value: string, options: KeychainOptions =
     if (encryptedValue) {
       value = encryptedValue;
     } else {
-      throw new Error(`keychain: failed to encrypt value`);
+      throw new Error(`[keychain]: failed to encrypt value`);
     }
   }
 
@@ -229,9 +240,9 @@ export async function set(key: string, value: string, options: KeychainOptions =
  */
 export async function getObject<T extends Record<string, any> = Record<string, unknown>>(
   key: string,
-  options: KeychainOptions = {}
+  options: KeychainOptions<GetOptions> = {}
 ): Promise<Result<T>> {
-  logger.debug(`keychain: getObject`, { key }, logger.DebugContext.keychain);
+  logger.debug(`[keychain]: getObject`, { key }, logger.DebugContext.keychain);
 
   const { value, error } = await get(key, options);
 
@@ -249,8 +260,8 @@ export async function getObject<T extends Record<string, any> = Record<string, u
  * A convenience method for stringifying an object and storing it on the
  * keychain.
  */
-export async function setObject(key: string, value: Record<string, any>, options: KeychainOptions = {}): Promise<void> {
-  logger.debug(`keychain: setObject`, { key }, logger.DebugContext.keychain);
+export async function setObject(key: string, value: Record<string, any>, options: KeychainOptions<SetOptions> = {}): Promise<void> {
+  logger.debug(`[keychain]: setObject`, { key }, logger.DebugContext.keychain);
 
   await set(key, JSON.stringify(value), options);
 }
@@ -259,18 +270,17 @@ export async function setObject(key: string, value: Record<string, any>, options
  * Check if a value exists on the keychain.
  */
 export async function has(key: string): Promise<boolean> {
-  logger.debug(`keychain: has`, { key }, logger.DebugContext.keychain);
-  return Boolean(await hasInternetCredentials(key));
+  logger.debug(`[keychain]: has`, { key }, logger.DebugContext.keychain);
+  return Boolean(await hasInternetCredentials({ server: key }));
 }
 
 /**
  * Remove a value from the keychain.
  */
 export async function remove(key: string) {
-  logger.debug(`keychain: remove`, { key }, logger.DebugContext.keychain);
-
+  logger.debug(`[keychain]: remove`, { key }, logger.DebugContext.keychain);
   cache.delete(key);
-  await resetInternetCredentials(key);
+  await resetInternetCredentials({ server: key });
 }
 
 /**
@@ -281,13 +291,11 @@ export async function remove(key: string) {
  */
 export async function getAllKeys(): Promise<UserCredentials[] | undefined> {
   try {
-    logger.debug(`keychain: getAllKeys`, {}, logger.DebugContext.keychain);
+    logger.debug(`[keychain]: getAllKeys`, {}, logger.DebugContext.keychain);
     const res = await getAllInternetCredentials();
     return res ? res.results : [];
-  } catch (e: any) {
-    logger.error(new RainbowError(`keychain: getAllKeys() failed`), {
-      message: e.toString(),
-    });
+  } catch (e) {
+    logger.error(new RainbowError(`[keychain]: getAllKeys() failed`, e));
     return undefined;
   }
 }
@@ -299,7 +307,7 @@ export async function getAllKeys(): Promise<UserCredentials[] | undefined> {
  * `getAllKeys`.
  */
 export async function clear() {
-  logger.debug(`keychain: clear`, {}, logger.DebugContext.keychain);
+  logger.debug(`[keychain]: clear`, {}, logger.DebugContext.keychain);
 
   cache.clearAll();
 
@@ -307,15 +315,25 @@ export async function clear() {
 
   if (!credentials) return;
 
-  await Promise.all(credentials?.map(c => resetInternetCredentials(c.username)));
+  await Promise.all(credentials?.map(c => resetInternetCredentials({ server: c.username })));
 }
 
 /**
  * Wrapper around the underlying library's method by the same name.
  */
 export async function getSupportedBiometryType(): Promise<BIOMETRY_TYPE | undefined> {
-  logger.debug(`keychain: getSupportedBiometryType`, {}, logger.DebugContext.keychain);
-  return (await originalGetSupportedBiometryType()) || undefined;
+  const result = (await originalGetSupportedBiometryType()) || undefined;
+  logger.debug(`[keychain]: getSupportedBiometryType result: ${result}`, {}, logger.DebugContext.keychain);
+  return result;
+}
+
+/**
+ * Wrapper around the underlying library's method by the same name.
+ */
+export async function isPasscodeAuthAvailable(): Promise<boolean> {
+  const result = await originalIsPasscodeAuthAvailable();
+  logger.debug(`[keychain]: isPasscodeAuthAvailable result: ${result}`, {}, logger.DebugContext.keychain);
+  return result;
 }
 
 /**
@@ -323,7 +341,7 @@ export async function getSupportedBiometryType(): Promise<BIOMETRY_TYPE | undefi
  * more robust `Result` return type.
  */
 export async function getSharedWebCredentials(): Promise<Result<SharedWebCredentials | undefined>> {
-  logger.debug(`keychain: getSharedWebCredentials`, {}, logger.DebugContext.keychain);
+  logger.debug(`[keychain]: getSharedWebCredentials`, {}, logger.DebugContext.keychain);
 
   let data = undefined;
 
@@ -352,7 +370,7 @@ export async function getSharedWebCredentials(): Promise<Result<SharedWebCredent
  * more robust `Result` return type.
  */
 export async function setSharedWebCredentials(username: string, password: string) {
-  logger.debug(`keychain: setSharedWebCredentials`, {}, logger.DebugContext.keychain);
+  logger.debug(`[keychain]: setSharedWebCredentials`, {}, logger.DebugContext.keychain);
   await originalSetSharedWebCredentials('rainbow.me', username, password);
 }
 
@@ -360,15 +378,19 @@ export async function setSharedWebCredentials(username: string, password: string
  * Returns our standard private access control options, based on certain
  * environment variables.
  */
-export async function getPrivateAccessControlOptions(): Promise<Options> {
-  logger.debug(`keychain: getPrivateAccessControlOptions`, {}, logger.DebugContext.keychain);
+export async function getPrivateAccessControlOptions(): Promise<SetOptions> {
+  logger.debug(`[keychain]: getPrivateAccessControlOptions`, {}, logger.DebugContext.keychain);
 
-  const isSimulator = IS_DEV && (await DeviceInfo.isEmulator());
+  const isSimulator = IS_DEV && IS_IOS && (await DeviceInfo.isEmulator());
 
   if (isSimulator) return {};
+
+  const usePin = await shouldAuthenticateWithPIN();
 
   return {
     accessControl: ios ? ACCESS_CONTROL.USER_PRESENCE : ACCESS_CONTROL.BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE,
     accessible: ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    // storage is explicitly set in order to specify RSA instead of the symmetric AES_GCM default.
+    storage: usePin ? STORAGE_TYPE.AES_GCM_NO_AUTH : STORAGE_TYPE.RSA,
   };
 }

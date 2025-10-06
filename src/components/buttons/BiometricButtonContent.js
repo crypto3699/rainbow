@@ -1,11 +1,13 @@
 import React from 'react';
 import { Text } from '../text';
 import { BiometryTypes } from '@/helpers';
-import { useBiometryType, useWallets } from '@/hooks';
+import { useBiometryType } from '@/hooks';
+import { useIsHardwareWallet } from '@/state/wallets/walletsStore';
 import styled from '@/styled-thing';
 import { fonts } from '@/styles';
 import { LedgerIcon } from '../icons/svg/LedgerIcon';
 import { IS_ANDROID } from '@/env';
+import { useTheme } from '@/theme';
 
 const { Face, FaceID, Fingerprint, none, passcode, TouchID } = BiometryTypes;
 
@@ -17,7 +19,7 @@ const Label = styled(Text).attrs(({ color, size = fonts.size.larger, theme: { co
   weight,
 }))({});
 
-function useBiometryIconString({ showIcon, isHardwareWallet }) {
+export function useBiometryIconString({ showIcon, isHardwareWallet }) {
   const biometryType = useBiometryType();
 
   const isFace = biometryType === Face || biometryType === FaceID;
@@ -42,8 +44,8 @@ function useBiometryIconString({ showIcon, isHardwareWallet }) {
 }
 
 export default function BiometricButtonContent({ label, showIcon = true, testID, ...props }) {
-  const biometryIcon = useBiometryIconString(!IS_ANDROID && showIcon);
-  const { isHardwareWallet } = useWallets();
+  const isHardwareWallet = useIsHardwareWallet();
+  const biometryIcon = useBiometryIconString({ showIcon: !IS_ANDROID && showIcon, isHardwareWallet });
   const { colors } = useTheme();
   return (
     <>

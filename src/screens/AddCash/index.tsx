@@ -1,7 +1,6 @@
 import React from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useSelector } from 'react-redux';
-import { ScrollView, StatusBar } from 'react-native';
+import { ScrollView } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import wait from 'w2t';
 
@@ -9,9 +8,7 @@ import { SheetHandle } from '@/components/sheet';
 import { deviceUtils } from '@/utils';
 import { useDimensions } from '@/hooks';
 import { borders } from '@/styles';
-import { IS_IOS } from '@/env';
 import { Box, Text, Separator, useForegroundColor, useBackgroundColor } from '@/design-system';
-import { AppState } from '@/redux/store';
 import { getProviders } from '@/resources/f2c';
 import Skeleton from '@/components/skeleton/Skeleton';
 import Navigation from '@/navigation/Navigation';
@@ -22,10 +19,10 @@ import { Ramp } from '@/screens/AddCash/providers/Ramp';
 import { Coinbase } from '@/screens/AddCash/providers/Coinbase';
 import { Moonpay } from '@/screens/AddCash/providers/Moonpay';
 import { FiatProviderName } from '@/entities/f2c';
-import * as lang from '@/languages';
+import * as i18n from '@/languages';
+import { useAccountAddress } from '@/state/wallets/walletsStore';
 
 const deviceHeight = deviceUtils.dimensions.height;
-const statusBarHeight = StatusBar.currentHeight || 0;
 
 const providerComponents = {
   [FiatProviderName.Ramp]: Ramp,
@@ -36,12 +33,10 @@ const providerComponents = {
 export function AddCashSheet() {
   const { isNarrowPhone } = useDimensions();
   const insets = useSafeAreaInsets();
-  const { accountAddress } = useSelector(({ settings }: AppState) => ({
-    accountAddress: settings.accountAddress,
-  }));
+  const accountAddress = useAccountAddress();
   const borderColor = useForegroundColor('separatorTertiary');
   const skeletonColor = useBackgroundColor('surfaceSecondaryElevated');
-  const sheetHeight = IS_IOS ? deviceHeight - insets.top : deviceHeight + statusBarHeight;
+  const sheetHeight = deviceHeight - insets.top;
 
   const {
     isLoading,
@@ -53,7 +48,7 @@ export function AddCashSheet() {
       const [{ data, error }] = await wait(1000, [await getProviders()]);
 
       if (!data || error) {
-        const e = new RainbowError('F2C: failed to fetch providers');
+        const e = new RainbowError('[AddCash]: failed to fetch providers');
 
         logger.error(e);
 
@@ -72,9 +67,9 @@ export function AddCashSheet() {
     if (error) {
       Navigation.goBack();
 
-      WrappedAlert.alert(lang.t(lang.l.wallet.add_cash_v2.generic_error.title), lang.t(lang.l.wallet.add_cash_v2.generic_error.message), [
+      WrappedAlert.alert(i18n.t(i18n.l.wallet.add_cash_v2.generic_error.title), i18n.t(i18n.l.wallet.add_cash_v2.generic_error.message), [
         {
-          text: lang.t(lang.l.wallet.add_cash_v2.generic_error.button),
+          text: i18n.t(i18n.l.wallet.add_cash_v2.generic_error.button),
         },
       ]);
     }
@@ -84,7 +79,7 @@ export function AddCashSheet() {
     <Box
       background="surfaceSecondary"
       height={{ custom: sheetHeight }}
-      top={{ custom: IS_IOS ? insets.top : statusBarHeight }}
+      top={{ custom: insets.top }}
       width="full"
       alignItems="center"
       overflow="hidden"
@@ -114,7 +109,7 @@ export function AddCashSheet() {
         <Box width="full" paddingTop="52px" paddingHorizontal="20px" paddingBottom={{ custom: isNarrowPhone ? 15 : insets.bottom + 11 }}>
           <Box paddingHorizontal="20px">
             <Text size="26pt" weight="heavy" color="label" align="center">
-              {lang.t(lang.l.wallet.add_cash_v2.sheet_title)}
+              {i18n.t(i18n.l.wallet.add_cash_v2.sheet_title)}
             </Text>
           </Box>
 
@@ -123,7 +118,7 @@ export function AddCashSheet() {
 
             {!isLoading && providers?.length ? (
               <>
-                {providers.map((provider, index) => {
+                {providers.map(provider => {
                   const Comp = providerComponents[provider.id];
                   return (
                     <Box key={provider.id} paddingTop="20px">
@@ -134,7 +129,8 @@ export function AddCashSheet() {
               </>
             ) : (
               <>
-                {Array(4)
+                {/* Loading skeleton length should match the number of onramp options we have available in prod */}
+                {Array(2)
                   .fill(0)
                   .map((_, index) => {
                     const height = 140;
@@ -160,12 +156,12 @@ export function AddCashSheet() {
               >
                 <Box paddingBottom="12px">
                   <Text size="17pt" weight="bold" color="labelTertiary">
-                    􀵲 {lang.t(lang.l.wallet.add_cash_v2.sheet_empty_state.title)}
+                    􀵲 {i18n.t(i18n.l.wallet.add_cash_v2.sheet_empty_state.title)}
                   </Text>
                 </Box>
 
                 <Text size="15pt" weight="semibold" color="labelQuaternary">
-                  {lang.t(lang.l.wallet.add_cash_v2.sheet_empty_state.description)}
+                  {i18n.t(i18n.l.wallet.add_cash_v2.sheet_empty_state.description)}
                 </Text>
               </Box>
             </Box>

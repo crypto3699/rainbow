@@ -1,37 +1,35 @@
 import React, { ReactNode } from 'react';
-import Animated, { DerivedValue, SharedValue } from 'react-native-reanimated';
+import Animated, { SharedValue } from 'react-native-reanimated';
 import { Box } from '@/design-system';
 import { BASE_INPUT_WIDTH, INPUT_PADDING, THICK_BORDER_WIDTH } from '@/__swaps__/screens/Swap/constants';
 import { useSwapInputStyles } from '@/__swaps__/screens/Swap/hooks/useSwapInputStyles';
 import { StyleSheet } from 'react-native';
+import { ExtendedAnimatedAssetWithColors } from '@/__swaps__/types/assets';
+import { IS_IOS } from '@/env';
 
 export const SwapInput = ({
-  children,
-  color,
+  asset,
   bottomInput,
+  children,
   otherInputProgress,
   progress,
 }: {
-  children?: ReactNode;
-  color: DerivedValue<string | number>;
+  asset: SharedValue<ExtendedAnimatedAssetWithColors | null>;
   bottomInput?: boolean;
+  children?: ReactNode;
   otherInputProgress: SharedValue<number>;
   progress: SharedValue<number>;
 }) => {
-  const { inputStyle, containerStyle, mixedShadowColor } = useSwapInputStyles({
+  const { containerStyle, inputHeight, inputStyle } = useSwapInputStyles({
+    asset,
     bottomInput,
-    color,
     otherInputProgress,
     progress,
   });
 
   return (
-    <Box
-      as={Animated.View}
-      style={[containerStyle, styles.staticInputContainerStyles, { shadowColor: mixedShadowColor }]}
-      width={{ custom: BASE_INPUT_WIDTH }}
-    >
-      <Box as={Animated.View} style={[inputStyle, styles.staticInputStyles]}>
+    <Box as={Animated.View} style={[styles.staticInputContainerStyles, containerStyle]} width={{ custom: BASE_INPUT_WIDTH }}>
+      <Box as={Animated.View} style={[styles.staticInputStyles, inputStyle, { height: inputHeight }]}>
         {children}
       </Box>
     </Box>
@@ -47,7 +45,7 @@ export const styles = StyleSheet.create({
   staticInputStyles: {
     borderCurve: 'continuous',
     borderRadius: 30,
-    borderWidth: THICK_BORDER_WIDTH,
+    borderWidth: IS_IOS ? THICK_BORDER_WIDTH : 0,
     overflow: 'hidden',
     padding: INPUT_PADDING,
     width: BASE_INPUT_WIDTH,

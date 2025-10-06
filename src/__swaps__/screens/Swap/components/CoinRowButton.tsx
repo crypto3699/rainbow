@@ -1,4 +1,3 @@
-/* eslint-disable no-nested-ternary */
 import React from 'react';
 import { ButtonPressAnimation } from '@/components/animations';
 import { Box, TextIcon, useColorMode, useForegroundColor } from '@/design-system';
@@ -14,6 +13,7 @@ export const CoinRowButton = ({
   outline,
   size,
   weight,
+  disabled,
 }: {
   color?: string;
   icon: string;
@@ -21,6 +21,7 @@ export const CoinRowButton = ({
   outline?: boolean;
   size?: TextSize;
   weight?: TextWeight;
+  disabled?: boolean;
 }) => {
   const { isDarkMode } = useColorMode();
   const fillTertiary = useForegroundColor('fillTertiary');
@@ -28,7 +29,7 @@ export const CoinRowButton = ({
   const separatorTertiary = useForegroundColor('separatorTertiary');
 
   return (
-    <ButtonPressAnimation disallowInterruption onPress={onPress} scaleTo={0.8}>
+    <ButtonPressAnimation disallowInterruption onPress={onPress} scaleTo={0.8} disabled={disabled}>
       <Box
         alignItems="center"
         borderRadius={14}
@@ -38,7 +39,7 @@ export const CoinRowButton = ({
           backgroundColor: outline
             ? 'transparent'
             : color
-              ? opacity(color, 0.25)
+              ? opacity(color, isDarkMode ? 0.16 : 0.25)
               : isDarkMode
                 ? fillQuaternary
                 : opacity(fillTertiary, 0.04),

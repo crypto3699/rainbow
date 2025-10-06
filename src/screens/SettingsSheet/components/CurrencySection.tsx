@@ -5,15 +5,15 @@ import Menu from './Menu';
 import MenuContainer from './MenuContainer';
 import MenuItem from './MenuItem';
 import { analytics } from '@/analytics';
+import { IS_IOS } from '@/env';
 import { useAccountSettings } from '@/hooks';
 import { ETH_ADDRESS, WBTC_ADDRESS, emojis, supportedNativeCurrencies } from '@/references';
-import { BackgroundProvider, Box, Inline, Inset, Text } from '@/design-system';
-import { SimpleSheet } from '@/components/sheet/SimpleSheet';
-import * as i18n from '@/languages';
-import { Network } from '@/networks/types';
 import { useExternalToken } from '@/resources/assets/externalAssetsQuery';
 import RainbowCoinIcon from '@/components/coin-icon/RainbowCoinIcon';
-import { useTheme } from '@/theme';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
+import { ChainId } from '@/state/backendNetworks/types';
+import { NativeCurrencyKey } from '@/entities';
+import * as i18n from '@/languages';
 
 const emojiData = Object.entries(emojis).map(([emoji, { name }]) => [name, emoji]);
 
@@ -26,18 +26,18 @@ const currencyListItems = Object.values(supportedNativeCurrencies).map(({ curren
 
 const CurrencySection = () => {
   const { nativeCurrency, settingsChangeNativeCurrency } = useAccountSettings();
-  const theme = useTheme();
-  const { data: WBTC } = useExternalToken({ address: WBTC_ADDRESS, network: Network.mainnet, currency: nativeCurrency });
-  const { data: ETH } = useExternalToken({ address: ETH_ADDRESS, network: Network.mainnet, currency: nativeCurrency });
+  const { data: WBTC } = useExternalToken({ address: WBTC_ADDRESS, chainId: ChainId.mainnet, currency: nativeCurrency });
+  const { data: ETH } = useExternalToken({ address: ETH_ADDRESS, chainId: ChainId.mainnet, currency: nativeCurrency });
 
   const onSelectCurrency = useCallback(
-    (currency: any) => {
+    (currency: NativeCurrencyKey) => {
+      userAssetsStoreManager.setState({ currency });
       settingsChangeNativeCurrency(currency);
       // reload widget timelines only if on ios version 14 or above
-      if (ios && parseInt(Platform.Version as string) >= 14) {
+      if (IS_IOS && parseInt(Platform.Version as string) >= 14) {
         reloadTimelines('PriceWidget');
       }
-      analytics.track('Changed native currency', { currency });
+      analytics.track(analytics.event.changedNativeCurrency, { currency });
     },
     [settingsChangeNativeCurrency]
   );
@@ -45,7 +45,7 @@ const CurrencySection = () => {
   return (
     <MenuContainer>
       <Menu>
-        {currencyListItems.map(({ label, emojiName, currency }: any) => (
+        {currencyListItems.map(({ emojiName, currency }: any) => (
           <MenuItem
             key={currency}
             leftComponent={
@@ -57,8 +57,7 @@ const CurrencySection = () => {
                     icon={currency === ETH?.symbol ? ETH?.icon_url : WBTC?.icon_url}
                     size={23}
                     symbol={currency}
-                    network={Network.mainnet}
-                    theme={theme}
+                    chainId={ChainId.mainnet}
                   />
                 </View>
               )
@@ -66,7 +65,11 @@ const CurrencySection = () => {
             onPress={() => onSelectCurrency(currency)}
             rightComponent={currency === nativeCurrency && <MenuItem.StatusIcon status="selected" />}
             size={52}
-            titleComponent={<MenuItem.Title text={label} />}
+            titleComponent={
+              <MenuItem.Title
+                text={i18n.t(i18n.l.settings.currency[currency as Exclude<keyof typeof i18n.l.settings.currency, 'title'>].label)}
+              />
+            }
           />
         ))}
       </Menu>

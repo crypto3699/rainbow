@@ -1,7 +1,7 @@
 import MaskedView from '@react-native-masked-view/masked-view';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React, { useCallback, useEffect } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Reanimated, {
   Easing,
   interpolateColor,
@@ -21,18 +21,19 @@ import { RainbowsBackground } from '../../components/rainbows-background/Rainbow
 import { Text } from '../../components/text';
 import { analytics } from '@/analytics';
 
-import { useHideSplashScreen } from '@/hooks';
 import { useNavigation } from '@/navigation';
 import Routes from '@rainbow-me/routes';
 import styled from '@/styled-thing';
 import { position } from '@/styles';
 import { ThemeContextProps, useTheme } from '@/theme';
-import logger from 'logger';
+import { logger } from '@/logger';
 import { IS_ANDROID, IS_TEST } from '@/env';
 import { WelcomeScreenRainbowButton } from '@/screens/WelcomeScreen/WelcomeScreenRainbowButton';
+import { openInBrowser } from '@/utils/openInBrowser';
+import { PerformanceMeasureView } from '@shopify/react-native-performance';
+import { hideSplashScreen } from '@/hooks/useHideSplashScreen';
 
-// @ts-expect-error Our implementation of SC complains
-const Container = styled.View({
+const Container = styled(View)({
   ...position.coverAsObject,
   alignItems: 'center',
   backgroundColor: ({ theme: { colors } }: { theme: ThemeContextProps }) => colors.white,
@@ -71,7 +72,6 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const { colors, isDarkMode } = useTheme();
   const { replace, navigate, getState: dangerouslyGetState } = useNavigation();
-  const hideSplashScreen = useHideSplashScreen();
 
   const contentAnimation = useSharedValue(1);
   const colorAnimation = useSharedValue(0);
@@ -85,10 +85,11 @@ export default function WelcomeScreen() {
   useEffect(() => {
     const initialize = async () => {
       if (IS_TEST) {
-        logger.log('Skipping animations because IS_TEST is true');
+        logger.debug('[WelcomeScreen] Skipping animations because IS_TEST is true');
         contentAnimation.value = 1;
         createWalletButtonAnimation.value = 1;
         colorAnimation.value = 0;
+        hideSplashScreen();
         return;
       }
 
@@ -178,7 +179,7 @@ export default function WelcomeScreen() {
   }));
 
   const onCreateWallet = useCallback(async () => {
-    analytics.track('Tapped "Get a new wallet"');
+    analytics.track(analytics.event.welcomeNewWallet);
     const operation = dangerouslyGetState()?.index === 1 ? navigate : replace;
     operation(Routes.SWIPE_LAYOUT, {
       params: { emptyWallet: true },
@@ -187,11 +188,11 @@ export default function WelcomeScreen() {
   }, [dangerouslyGetState, navigate, replace]);
 
   const handlePressTerms = useCallback(() => {
-    Linking.openURL('https://rainbow.me/terms-of-use');
+    openInBrowser('https://rainbow.me/terms-of-use', false);
   }, []);
 
   const showRestoreSheet = useCallback(() => {
-    analytics.track('Tapped "I already have one"');
+    analytics.track(analytics.event.welcomeAlreadyHave);
     navigate(Routes.ADD_WALLET_NAVIGATOR, {
       isFirstWallet: true,
     });
@@ -202,54 +203,61 @@ export default function WelcomeScreen() {
   });
 
   return (
-    <Container testID="welcome-screen">
-      <RainbowsBackground shouldAnimate={shouldAnimateRainbows} />
-      <ContentWrapper style={contentStyle}>
-        {IS_ANDROID && IS_TEST ? (
-          // @ts-expect-error JS component
-          <RainbowText colors={colors} />
-        ) : (
-          // @ts-expect-error JS component
-          <MaskedView maskElement={<RainbowText colors={colors} />}>
-            <RainbowTextMask style={textStyle} />
-          </MaskedView>
-        )}
+    <PerformanceMeasureView interactive={true} screenName="WelcomeScreen">
+      <Container testID="welcome-screen">
+        <RainbowsBackground shouldAnimate={shouldAnimateRainbows} />
+        <ContentWrapper style={contentStyle}>
+          {IS_ANDROID && IS_TEST ? (
+            <RainbowText colors={colors} />
+          ) : (
+            <MaskedView maskElement={<RainbowText colors={colors} />}>
+              <RainbowTextMask style={textStyle} />
+            </MaskedView>
+          )}
 
-        <ButtonWrapper style={buttonStyle}>
-          <WelcomeScreenRainbowButton
-            emoji="castle"
-            height={54 + (ios ? 0 : 6)}
-            onPress={onCreateWallet}
-            shadowStyle={createWalletButtonAnimatedShadowStyle}
-            style={createWalletButtonAnimatedStyle}
-            testID="new-wallet-button"
-            text={lang.t('wallet.new.get_new_wallet')}
-            textColor={isDarkMode ? colors.dark : colors.white}
-          />
-        </ButtonWrapper>
-        <ButtonWrapper>
-          <WelcomeScreenRainbowButton
-            darkShadowStyle={sx.existingWalletShadow}
-            emoji="old_key"
-            height={56}
-            onPress={showRestoreSheet}
-            shadowStyle={sx.existingWalletShadow}
-            style={[sx.existingWallet, { backgroundColor: colors.blueGreyDarkLight }]}
-            testID="already-have-wallet-button"
-            text={lang.t('wallet.new.already_have_wallet')}
-            textColor={colors.alpha(colors.blueGreyDark, 0.8)}
-          />
-        </ButtonWrapper>
-      </ContentWrapper>
-      <TermsOfUse bottomInset={insets.bottom}>
-        <Text align="center" color={colors.alpha(colors.blueGreyDark, 0.5)} lineHeight="loose" size="smedium" weight="semibold">
-          {lang.t('wallet.new.terms')}
-          <Text color={colors.paleBlue} lineHeight="loose" onPress={handlePressTerms} size="smedium" suppressHighlighting weight="semibold">
-            {lang.t('wallet.new.terms_link')}
+          <ButtonWrapper style={buttonStyle}>
+            <WelcomeScreenRainbowButton
+              emoji="castle"
+              height={54 + (ios ? 0 : 6)}
+              onPress={onCreateWallet}
+              shadowStyle={createWalletButtonAnimatedShadowStyle}
+              style={createWalletButtonAnimatedStyle}
+              testID="new-wallet-button"
+              text={i18n.t(i18n.l.wallet.new.get_new_wallet)}
+              textColor={isDarkMode ? colors.dark : colors.white}
+            />
+          </ButtonWrapper>
+          <ButtonWrapper>
+            <WelcomeScreenRainbowButton
+              darkShadowStyle={sx.existingWalletShadow}
+              emoji="old_key"
+              height={56}
+              onPress={showRestoreSheet}
+              shadowStyle={sx.existingWalletShadow}
+              style={[sx.existingWallet, { backgroundColor: colors.blueGreyDarkLight }]}
+              testID="already-have-wallet-button"
+              text={i18n.t(i18n.l.wallet.new.already_have_wallet)}
+              textColor={colors.alpha(colors.blueGreyDark, 0.8)}
+            />
+          </ButtonWrapper>
+        </ContentWrapper>
+        <TermsOfUse bottomInset={insets.bottom}>
+          <Text align="center" color={colors.alpha(colors.blueGreyDark, 0.5)} lineHeight="loose" size="smedium" weight="semibold">
+            {i18n.t(i18n.l.wallet.new.terms)}
+            <Text
+              color={colors.paleBlue}
+              lineHeight="loose"
+              onPress={handlePressTerms}
+              size="smedium"
+              suppressHighlighting
+              weight="semibold"
+            >
+              {i18n.t(i18n.l.wallet.new.terms_link)}
+            </Text>
           </Text>
-        </Text>
-      </TermsOfUse>
-    </Container>
+        </TermsOfUse>
+      </Container>
+    </PerformanceMeasureView>
   );
 }
 

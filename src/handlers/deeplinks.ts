@@ -1,24 +1,42 @@
-import URL from 'url-parse';
 import { parseUri } from '@walletconnect/utils';
+import URL from 'url-parse';
 
-import store from '@/redux/store';
-import { walletConnectOnSessionRequest, walletConnectRemovePendingRedirect, walletConnectSetPendingRedirect } from '@/redux/walletconnect';
-
-import { fetchReverseRecordWithRetry } from '@/utils/profileUtils';
+import { ParsedSearchAsset } from '@/__swaps__/types/assets';
+import { GasSpeed } from '@/__swaps__/types/gas';
+import { analytics } from '@/analytics';
+import { showWalletConnectToast } from '@/components/toasts/WalletConnectToast';
 import { defaultConfig } from '@/config/experimental';
 import { PROFILES } from '@/config/experimentalHooks';
-import { delay } from '@/utils/delay';
-import { checkIsValidAddressOrDomain, isENSAddressFormat } from '@/helpers/validators';
-import { Navigation } from '@/navigation';
-import Routes from '@/navigation/routesNames';
-import ethereumUtils from '@/utils/ethereumUtils';
-import { logger } from '@/logger';
-import { pair as pairWalletConnect, setHasPendingDeeplinkPendingRedirect } from '@/walletConnect';
-import { analyticsV2 } from '@/analytics';
 import { FiatProviderName } from '@/entities/f2c';
-import { getPoapAndOpenSheetWithQRHash, getPoapAndOpenSheetWithSecretWord } from '@/utils/poaps';
+import { checkIsValidAddressOrDomain, isENSAddressFormat } from '@/helpers/validators';
+import { logger } from '@/logger';
+import { Navigation } from '@/navigation';
+import { InitialRoute } from '@/navigation/initialRoute';
+import Routes from '@/navigation/routesNames';
 import { queryClient } from '@/react-query';
+import store from '@/redux/store';
 import { pointsReferralCodeQueryKey } from '@/resources/points';
+import { delay } from '@/utils/delay';
+import ethereumUtils, { getAddressAndChainIdFromUniqueId, getUniqueId } from '@/utils/ethereumUtils';
+import { getPoapAndOpenSheetWithQRHash, getPoapAndOpenSheetWithSecretWord } from '@/utils/poaps';
+import { fetchReverseRecordWithRetry } from '@/utils/profileUtils';
+import { pair as pairWalletConnect, setHasPendingDeeplinkPendingRedirect } from '@/walletConnect';
+import { useMobileWalletProtocolHost } from '@coinbase/mobile-wallet-protocol-host';
+
+import { navigateToSwaps, NavigateToSwapsParams } from '@/__swaps__/screens/Swap/navigateToSwaps';
+import { searchVerifiedTokens, TokenLists } from '@/__swaps__/screens/Swap/resources/search/searchV2';
+import { parseSearchAsset } from '@/__swaps__/utils/assets';
+import { clamp } from '@/__swaps__/utils/swaps';
+import { fetchExternalToken } from '@/resources/assets/externalAssetsQuery';
+import { userAssetsStore } from '@/state/assets/userAssets';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { getWalletReady, getWallets, setSelectedWallet } from '@/state/wallets/walletsStore';
+import { isAddress } from 'viem';
+
+interface DeeplinkHandlerProps extends Pick<ReturnType<typeof useMobileWalletProtocolHost>, 'handleRequestUrl' | 'sendFailureToClient'> {
+  url: string;
+  initialRoute: InitialRoute;
+}
 
 /*
  * You can test these deeplinks with the following command:
@@ -26,23 +44,23 @@ import { pointsReferralCodeQueryKey } from '@/resources/points';
  *    `xcrun simctl openurl booted "https://link.rainbow.me/0x123"`
  */
 
-export default async function handleDeeplink(url: string, initialRoute: any = null) {
+export default async function handleDeeplink({ url, initialRoute, handleRequestUrl, sendFailureToClient }: DeeplinkHandlerProps) {
   if (!url) {
-    logger.warn(`handleDeeplink: No url provided`);
+    logger.warn(`[handleDeeplink]: No url provided`);
     return;
   }
 
   /**
    * We need to wait till the wallet is ready to handle any deeplink
    */
-  while (!store.getState().appState.walletReady) {
-    logger.info(`handleDeeplink: Waiting for wallet to be ready`);
+  while (!getWalletReady()) {
+    logger.debug(`[handleDeeplink]: Waiting for wallet to be ready`);
     await delay(50);
   }
 
   const { protocol, host, pathname, query } = new URL(url, true);
 
-  logger.info(`handleDeeplink: handling url`, {
+  logger.debug(`[handleDeeplink]: handling url`, {
     url,
     protocol,
     host,
@@ -54,13 +72,13 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
     /**
      * Handling send deep links
      */
-    logger.info(`handleDeeplink: ethereum:// protocol`);
+    logger.debug(`[handleDeeplink]: ethereum:// protocol`);
     ethereumUtils.parseEthereumUrl(url);
   } else if (protocol === 'https:' || protocol === 'rainbow:') {
     /**
      * Any native iOS deep link OR universal links via HTTPS
      */
-    logger.info(`handleDeeplink: https:// or rainbow:// protocol`);
+    logger.debug(`[handleDeeplink]: https:// or rainbow:// protocol`);
 
     /**
      * The first path following the host (universal link) or protocol
@@ -75,40 +93,49 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
        * tap "Rainbow" in Web3Modal and it hits this handler
        */
       case 'wc': {
-        logger.info(`handleDeeplink: wc`);
+        logger.debug(`[handleDeeplink]: wc`);
         handleWalletConnect(query.uri, query.connector);
         break;
       }
 
       /**
        * Links from website to an individual token
+       * ex. rainbow://token/base/0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe
        */
       case 'token': {
-        logger.info(`handleDeeplink: token`);
-        const { addr } = query;
-        const address = (addr as string)?.toLowerCase() ?? '';
+        logger.debug(`[handleDeeplink]: token`);
+        let networkLabel = pathname.split('/')[2]?.toLowerCase();
+        const address = pathname.split('/')[3]?.toLowerCase();
+        // Some chains have different link labels for aesthetic reasons
+        if (networkLabel === 'ethereum') {
+          networkLabel = 'mainnet';
+        } else if (networkLabel === 'zksync') {
+          networkLabel = 'zksync-era';
+        }
+        const chainId = useBackendNetworksStore.getState().getChainsIdByName()[networkLabel];
+        const uniqueId = getUniqueId(address, chainId);
 
-        if (address && address.length > 0) {
-          const asset = ethereumUtils.getAssetFromAllAssets(address);
+        if (address && chainId && uniqueId) {
+          const currency = store.getState().settings.nativeCurrency;
+          const asset = await fetchExternalToken({ address, chainId, currency });
 
           // First go back to home to dismiss any open shit
           // and prevent a weird crash
           if (initialRoute !== Routes.WELCOME_SCREEN) {
-            // @ts-expect-error FIXME: Expected 2-3 arguments, but got 1.
             Navigation.handleAction(Routes.WALLET_SCREEN);
           }
 
           setTimeout(() => {
-            const _action = (asset: any) => {
-              Navigation.handleAction(Routes.EXPANDED_ASSET_SHEET, {
-                asset,
-                fromDiscover: true,
-                type: 'token',
-              });
-            };
-
             if (asset) {
-              _action(asset);
+              Navigation.handleAction(Routes.EXPANDED_ASSET_SHEET_V2, {
+                asset: {
+                  ...asset,
+                  uniqueId,
+                  chainId,
+                },
+                address: address,
+                chainId: chainId,
+              });
             }
           }, 50);
         }
@@ -120,12 +147,12 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
        * should contain metadata about the transaction, if we have it.
        */
       case 'f2c': {
-        logger.info(`handleDeeplink: f2c`);
+        logger.debug(`[handleDeeplink]: f2c`);
 
         const { provider, sessionId } = query;
 
         if (!provider || !sessionId) {
-          logger.warn('Received FWC deeplink with invalid params', {
+          logger.warn(`[handleDeeplink]: Received FWC deeplink with invalid params`, {
             url,
             query,
           });
@@ -145,13 +172,13 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
            * `success: true` here. Eventually we may need to revisit this so
            * that we can add more properties as they become available.
            */
-          analyticsV2.track(analyticsV2.event.f2cProviderFlowCompleted, {
+          analytics.track(analytics.event.f2cProviderFlowCompleted, {
             provider: provider as FiatProviderName,
             sessionId: sessionId as string,
             success: true,
           });
         } else {
-          analyticsV2.track(analyticsV2.event.f2cProviderFlowCompleted, {
+          analytics.track(analytics.event.f2cProviderFlowCompleted, {
             provider: provider as FiatProviderName,
             sessionId: sessionId as string,
             // success is unknown
@@ -166,11 +193,12 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
        * Ratio's onramp SDK.
        */
       case 'plaid': {
-        logger.log('handleDeeplink: handling Plaid redirect', { url });
+        logger.debug(`[handleDeeplink]: handling Plaid redirect`, { url });
         break;
       }
 
       case 'poap': {
+        logger.debug(`[handleDeeplink]: handling POAP`, { url });
         const secretWordOrHash = pathname?.split('/')?.[1];
         await getPoapAndOpenSheetWithSecretWord(secretWordOrHash, false);
         await getPoapAndOpenSheetWithQRHash(secretWordOrHash, false);
@@ -178,9 +206,10 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
       }
 
       case 'points': {
+        logger.debug(`[handleDeeplink]: handling points`, { url });
         const referralCode = query?.ref;
         if (referralCode) {
-          analyticsV2.track(analyticsV2.event.pointsReferralCodeDeeplinkOpened);
+          analytics.track(analytics.event.pointsReferralCodeDeeplinkOpened);
           queryClient.setQueryData(
             pointsReferralCodeQueryKey,
             (referralCode.slice(0, 3) + '-' + referralCode.slice(3, 7)).toLocaleUpperCase()
@@ -189,7 +218,38 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
         break;
       }
 
+      case 'dapp': {
+        const { url } = query;
+        logger.debug(`[handleDeeplink]: handling dapp`, { url });
+        if (url) {
+          Navigation.handleAction(Routes.DAPP_BROWSER_SCREEN, { url });
+        }
+        break;
+      }
+
+      case 'swap': {
+        logger.debug(`[handleDeeplink]: swap`, { url });
+        handleSwapsDeeplink(url);
+        break;
+      }
+
+      case 'wsegue': {
+        const response = await handleRequestUrl(url);
+        if (response.error) {
+          // Return error to client app if session is expired or invalid
+          const { errorMessage, decodedRequest } = response.error;
+          await sendFailureToClient(errorMessage, decodedRequest);
+        }
+        break;
+      }
+
+      case 'e2e': {
+        // Ignore, will be handled in TestDeeplinkHandler.
+        break;
+      }
+
       default: {
+        logger.debug(`[handleDeeplink]: default`, { url });
         const addressOrENS = pathname?.split('/profile/')?.[1] ?? pathname?.split('/')?.[1];
         /**
          * This handles ENS profile links on mobile i.e.
@@ -207,7 +267,7 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
               fromRoute: 'Deeplink',
             });
           } else {
-            logger.warn(`handleDeeplink: invalid address or ENS provided`, {
+            logger.warn(`[handleDeeplink]: invalid address or ENS provided`, {
               url,
               protocol,
               host,
@@ -220,7 +280,7 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
           /**
            * This is a catch-all for any other deep links that we don't handle
            */
-          logger.warn(`handleDeeplink: invalid or unknown deeplink`, {
+          logger.warn(`[handleDeeplink]: invalid or unknown deeplink`, {
             url,
             protocol,
             host,
@@ -232,7 +292,7 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
     }
     // Android uses normal deeplinks
   } else if (protocol === 'wc:') {
-    logger.info(`handleDeeplink: wc:// protocol`);
+    logger.debug(`[handleDeeplink]: wc:// protocol`);
     handleWalletConnect(url, query.connector);
   }
 }
@@ -246,9 +306,8 @@ export default async function handleDeeplink(url: string, initialRoute: any = nu
  * already handled.
  *
  * In the case of WC, we don't want this to happen because we'll try to connect
- * to a session that's either already active or expired. In WC v1, we handled
- * this using `walletConnectUris` state in Redux. We now handle this here,
- * before we even reach application code.
+ * to a session that's either already active or expired.
+ * We handle this here, before we even reach application code.
  *
  * Important: dapps also use deeplinks to re-focus the user to our app, where
  * the socket connections then take over. So those URIs are always the same,
@@ -259,21 +318,22 @@ const walletConnectURICache = new Set();
 
 function handleWalletConnect(uri?: string, connector?: string) {
   if (!uri) {
-    logger.debug(`handleWalletConnect: skipping uri empty`, {});
+    logger.debug(`[handleWalletConnect]: skipping uri empty`);
+    showWalletConnectToast({ isTransactionRequest: true });
     return;
   }
 
   const cacheKey = JSON.stringify({ uri });
 
   if (walletConnectURICache.has(cacheKey)) {
-    logger.debug(`handleWalletConnect: skipping duplicate event`, {});
+    logger.debug(`[handleWalletConnect]: skipping duplicate event`);
     return;
   }
 
   const { query } = new URL(uri);
   const parsedUri = uri ? parseUri(uri) : null;
 
-  logger.debug(`handleWalletConnect: handling event`, {
+  logger.debug(`[handleWalletConnect]: handling event`, {
     uri,
     query,
     parsedUri,
@@ -283,28 +343,101 @@ function handleWalletConnect(uri?: string, connector?: string) {
     // make sure we don't handle this again
     walletConnectURICache.add(cacheKey);
 
-    if (parsedUri.version === 1) {
-      store.dispatch(walletConnectSetPendingRedirect());
-      store.dispatch(
-        walletConnectOnSessionRequest(uri, connector, (status: any, dappScheme: any) => {
-          logger.debug(`walletConnectOnSessionRequest callback`, {
-            status,
-            dappScheme,
-          });
-          const type = status === 'approved' ? 'connect' : status;
-          store.dispatch(walletConnectRemovePendingRedirect(type, dappScheme));
-        })
-      );
-    } else if (parsedUri.version === 2) {
-      logger.debug(`handleWalletConnect: handling v2`, { uri });
+    showWalletConnectToast();
+
+    if (parsedUri.version === 2) {
+      logger.debug(`[handleWalletConnect]: handling v2`, { uri });
       setHasPendingDeeplinkPendingRedirect(true);
       pairWalletConnect({ uri, connector });
     }
   } else {
-    logger.debug(`handleWalletConnect: handling fallback`, { uri });
+    logger.debug(`[handleWalletConnect]: handling fallback`, { uri });
     // This is when we get focused by WC due to a signing request
     // Don't add this URI to cache
+    showWalletConnectToast({ isTransactionRequest: true });
     setHasPendingDeeplinkPendingRedirect(true);
-    store.dispatch(walletConnectSetPendingRedirect());
   }
+}
+
+const querySwapAsset = async (uniqueId: string | undefined): Promise<ParsedSearchAsset | undefined> => {
+  if (!uniqueId) return undefined;
+
+  const { address, chainId } = getAddressAndChainIdFromUniqueId(uniqueId);
+  const supportedSwapChainIds = useBackendNetworksStore.getState().getSwapSupportedChainIds();
+  if (!supportedSwapChainIds.includes(parseInt(chainId.toString(), 10))) return undefined;
+  if (address !== 'eth' && address.length !== 42) return undefined;
+
+  const userAsset = userAssetsStore.getState().getUserAsset(uniqueId) || undefined;
+
+  const searchResults = await searchVerifiedTokens({ query: address.toLowerCase(), chainId, list: TokenLists.Verified }, null);
+
+  const searchAsset = searchResults.results.filter(x => !!x)?.[0];
+
+  if (!searchAsset) return userAsset;
+  return parseSearchAsset({ searchAsset, userAsset });
+};
+
+function isValidGasSpeed(s: string | undefined): s is GasSpeed {
+  if (!s) return false;
+  return Object.values(GasSpeed).includes(s as GasSpeed);
+}
+
+async function setFromWallet(address: string | undefined) {
+  if (!address || !isAddress(address)) return;
+
+  const userWallets = getWallets()!;
+  const wallet = Object.values(userWallets).find(w => w.addresses.some(a => a.address === address));
+
+  if (!wallet) return;
+
+  setSelectedWallet(wallet, address);
+}
+
+function isNumericString(value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+  return !isNaN(+value);
+}
+
+async function handleSwapsDeeplink(url: string) {
+  const { query } = new URL(url, true);
+
+  await setFromWallet(query.from);
+
+  const params: NavigateToSwapsParams = {};
+
+  const inputAsset = querySwapAsset(query.inputAsset?.toLowerCase());
+  const outputAsset = querySwapAsset(query.outputAsset?.toLowerCase());
+
+  if ('slippage' in query && isNumericString(query.slippage)) {
+    params.slippage = query.slippage;
+  }
+
+  if (isNumericString(query.percentageToSell)) {
+    params.percentageToSell = clamp(+query.percentageToSell, 0, 1);
+  } else if (isNumericString(query.inputAmount)) {
+    params.inputAmount = query.inputAmount;
+  }
+  // Output-based quotes aren't currently supported
+  // else if (isNumericString(query.outputAmount)) {
+  //   params.outputAmount = query.outputAmount;
+  // }
+
+  const gasSpeed = query.gasSpeed?.toLowerCase();
+  if (isValidGasSpeed(gasSpeed)) {
+    params.gasSpeed = gasSpeed;
+  }
+
+  const inputAssetToSet = await inputAsset;
+  const outputAssetToSet = await outputAsset;
+
+  if (inputAssetToSet) params.inputAsset = inputAssetToSet;
+  if (outputAssetToSet) params.outputAsset = outputAssetToSet;
+
+  navigateToSwaps(params);
+}
+
+export function buildTokenDeeplink({ networkLabel, contractAddress }: { networkLabel: string; contractAddress: string }) {
+  return `https://rainbow.me/token/${networkLabel.toLowerCase()}/${contractAddress}`;
 }

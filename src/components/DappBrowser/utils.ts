@@ -1,7 +1,7 @@
 import { Share } from 'react-native';
 import { WebViewNavigationEvent } from 'react-native-webview/lib/RNCWebViewNativeComponent';
-import { RainbowError, logger } from '@/logger';
-import { HTTP, HTTPS, RAINBOW_HOME } from './constants';
+import { RainbowError, ensureError, logger } from '@/logger';
+import { HTTP, HTTPS, RAINBOW_HOME, APP_STORE_URL_PREFIXES } from './constants';
 
 // ---------------------------------------------------------------------------- //
 // URL validation regex breakdown here: https://mathiasbynens.be/demo/url-regex
@@ -12,44 +12,44 @@ import { HTTP, HTTPS, RAINBOW_HOME } from './constants';
 const URL_PATTERN_REGEX =
   /^(?:(?:(?:https?):)?\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff_-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}\.?))(?::\d{2,5})?(?:[/?#]\S*)?$/i;
 
-export function isValidURL(url: string): boolean {
-  let urlForValidation = url.trim();
-  if (!urlForValidation.startsWith(HTTP) && !urlForValidation.startsWith(HTTPS)) {
-    urlForValidation = HTTPS + urlForValidation;
-  }
-  return URL_PATTERN_REGEX.test(urlForValidation);
+export function isMissingValidProtocol(url: string): boolean {
+  return !url.startsWith(HTTP) && !url.startsWith(HTTPS);
+}
+
+export function isMissingValidProtocolWorklet(url: string): boolean {
+  'worklet';
+  return !url.startsWith(HTTP) && !url.startsWith(HTTPS);
+}
+
+export function isValidAppStoreUrl(url: string): boolean {
+  return APP_STORE_URL_PREFIXES.some(prefix => url.startsWith(prefix));
 }
 
 export function isValidURLWorklet(url: string): boolean {
   'worklet';
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    return false;
+  }
+
   let urlForValidation = url.trim();
-  if (!urlForValidation.startsWith(HTTP) && !urlForValidation.startsWith(HTTPS)) {
+  if (isMissingValidProtocolWorklet(urlForValidation)) {
     urlForValidation = HTTPS + urlForValidation;
   }
   return URL_PATTERN_REGEX.test(urlForValidation);
 }
-
-export const normalizeUrl = (url: string): string => {
-  if (!url) {
-    return '';
-  }
-  let normalizedUrl = url;
-  if (!normalizedUrl.startsWith(HTTP) && !normalizedUrl.startsWith(HTTPS)) {
-    normalizedUrl = HTTPS + normalizedUrl;
-  }
-  if (!normalizedUrl.endsWith('/') && !normalizedUrl.includes('?')) {
-    normalizedUrl += '/';
-  }
-  return normalizedUrl;
-};
 
 export const normalizeUrlWorklet = (url: string): string => {
   'worklet';
   if (!url) {
     return '';
   }
+
+  if (url === RAINBOW_HOME || url.startsWith('blob:') || url.startsWith('data:')) {
+    return url;
+  }
+
   let normalizedUrl = url;
-  if (!normalizedUrl.startsWith(HTTP) && !normalizedUrl.startsWith(HTTPS)) {
+  if (isMissingValidProtocolWorklet(normalizedUrl)) {
     normalizedUrl = HTTPS + normalizedUrl;
   }
   if (!normalizedUrl.endsWith('/') && !normalizedUrl.includes('?')) {
@@ -88,21 +88,9 @@ export const formatUrl = (url: string, formatSearches = true, prettifyUrl = true
   return formattedValue;
 };
 
-export const generateUniqueId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const randomString = Math.random().toString(36).slice(2, 7);
-  return `${timestamp}${randomString}`;
-};
-
-export function generateUniqueIdWorklet(): string {
-  'worklet';
-  const timestamp = Date.now().toString(36);
-  const randomString = Math.random().toString(36).slice(2, 7);
-  return `${timestamp}${randomString}`;
-}
-
-export const getNameFromFormattedUrl = (formattedUrl: string): string => {
-  const parts = formattedUrl.split('.');
+export const getNameFromFormattedUrl = (formattedUrl: string, needsFormatting?: boolean): string => {
+  const url = needsFormatting ? formatUrl(formattedUrl, false, true, true) : formattedUrl;
+  const parts = url.split('.');
   let name;
   if (parts.length > 2 && parts[parts.length - 2].length <= 2) {
     name = parts[parts.length - 3];
@@ -117,10 +105,9 @@ export const getNameFromFormattedUrl = (formattedUrl: string): string => {
 export async function handleShareUrl(url: string): Promise<void> {
   try {
     await Share.share({ message: url });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (e: any) {
-    logger.error(new RainbowError('Error sharing browser URL'), {
-      message: e.message,
+  } catch (e) {
+    logger.error(new RainbowError('[DappBrowser]: Error sharing browser URL'), {
+      error: ensureError(e),
       url,
     });
   }

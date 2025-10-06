@@ -6,17 +6,20 @@ import { LayoutChangeEvent, PixelRatio, RefreshControl, ScrollViewProps, StyleSh
 import { DataProvider, LayoutProvider, RecyclerListView } from 'recyclerlistview';
 import { RecyclerListViewProps, RecyclerListViewState } from 'recyclerlistview/dist/reactnative/core/RecyclerListView';
 import StickyContainer from 'recyclerlistview/dist/reactnative/core/StickyContainer';
-import { withThemeContext } from '../../../theme/ThemeContext';
+import { ThemeContextProps, withThemeContext } from '../../../theme/ThemeContext';
 import { CoinDivider, CoinDividerHeight } from '../../coin-divider';
 import { CoinRowHeight } from '../../coin-row';
 import AssetListHeader, { AssetListHeaderHeight } from '../AssetListHeader';
-import { firstCoinRowMarginTop, ViewTypes } from '../RecyclerViewTypes';
+import { firstCoinRowMarginTop, ViewTypes } from './ViewTypes';
 import LayoutItemAnimator from './LayoutItemAnimator';
 import { EthereumAddress } from '@/entities';
-import { useCoinListEdited, useOpenFamilies, useOpenSmallBalances, usePrevious, useRefreshAccountData } from '@/hooks';
+import { useCoinListEdited, usePrevious, useRefreshAccountData } from '@/hooks';
 import styled from '@/styled-thing';
 import { deviceUtils } from '@/utils';
 import * as i18n from '@/languages';
+import { logger } from '@/logger';
+import { useOpenSmallBalances } from '@/state/wallets/smallBalancesStore';
+import { useOpenCollectionsStore } from '@/state/nfts/openCollectionsStore';
 
 const extractCollectiblesIdFromRow = (row: {
   item: {
@@ -31,8 +34,10 @@ const extractCollectiblesIdFromRow = (row: {
       });
     });
     return tokenAddresses;
-    // eslint-disable-next-line no-empty
-  } catch (e) {}
+  } catch (e) {
+    logger.warn(`[RecyclerAssetList]: Failed to extract collectibles id from row`, { e, row });
+    return '';
+  }
 };
 
 const extractRelevantAssetInfo = (asset: {
@@ -56,8 +61,10 @@ const extractRelevantAssetInfo = (asset: {
       nativeBalanceDisplay,
       relativeChange24h,
     };
-    // eslint-disable-next-line no-empty
-  } catch (e) {}
+  } catch (e) {
+    logger.warn(`[RecyclerAssetList]: Failed to extract relevant asset info`, { e, asset });
+    return null;
+  }
 };
 
 const defaultIndices = [0];
@@ -91,16 +98,14 @@ const isEqualDataProvider = new DataProvider((r1, r2) => {
 });
 
 const StyledRecyclerListView = styled(RecyclerListView)({
-  // @ts-expect-error
-  backgroundColor: ({ theme: { colors } }) => colors.white,
+  backgroundColor: ({ theme: { colors } }: { theme: ThemeContextProps }) => colors.white,
   display: 'flex',
   flex: 1,
   minHeight: 1,
 });
 
 const StyledContainer = styled(View)({
-  // @ts-expect-error
-  backgroundColor: ({ theme: { colors } }) => colors.white,
+  backgroundColor: ({ theme: { colors } }: { theme: ThemeContextProps }) => colors.white,
   display: 'flex',
   flex: 1,
   overflow: 'hidden',
@@ -113,7 +118,7 @@ export function useRecyclerListViewRef(): {
   readonly ref: RecyclerListViewRef | undefined;
   readonly _ref: React.MutableRefObject<RecyclerListViewRef | undefined>;
 } {
-  const ref = useRef<RecyclerListViewRef>();
+  const ref = useRef<RecyclerListViewRef>(undefined);
   const handleRef = React.useCallback(
     (nextRef: RecyclerListViewRef): void => {
       ref.current = nextRef;
@@ -127,17 +132,14 @@ export function useRecyclerListViewRef(): {
 
 export type RecyclerAssetListSection = {
   readonly name: string;
-  readonly balances: boolean;
+  readonly balances?: boolean;
   readonly data: any[];
-  readonly collectibles: {
-    readonly data: readonly any[];
-  };
   readonly header: {
-    readonly title: string;
-    readonly totalItems: number;
-    readonly totalValue: string;
+    readonly title?: string;
+    readonly totalItems?: number;
+    readonly totalValue?: string;
   };
-  readonly perData: any;
+  readonly perData?: any;
   readonly renderItem: (item: any) => JSX.Element | null;
   readonly type: string;
 };
@@ -145,11 +147,7 @@ export type RecyclerAssetListSection = {
 const NoStickyContainer = ({ children }: { children: JSX.Element }): JSX.Element => children;
 
 export type RecyclerAssetListProps = {
-  // TODO: This needs to be migrated into a global type.
-  readonly colors: {
-    readonly alpha: (color: string, alpha: number) => string;
-    readonly blueGreyDark: string;
-  };
+  readonly colors: ThemeContextProps['colors'];
   readonly sections: readonly RecyclerAssetListSection[];
   readonly paddingBottom?: number;
   readonly hideHeader: boolean;
@@ -175,9 +173,9 @@ function RecyclerAssetList({
   const { isCoinListEdited, setIsCoinListEdited } = useCoinListEdited();
   const { refresh, isRefreshing } = useRefreshAccountData();
   const { isSmallBalancesOpen: openSmallBalances } = useOpenSmallBalances();
-  const { openFamilies: openFamilyTabs } = useOpenFamilies();
+  const openCollections = useOpenCollectionsStore(state => state.openCollections);
   const { ref, handleRef } = useRecyclerListViewRef();
-  const stickyCoinDividerRef = React.useRef<View>() as React.RefObject<View>;
+  const stickyCoinDividerRef = React.useRef<View>(undefined) as React.RefObject<View>;
   const [globalDeviceDimensions, setGlobalDeviceDimensions] = useState<number>(0);
   const { areSmallCollectibles, items, itemsCount, sectionsIndices, stickyComponentsIndices } = useMemo(() => {
     const sectionsIndices: number[] = [];
@@ -191,9 +189,9 @@ function RecyclerAssetList({
           ...section.header,
         },
       ]);
-      if (section.collectibles) {
+      if (section.name === 'collectibles') {
         section.data.forEach((item, index) => {
-          if (item.isHeader || openFamilyTabs[item.familyName + (showcase ? '-showcase' : '')]) {
+          if (item.isHeader || openCollections[item.familyName + (showcase ? '-showcase' : '')]) {
             ctx.push({
               familySectionIndex: index,
               item: { ...item, ...section.perData },
@@ -212,7 +210,7 @@ function RecyclerAssetList({
       return ctx;
     }, []);
     items.push({ item: { isLastPlaceholder: true }, renderItem: () => null });
-    const areSmallCollectibles = (c => c && c?.type === 'small')(sections.find(e => e.collectibles));
+    const areSmallCollectibles = (c => c && c?.type === 'small')(sections.find(e => e.name === 'collectibles'));
     return {
       areSmallCollectibles,
       items,
@@ -220,7 +218,7 @@ function RecyclerAssetList({
       sectionsIndices,
       stickyComponentsIndices,
     };
-  }, [openFamilyTabs, sections, showcase]);
+  }, [openCollections, sections, showcase]);
 
   // Defines the position of the coinDivider, if it exists.
   const coinDividerIndex = useMemo<number>(() => {
@@ -411,7 +409,7 @@ function RecyclerAssetList({
                 amountOfRows: sections?.[collectiblesIndex]?.data?.[familyIndex]?.tokens?.length ?? 0,
                 isFirst,
                 isHeader,
-                isOpen: openFamilyTabs[sections[collectiblesIndex].data[familyIndex].familyName + (showcase ? '-showcase' : '')],
+                isOpen: openCollections[sections[collectiblesIndex].data[familyIndex].familyName + (showcase ? '-showcase' : '')],
               }),
               index: ViewTypes.UNIQUE_TOKEN_ROW.index,
               isFirst,
@@ -442,7 +440,7 @@ function RecyclerAssetList({
     isCoinListEdited,
     items,
     itemsCount,
-    openFamilyTabs,
+    openCollections,
     openSmallBalances,
     paddingBottom,
     sections,
@@ -475,7 +473,7 @@ function RecyclerAssetList({
   }, [items]);
 
   const lastSections = usePrevious(sections) || sections;
-  const lastOpenFamilyTabs = usePrevious(openFamilyTabs) || openFamilyTabs;
+  const lastOpenCollections = usePrevious(openCollections);
   const lastIsCoinListEdited = usePrevious(isCoinListEdited) || isCoinListEdited;
 
   useEffect(() => {
@@ -490,10 +488,10 @@ function RecyclerAssetList({
 
     if (sections) {
       sections.forEach(section => {
-        if (section?.collectibles) {
+        if (section?.name === 'collectibles') {
           collectibles = section;
         }
-        if (section?.balances) {
+        if (section?.name === 'balances') {
           balances = section;
         }
       });
@@ -524,7 +522,7 @@ function RecyclerAssetList({
       const colleciblesStartHeight = balancesHeight + smallBalancesHeight;
 
       lastSections.forEach(section => {
-        if (section.collectibles) {
+        if (section.name === 'collectibles') {
           prevCollectibles = section;
         }
       });
@@ -547,11 +545,11 @@ function RecyclerAssetList({
     globalDeviceDimensions,
     dataProvider,
     lastIsCoinListEdited,
-    lastOpenFamilyTabs,
+    lastOpenCollections,
     lastSections,
     sections,
     isCoinListEdited,
-    openFamilyTabs,
+    openCollections,
     openSmallBalances,
     paddingBottom,
     showcase,
@@ -571,7 +569,6 @@ function RecyclerAssetList({
 
   return (
     <StyledContainer onLayout={onLayout}>
-      {/* @ts-ignore */}
       <MaybeStickyContainer
         overrideRowRenderer={stickyRowRenderer}
         stickyHeaderIndices={disableStickyHeaders ? [] : isCoinListEdited ? defaultIndices : stickyComponentsIndices}
@@ -606,6 +603,7 @@ function RecyclerAssetList({
           },
         ]}
       >
+        {/* @ts-expect-error - untyped js file */}
         <CoinDivider balancesSum={0} defaultToEditButton={false} extendedState={coinDividerExtendedState} />
       </View>
     </StyledContainer>

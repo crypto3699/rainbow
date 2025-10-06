@@ -1,18 +1,14 @@
 import React from 'react';
 import { Box, BoxProps } from '@/design-system';
-import { useAccountSettings } from '@/hooks';
-import { usePositions } from '@/resources/defi/PositionsQuery';
 import { PositionCard } from '@/components/positions/PositionsCard';
+import { RainbowPosition } from '@/resources/defi/types';
 
-export default function WrappedPosition({ uniqueId, placement }: { uniqueId: string; placement: 'left' | 'right' }) {
-  const { accountAddress, nativeCurrency } = useAccountSettings();
-  const { data } = usePositions({
-    address: accountAddress,
-    currency: nativeCurrency,
-  });
+type Props = {
+  position: RainbowPosition;
+  placement: 'left' | 'right';
+};
 
-  const position = data?.positions.find(position => position.type === uniqueId);
-
+function WrappedPosition({ position, placement }: Props) {
   const placementProps: BoxProps =
     placement === 'left'
       ? {
@@ -27,9 +23,12 @@ export default function WrappedPosition({ uniqueId, placement }: { uniqueId: str
         };
 
   if (!position) return null;
+
   return (
     <Box justifyContent="center" testID={`wrapped-position-${position.type}`} {...placementProps}>
       <PositionCard position={position} />
     </Box>
   );
 }
+
+export default React.memo(WrappedPosition);

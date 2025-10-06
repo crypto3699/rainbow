@@ -1,4 +1,4 @@
-import { useRoute } from '@react-navigation/native';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import React, { useMemo } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useRecoilState } from 'recoil';
@@ -9,6 +9,8 @@ import { accentColorAtom, textRecordFields } from '@/helpers/ens';
 import { useENSRegistrationForm } from '@/hooks';
 import { deviceUtils } from '@/utils';
 import { IS_ANDROID } from '@/env';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
 
 export const ENSAdditionalRecordsSheetHeight = 262;
 const recordLineHeight = 30;
@@ -21,16 +23,16 @@ export const getENSAdditionalRecordsSheetHeight = () => {
 };
 
 export default function ENSAdditionalRecordsSheet() {
-  const { params } = useRoute<any>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.ENS_CONFIRM_REGISTER_SHEET>>();
   const [accentColor] = useRecoilState(accentColorAtom);
   const { selectedFields, onAddField, onRemoveField } = useENSRegistrationForm();
   const { height: deviceHeight } = useWindowDimensions();
 
   const boxStyle = useMemo(
     () => ({
-      height: params.longFormHeight || ENSAdditionalRecordsSheetHeight,
+      height: params?.longFormHeight || ENSAdditionalRecordsSheetHeight,
     }),
-    [params.longFormHeight]
+    [params?.longFormHeight]
   );
 
   const androidTop = deviceHeight - boxStyle.height - recordLineHeight;

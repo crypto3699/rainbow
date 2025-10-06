@@ -3,9 +3,10 @@ import { Dispatch } from 'react';
 import { AppDispatch, AppGetState } from './store';
 import { ENSRegistrations, ENSRegistrationState, Records, RegistrationParameters, TransactionRegistrationParameters } from '@/entities';
 import { getLocalENSRegistrations, saveLocalENSRegistrations } from '@/handlers/localstorage/accountLocal';
-import { NetworkTypes } from '@/helpers';
 import { ENS_RECORDS, REGISTRATION_MODES } from '@/helpers/ens';
 import { omitFlatten } from '@/helpers/utilities';
+import { Network } from '@/state/backendNetworks/types';
+import { getAccountAddress } from '@/state/wallets/walletsStore';
 
 const ENS_REGISTRATION_SET_CHANGED_RECORDS = 'ensRegistration/ENS_REGISTRATION_SET_CHANGED_RECORDS';
 const ENS_REGISTRATION_SET_INITIAL_RECORDS = 'ensRegistration/ENS_REGISTRATION_SET_INITIAL_RECORDS';
@@ -113,7 +114,8 @@ export type EnsRegistrationActionTypes =
  * Loads initial state from account local storage.
  */
 export const ensRegistrationsLoadState = () => async (dispatch: Dispatch<EnsRegistrationLoadState>, getState: AppGetState) => {
-  const { accountAddress, network } = getState().settings;
+  const { network } = getState().settings;
+  const accountAddress = getAccountAddress();
   try {
     const registrations = await getLocalENSRegistrations(accountAddress, network);
     dispatch({
@@ -126,9 +128,9 @@ export const ensRegistrationsLoadState = () => async (dispatch: Dispatch<EnsRegi
 
 export const startRegistration =
   (name: string, mode: keyof typeof REGISTRATION_MODES) => async (dispatch: AppDispatch, getState: AppGetState) => {
+    const accountAddress = getAccountAddress();
     const {
       ensRegistration: { registrations },
-      settings: { accountAddress },
     } = getState();
     const lcAccountAddress = accountAddress.toLowerCase();
     const accountRegistrations = registrations?.[lcAccountAddress] || {};
@@ -161,9 +163,9 @@ export const continueRegistration = (name: string) => async (dispatch: AppDispat
 };
 
 export const removeExpiredRegistrations = () => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations },
-    settings: { accountAddress },
   } = getState();
 
   const accountRegistrations = registrations?.[accountAddress.toLowerCase()] || [];
@@ -183,9 +185,9 @@ export const removeExpiredRegistrations = () => async (dispatch: AppDispatch, ge
 };
 
 export const setInitialRecords = (records: Records) => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations, currentRegistrationName },
-    settings: { accountAddress },
   } = getState();
   const lcAccountAddress = accountAddress.toLowerCase();
   const accountRegistrations = registrations?.[lcAccountAddress] || {};
@@ -211,9 +213,9 @@ export const setInitialRecords = (records: Records) => async (dispatch: AppDispa
 };
 
 export const setChangedRecords = (changedRecords: Records) => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations, currentRegistrationName },
-    settings: { accountAddress },
   } = getState();
   const lcAccountAddress = accountAddress.toLowerCase();
   const accountRegistrations = registrations?.[lcAccountAddress] || {};
@@ -238,9 +240,9 @@ export const setChangedRecords = (changedRecords: Records) => async (dispatch: A
 };
 
 export const updateRecords = (records: Records) => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations, currentRegistrationName },
-    settings: { accountAddress },
   } = getState();
   const lcAccountAddress = accountAddress.toLowerCase();
   const accountRegistrations = registrations?.[lcAccountAddress] || {};
@@ -262,9 +264,9 @@ export const updateRecords = (records: Records) => async (dispatch: AppDispatch,
 };
 
 export const updateRecordByKey = (key: string, value: string) => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations, currentRegistrationName },
-    settings: { accountAddress },
   } = getState();
   const lcAccountAddress = accountAddress.toLowerCase();
 
@@ -290,9 +292,9 @@ export const updateRecordByKey = (key: string, value: string) => async (dispatch
 };
 
 export const removeRecordByKey = (key: string) => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations, currentRegistrationName },
-    settings: { accountAddress },
   } = getState();
 
   const lcAccountAddress = accountAddress.toLowerCase();
@@ -324,9 +326,9 @@ export const removeRecordByKey = (key: string) => async (dispatch: AppDispatch, 
 export const saveCommitRegistrationParameters =
   (registrationParameters: RegistrationParameters | TransactionRegistrationParameters) =>
   async (dispatch: AppDispatch, getState: AppGetState) => {
+    const accountAddress = getAccountAddress();
     const {
       ensRegistration: { registrations, currentRegistrationName },
-      settings: { accountAddress },
     } = getState();
     const registrationName = (registrationParameters as RegistrationParameters)?.name || currentRegistrationName;
     const lcAccountAddress = accountAddress.toLowerCase();
@@ -345,7 +347,7 @@ export const saveCommitRegistrationParameters =
       },
     };
 
-    saveLocalENSRegistrations(updatedEnsRegistrationManager.registrations, accountAddress, NetworkTypes.mainnet);
+    saveLocalENSRegistrations(updatedEnsRegistrationManager.registrations, accountAddress, Network.mainnet);
 
     dispatch({
       payload: updatedEnsRegistrationManager,
@@ -361,9 +363,9 @@ export const clearCurrentRegistrationName = () => async (dispatch: AppDispatch) 
 
 export const updateTransactionRegistrationParameters =
   (registrationParameters: TransactionRegistrationParameters) => async (dispatch: AppDispatch, getState: AppGetState) => {
+    const accountAddress = getAccountAddress();
     const {
       ensRegistration: { registrations, currentRegistrationName },
-      settings: { accountAddress },
     } = getState();
 
     const lcAccountAddress = accountAddress.toLowerCase();
@@ -382,7 +384,7 @@ export const updateTransactionRegistrationParameters =
       },
     };
 
-    saveLocalENSRegistrations(updatedEnsRegistrationManager.registrations, accountAddress, NetworkTypes.mainnet);
+    saveLocalENSRegistrations(updatedEnsRegistrationManager.registrations, accountAddress, Network.mainnet);
 
     dispatch({
       payload: updatedEnsRegistrationManager,
@@ -391,9 +393,9 @@ export const updateTransactionRegistrationParameters =
   };
 
 export const removeRegistrationByName = (name: string) => async (dispatch: AppDispatch, getState: AppGetState) => {
+  const accountAddress = getAccountAddress();
   const {
     ensRegistration: { registrations },
-    settings: { accountAddress },
   } = getState();
 
   const lcAccountAddress = accountAddress.toLowerCase();
@@ -408,7 +410,7 @@ export const removeRegistrationByName = (name: string) => async (dispatch: AppDi
     },
   };
 
-  saveLocalENSRegistrations(updatedEnsRegistrationManager.registrations, accountAddress, NetworkTypes.mainnet);
+  saveLocalENSRegistrations(updatedEnsRegistrationManager.registrations, accountAddress, Network.mainnet);
 
   dispatch({
     payload: updatedEnsRegistrationManager,

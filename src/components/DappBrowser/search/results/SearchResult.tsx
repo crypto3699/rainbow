@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { StyleSheet } from 'react-native';
 import { Source } from 'react-native-fast-image';
-import Animated, { SharedValue, useAnimatedProps, useAnimatedStyle, useDerivedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedProps, useAnimatedStyle, useDerivedValue } from 'react-native-reanimated';
 import GoogleSearchIcon from '@/assets/googleSearchIcon.png';
 import { AnimatedFasterImage } from '@/components/AnimatedComponents/AnimatedFasterImage';
 import { ButtonPressAnimation } from '@/components/animations';
@@ -9,7 +9,7 @@ import { ImgixImage } from '@/components/images';
 import { DEFAULT_FASTER_IMAGE_CONFIG } from '@/components/images/ImgixImage';
 import { AnimatedText, Box, Inline, Stack, Text, globalColors, useColorMode, useForegroundColor } from '@/design-system';
 import { useDimensions } from '@/hooks';
-import { Dapp } from '@/resources/metadata/dapps';
+import * as i18n from '@/languages';
 import { THICK_BORDER_WIDTH } from '@/__swaps__/screens/Swap/constants';
 import { useSearchContext } from '../SearchContext';
 
@@ -18,34 +18,46 @@ export const SearchResult = ({ index, goToUrl }: { index: number; goToUrl: (url:
   const { isDarkMode } = useColorMode();
   const { width: deviceWidth } = useDimensions();
 
-  const dapp: SharedValue<Dapp | undefined> = useDerivedValue(() => searchResults?.value[index]);
-  const name: SharedValue<string | undefined> = useDerivedValue(() => dapp.value?.name);
-  const url: SharedValue<string | undefined> = useDerivedValue(() => dapp.value?.url);
-  const urlDisplay: SharedValue<string | undefined> = useDerivedValue(() => dapp.value?.urlDisplay);
+  const dapp = useDerivedValue(() => (_WORKLET ? searchResults?.value[index] : null));
+  const iconUrl = useDerivedValue(() => (_WORKLET ? dapp.value?.iconUrl ?? dapp.value?.name : undefined));
+  const name = useDerivedValue(() => (_WORKLET ? dapp.value?.name : undefined));
+  const urlDisplay = useDerivedValue(() => (_WORKLET ? dapp.value?.urlDisplay : undefined));
 
   const animatedIconSource = useAnimatedProps(() => {
     return {
       source: {
         ...DEFAULT_FASTER_IMAGE_CONFIG,
-        url: dapp.value?.iconUrl ?? '',
+        url: _WORKLET ? iconUrl.value : '',
       },
     };
   });
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      display: dapp.value ? 'flex' : 'none',
+      display: _WORKLET && dapp.value ? 'flex' : 'none',
     };
   });
 
   const separatorSecondary = useForegroundColor('separatorSecondary');
   const separatorTertiary = useForegroundColor('separatorTertiary');
 
-  const onPress = useCallback(() => url.value && goToUrl(url.value), [goToUrl, url.value]);
+  const onPress = useCallback(() => {
+    const url = dapp.value?.url;
+    if (url) {
+      goToUrl(url);
+    }
+  }, [dapp, goToUrl]);
 
   const fallbackIconStyle = useAnimatedStyle(() => {
-    return { display: dapp.value?.iconUrl ? 'none' : 'flex' };
+    return { display: !_WORKLET || dapp.value?.iconUrl ? 'none' : 'flex' };
   });
+
+  const imageStyle = useAnimatedStyle(() => {
+    return {
+      display: _WORKLET && dapp.value?.iconUrl ? 'flex' : 'none',
+    };
+  });
+
   return (
     <Animated.View style={animatedStyle}>
       <Box
@@ -70,11 +82,13 @@ export const SearchResult = ({ index, goToUrl }: { index: number; goToUrl: (url:
           <Box width={{ custom: 40 }} height={{ custom: 40 }}>
             <Box style={styles.iconContainer}>
               <Animated.View style={[{ width: 40, height: 40, justifyContent: 'center' }, fallbackIconStyle]}>
-                <AnimatedText color="labelQuaternary" size="icon 28px" weight="black" staticText="􀎭" align="center" />
+                <AnimatedText align="center" color="labelQuaternary" size="icon 28px" weight="black">
+                  􀎭
+                </AnimatedText>
               </Animated.View>
               {/* ⚠️ TODO: This works but we should figure out how to type this correctly to avoid this error */}
-              {/* @ts-expect-error: Doesn't pick up that its getting a source prop via animatedProps */}
-              <AnimatedFasterImage animatedProps={animatedIconSource} style={styles.iconImage} />
+              {/* @ts-expect-error: Doesn't pick up that it's getting a source prop via animatedProps */}
+              <AnimatedFasterImage animatedProps={animatedIconSource} style={[imageStyle, styles.iconImage]} />
             </Box>
           </Box>
           <Box width={{ custom: deviceWidth - 100 }}>
@@ -93,11 +107,13 @@ export const SearchResult = ({ index, goToUrl }: { index: number; goToUrl: (url:
   );
 };
 
+const searchText = i18n.t(i18n.l.dapp_browser.search.search);
+
 export const GoogleSearchResult = ({ goToUrl }: { goToUrl: (url: string) => void }) => {
   const { searchQuery } = useSearchContext();
   const { width: deviceWidth } = useDimensions();
 
-  const animatedText = useDerivedValue(() => `Search "${searchQuery?.value}"`);
+  const animatedText = useDerivedValue(() => (_WORKLET ? `${searchText} "${searchQuery?.value}"` : ''));
 
   const onPress = useCallback(
     () => searchQuery && goToUrl(`https://www.google.com/search?q=${encodeURIComponent(searchQuery.value)}`),

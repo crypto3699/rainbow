@@ -1,7 +1,25 @@
-import { Network } from '@/helpers';
+import { Block, Provider } from '@ethersproject/abstract-provider';
+import { MaxUint256 } from '@ethersproject/constants';
+import { Contract, PopulatedTransaction } from '@ethersproject/contracts';
+import { StaticJsonRpcProvider } from '@ethersproject/providers';
+import { CrosschainQuote, Quote, getQuoteExecutionDetails, getTargetAddress } from '@rainbow-me/swaps';
+import { mainnet } from 'viem/chains';
+import { Chain, erc20Abi } from 'viem';
 import { GasFeeParamsBySpeed, LegacyGasFeeParamsBySpeed, LegacyTransactionGasParamAmounts, TransactionGasParamAmounts } from '@/entities';
-import { ethereumUtils, gasUtils } from '@/utils';
-import { add, greaterThan } from '@/helpers/utilities';
+import { gasUtils } from '@/utils';
+import { add, greaterThan, multiply } from '@/helpers/utilities';
+import { ChainId } from '@/state/backendNetworks/types';
+import { gasUnits } from '@/references';
+import { toHexNoLeadingZeros } from '@/handlers/web3';
+import { BigNumber } from '@ethersproject/bignumber';
+import { SwapsGasFeeParamsBySpeed } from '@/__swaps__/screens/Swap/hooks/useSelectedGas';
+
+export const CHAIN_IDS_WITH_TRACE_SUPPORT: ChainId[] = [mainnet.id];
+export const SWAP_GAS_PADDING = 1.1;
+
+const GAS_LIMIT_INCREMENT = 50000;
+const EXTRA_GAS_PADDING = 1.5;
+const TRACE_CALL_BLOCK_NUMBER_OFFSET = 20;
 
 export const overrideWithFastSpeedIfNeeded = ({
   gasParams,
@@ -10,9 +28,9 @@ export const overrideWithFastSpeedIfNeeded = ({
 }: {
   gasParams: TransactionGasParamAmounts | LegacyTransactionGasParamAmounts;
   chainId: number;
-  gasFeeParamsBySpeed: GasFeeParamsBySpeed | LegacyGasFeeParamsBySpeed;
+  gasFeeParamsBySpeed: SwapsGasFeeParamsBySpeed | GasFeeParamsBySpeed | LegacyGasFeeParamsBySpeed;
 }): TransactionGasParamAmounts | LegacyTransactionGasParamAmounts => {
-  if (chainId !== ethereumUtils.getChainIdFromNetwork(Network.mainnet)) {
+  if (chainId !== ChainId.mainnet) {
     return gasParams;
   }
   const transactionGasParams = gasParams as TransactionGasParamAmounts;
@@ -31,4 +49,171 @@ export const overrideWithFastSpeedIfNeeded = ({
   }
 
   return transactionGasParams;
+};
+
+const getStateDiff = async (provider: Provider, quote: Quote | CrosschainQuote): Promise<unknown> => {
+  const tokenAddress = quote.sellTokenAddress;
+  const fromAddr = quote.from;
+  const toAddr = quote.swapType === 'normal' ? getTargetAddress(quote) : (quote as CrosschainQuote).allowanceTarget;
+  const tokenContract = new Contract(tokenAddress, erc20Abi, provider);
+
+  const { number: blockNumber } = await (provider.getBlock as () => Promise<Block>)();
+
+  // Get data
+  const { data } = await tokenContract.populateTransaction.approve(toAddr, MaxUint256.toHexString());
+
+  // trace_call default params
+  const callParams = [
+    {
+      data,
+      from: fromAddr,
+      to: tokenAddress,
+      value: '0x0',
+    },
+    ['stateDiff'],
+    toHexNoLeadingZeros(blockNumber - TRACE_CALL_BLOCK_NUMBER_OFFSET),
+  ];
+
+  const trace = await (provider as StaticJsonRpcProvider).send('trace_call', callParams);
+
+  if (trace.stateDiff) {
+    const slotAddress = Object.keys(trace.stateDiff[tokenAddress]?.storage)?.[0];
+    if (slotAddress) {
+      const formattedStateDiff = {
+        [tokenAddress]: {
+          stateDiff: {
+            [slotAddress]: MaxUint256.toHexString(),
+          },
+        },
+      };
+      return formattedStateDiff;
+    }
+  }
+};
+
+const getClosestGasEstimate = async (estimationFn: (gasEstimate: number) => Promise<boolean>): Promise<string> => {
+  // From 200k to 1M
+  const gasEstimates = Array.from(Array(21).keys())
+    .filter(x => x > 3)
+    .map(x => x * GAS_LIMIT_INCREMENT);
+
+  let start = 0;
+  let end = gasEstimates.length - 1;
+
+  let highestFailedGuess = null;
+  let lowestSuccessfulGuess = null;
+  let lowestFailureGuess = null;
+  // guess is typically middle of array
+  let guessIndex = Math.floor((end - start) / 2);
+  while (end > start) {
+    const gasEstimationSucceded = await estimationFn(gasEstimates[guessIndex]);
+    if (gasEstimationSucceded) {
+      if (!lowestSuccessfulGuess || guessIndex < lowestSuccessfulGuess) {
+        lowestSuccessfulGuess = guessIndex;
+      }
+      end = guessIndex;
+      guessIndex = Math.max(Math.floor((end + start) / 2) - 1, highestFailedGuess || 0);
+    } else if (!gasEstimationSucceded) {
+      if (!highestFailedGuess || guessIndex > highestFailedGuess) {
+        highestFailedGuess = guessIndex;
+      }
+      if (!lowestFailureGuess || guessIndex < lowestFailureGuess) {
+        lowestFailureGuess = guessIndex;
+      }
+      start = guessIndex;
+      guessIndex = Math.ceil((end + start) / 2);
+    }
+
+    if (
+      (highestFailedGuess !== null && highestFailedGuess + 1 === lowestSuccessfulGuess) ||
+      lowestSuccessfulGuess === 0 ||
+      (lowestSuccessfulGuess !== null && lowestFailureGuess === lowestSuccessfulGuess - 1)
+    ) {
+      return String(gasEstimates[lowestSuccessfulGuess]);
+    }
+
+    if (highestFailedGuess === gasEstimates.length - 1) {
+      return '-1';
+    }
+  }
+  return '-1';
+};
+
+export const getDefaultGasLimitForTrade = (quote: Quote, chainId: Chain['id']): string => {
+  return quote?.defaultGasLimit || multiply(gasUnits.basic_swap[chainId], EXTRA_GAS_PADDING);
+};
+
+export const estimateSwapGasLimitWithFakeApproval = async (
+  chainId: number,
+  provider: Provider,
+  quote: Quote | CrosschainQuote
+): Promise<string> => {
+  let stateDiff: unknown;
+
+  try {
+    stateDiff = await getStateDiff(provider, quote);
+    const { router, methodName, params, methodArgs } = getQuoteExecutionDetails(
+      quote,
+      { from: quote.from },
+      provider as StaticJsonRpcProvider
+    );
+
+    const { data } = await router.populateTransaction[methodName](...(methodArgs ?? []), params);
+
+    const gasLimit = await getClosestGasEstimate(async (gas: number) => {
+      const callParams = [
+        {
+          data,
+          from: quote.from,
+          gas: toHexNoLeadingZeros(String(gas)),
+          gasPrice: toHexNoLeadingZeros(`100000000000`),
+          to: quote.swapType === 'normal' ? getTargetAddress(quote) : (quote as CrosschainQuote).allowanceTarget,
+          value: '0x0', // 100 gwei
+        },
+        'latest',
+      ];
+
+      try {
+        await (provider as StaticJsonRpcProvider).send('eth_call', [...callParams, stateDiff]);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    });
+    if (gasLimit && greaterThan(gasLimit, gasUnits.basic_swap[ChainId.mainnet])) {
+      return gasLimit;
+    }
+  } catch (e) {
+    //
+  }
+  return getDefaultGasLimitForTrade(quote, chainId);
+};
+
+export const populateSwap = async ({
+  provider,
+  quote,
+}: {
+  provider: Provider;
+  quote: Quote | CrosschainQuote;
+}): Promise<PopulatedTransaction | null> => {
+  if (quote.swapType === 'cross-chain') {
+    return {
+      to: quote.to,
+      from: quote.from,
+      data: quote.data,
+      value: BigNumber.from(quote.value),
+    };
+  } else {
+    try {
+      const { router, methodName, params, methodArgs } = getQuoteExecutionDetails(
+        quote,
+        { from: quote.from },
+        provider as StaticJsonRpcProvider
+      );
+      const swapTransaction = await router.populateTransaction[methodName](...(methodArgs ?? []), params);
+      return swapTransaction;
+    } catch (e) {
+      return null;
+    }
+  }
 };

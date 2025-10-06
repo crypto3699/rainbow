@@ -3,8 +3,8 @@ import { LayoutAnimation } from 'react-native';
 import { View } from 'react-primitives';
 import { DataProvider, LayoutProvider, RecyclerListView } from 'recyclerlistview';
 import { buildCoinsList } from '../../helpers/assets';
-import { deviceUtils } from '../../utils';
-import Divider, { DividerSize } from '../Divider';
+import { deviceUtils, safeAreaInsetValues } from '../../utils';
+import Divider, { DividerSize } from '@/components/Divider';
 import { FlyInAnimation } from '../animations';
 import { CoinDividerOpenButton } from '../coin-divider';
 import { CollectiblesSendRow, SendCoinRow } from '../coin-row';
@@ -30,6 +30,10 @@ const SendAssetListDivider = () => {
       <Divider color={colors.rowDividerExtraLight} />
     </Centered>
   );
+};
+
+const SendAssetListFooter = () => {
+  return <View style={{ height: safeAreaInsetValues.bottom, width: '100%' }} />;
 };
 
 export default class SendAssetList extends React.Component {
@@ -75,10 +79,10 @@ export default class SendAssetList extends React.Component {
     const imageTokens = [];
     uniqueTokens.forEach(family => {
       family.data.forEach(token => {
-        if (token.image_thumbnail_url) {
+        if (token.images.lowResUrl) {
           imageTokens.push({
-            id: token.id,
-            uri: token.image_thumbnail_url,
+            id: token.tokenId,
+            uri: token.images.lowResUrl,
           });
         }
       });
@@ -182,7 +186,7 @@ export default class SendAssetList extends React.Component {
     collectibles.map(collectible => (
       <CollectiblesSendRow
         item={collectible}
-        key={collectible.id}
+        key={collectible.uniqueId}
         onPress={() => this.props.onSelectAsset(collectible)}
         testID="send-collectible"
       />
@@ -242,10 +246,10 @@ export default class SendAssetList extends React.Component {
     const { openShitcoins } = this.state;
     return (
       <View>
-        <View marginTop={android ? 0 : 5}>
+        <View marginTop={5}>
           <CoinDividerOpenButton isSmallBalancesOpen={openShitcoins} onPress={this.changeOpenShitcoins} />
         </View>
-        {openShitcoins && <View marginTop={android ? 1 : -4}>{this.mapShitcoins(item.assets)}</View>}
+        {openShitcoins && <View marginTop={-4}>{this.mapShitcoins(item.assets)}</View>}
       </View>
     );
   };
@@ -278,6 +282,7 @@ export default class SendAssetList extends React.Component {
           onScroll={this.handleScroll}
           ref={this.handleRef}
           rowRenderer={this.renderRow}
+          renderFooter={SendAssetListFooter}
           testID="send-asset-list"
         />
       </FlyInAnimation>

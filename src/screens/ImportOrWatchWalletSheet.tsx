@@ -4,27 +4,22 @@ import { AccentColorProvider, Box, globalColors, Inset, Stack, Text, useForegrou
 import { IS_ANDROID } from '@/env';
 import { useImportingWallet, useKeyboardHeight } from '@/hooks';
 import { colors } from '@/styles';
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import * as i18n from '@/languages';
 import { ButtonPressAnimation } from '@/components/animations';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { LoadingOverlay } from '@/components/modal';
+import { RootStackParamList } from '@/navigation/types';
+import Routes from '@/navigation/routesNames';
+import { Keyboard } from 'react-native';
 
 const TRANSLATIONS = i18n.l.wallet.new.import_or_watch_wallet_sheet;
 
-export type ImportOrWatchWalletSheetParams = {
-  type: 'watch' | 'import';
-};
-
-type RouteParams = {
-  ImportOrWatchWalletSheetParams: ImportOrWatchWalletSheetParams;
-};
-
 export const ImportOrWatchWalletSheet = () => {
-  const { params: { type = 'watch' } = {} } = useRoute<RouteProp<RouteParams, 'ImportOrWatchWalletSheetParams'>>();
+  const { params: { type = 'watch' } = {} } = useRoute<RouteProp<RootStackParamList, typeof Routes.IMPORT_OR_WATCH_WALLET_SHEET>>();
 
-  const { busy, handleFocus, handlePressImportButton, handleSetSeedPhrase, inputRef, isSecretValid, seedPhrase } = useImportingWallet();
+  const { busy, handlePressImportButton, handleSetSeedPhrase, inputRef, isSecretValid, seedPhrase } = useImportingWallet();
   const keyboardHeight = useKeyboardHeight();
 
   const textStyle = useTextStyle({
@@ -34,8 +29,29 @@ export const ImportOrWatchWalletSheet = () => {
     weight: 'semibold',
   });
   const labelTertiary = useForegroundColor('labelTertiary');
+  const hasRefocused = useRef(false);
 
-  useFocusEffect(useCallback(() => inputRef.current?.focus(), [inputRef]));
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+        // lower value than this seems to cause a bug where it de-focuses immediately
+      }, 500);
+
+      return () => {
+        clearTimeout(timer);
+        Keyboard.dismiss();
+      };
+    }, [inputRef])
+  );
+
+  const refocusOnce = () => {
+    // given we are using rough timing, for slow devices we can ensure it doesn't de-focus here
+    if (!hasRefocused.current) {
+      hasRefocused.current = true;
+      inputRef.current?.focus();
+    }
+  };
 
   const buttonDisabled = seedPhrase && !isSecretValid;
 
@@ -64,18 +80,16 @@ export const ImportOrWatchWalletSheet = () => {
         >
           <Input
             autoCorrect={false}
-            autoFocus={false}
             autoCapitalize="none"
             textContentType="none"
             enablesReturnKeyAutomatically
+            onBlur={refocusOnce}
             keyboardType={IS_ANDROID ? 'visible-password' : 'default'}
             onChangeText={handleSetSeedPhrase}
-            onFocus={handleFocus}
             multiline
             numberOfLines={3}
             onSubmitEditing={() => {
-              // @ts-expect-error callback needs refactor
-              if (isSecretValid) handlePressImportButton();
+              if (isSecretValid) handlePressImportButton({ type });
             }}
             placeholder={i18n.t(TRANSLATIONS[type].placeholder)}
             placeholderTextColor={labelTertiary}
@@ -95,7 +109,9 @@ export const ImportOrWatchWalletSheet = () => {
               <ButtonPressAnimation
                 disabled={buttonDisabled}
                 onPress={
-                  seedPhrase ? handlePressImportButton : () => Clipboard.getString().then((text: string) => handleSetSeedPhrase(text))
+                  seedPhrase
+                    ? handlePressImportButton
+                    : () => Clipboard.getString().then((text: string) => handleSetSeedPhrase(text.trim()))
                 }
                 overflowMargin={50}
                 testID="import-sheet-button"

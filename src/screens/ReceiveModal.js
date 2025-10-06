@@ -1,23 +1,23 @@
+import { SimpleSheet } from '@/components/sheet/SimpleSheet';
+import { Box } from '@/design-system';
+import { IS_ANDROID, IS_IOS } from '@/env';
 import { toChecksumAddress } from '@/handlers/web3';
-import { toLower } from 'lodash';
-import React, { useCallback, useState } from 'react';
-import { useSelector } from 'react-redux';
-import { createSelector } from 'reselect';
-import TouchableBackdrop from '../components/TouchableBackdrop';
-import { CopyFloatingEmojis } from '../components/floating-emojis';
-import { Centered, Column, ColumnWithMargins } from '../components/layout';
-import QRCode from '../components/qr-code/QRCode';
-import ShareButton from '../components/qr-code/ShareButton';
-import { SheetHandle } from '../components/sheet';
-import { Text, TruncatedAddress } from '../components/text';
-import { CopyToast, ToastPositionContainer } from '../components/toasts';
-import { useNavigation } from '../navigation/Navigation';
-import { abbreviations, deviceUtils } from '../utils';
-import { useAccountProfile } from '@/hooks';
+import { useDimensions } from '@/hooks';
+import { sharedCoolModalTopOffset } from '@/navigation/config';
+import { useAccountAddress, useAccountProfileInfo } from '@/state/wallets/walletsStore';
 import styled from '@/styled-thing';
 import { padding, shadow } from '@/styles';
+import React, { useCallback, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CopyFloatingEmojis } from '../components/floating-emojis';
+import { Column, ColumnWithMargins } from '../components/layout';
+import QRCode from '../components/qr-code/QRCode';
+import ShareButton from '../components/qr-code/ShareButton';
+import { Text, TruncatedAddress } from '../components/text';
+import { CopyToast, ToastPositionContainer } from '../components/toasts';
+import { abbreviations, deviceUtils } from '../utils';
 
-const QRCodeSize = ios ? 250 : Math.min(230, deviceUtils.dimensions.width - 20);
+const QRCodeSize = IS_IOS ? 250 : Math.min(230, deviceUtils.dimensions.width - 20);
 
 const AddressText = styled(TruncatedAddress).attrs(({ theme: { colors } }) => ({
   align: 'center',
@@ -26,21 +26,9 @@ const AddressText = styled(TruncatedAddress).attrs(({ theme: { colors } }) => ({
   opacity: 0.6,
   size: 'large',
   weight: 'semibold',
+  paddingBottom: 24,
 }))({
   width: '100%',
-});
-
-const Container = styled(Centered).attrs({
-  direction: 'column',
-})({
-  bottom: 0,
-  flex: 1,
-});
-
-const Handle = styled(SheetHandle).attrs(({ theme: { colors } }) => ({
-  color: colors.whiteLabel,
-}))({
-  marginBottom: 19,
 });
 
 const QRWrapper = styled(Column).attrs({ align: 'center' })(({ theme: { colors } }) => ({
@@ -48,6 +36,7 @@ const QRWrapper = styled(Column).attrs({ align: 'center' })(({ theme: { colors }
   ...padding.object(24),
   backgroundColor: colors.whiteLabel,
   borderRadius: 39,
+  margin: 24,
 }));
 
 const NameText = styled(Text).attrs(({ theme: { colors } }) => ({
@@ -58,13 +47,9 @@ const NameText = styled(Text).attrs(({ theme: { colors } }) => ({
   weight: 'bold',
 }))({});
 
-const accountAddressSelector = state => state.settings.accountAddress;
-const lowercaseAccountAddressSelector = createSelector(accountAddressSelector, toLower);
-
 export default function ReceiveModal() {
-  const { goBack } = useNavigation();
-  const accountAddress = useSelector(lowercaseAccountAddressSelector);
-  const { accountName } = useAccountProfile();
+  const accountAddress = useAccountAddress();
+  const { accountName } = useAccountProfileInfo();
 
   const [copiedText, setCopiedText] = useState(undefined);
   const [copyCount, setCopyCount] = useState(0);
@@ -73,13 +58,19 @@ export default function ReceiveModal() {
     setCopyCount(count => count + 1);
   }, []);
 
-  const checksummedAddress = useMemo(() => toChecksumAddress(accountAddress), [accountAddress]);
+  const checksummedAddress = useMemo(() => toChecksumAddress(accountAddress.toLowerCase()), [accountAddress]);
+  const { height: deviceHeight } = useDimensions();
+  const { top } = useSafeAreaInsets();
 
   return (
-    <Container backgroundColor="rgba(0,0,0,0.85)" testID="receive-modal">
-      <TouchableBackdrop onPress={goBack} />
-      <Handle />
-      <ColumnWithMargins align="center" margin={24}>
+    <SimpleSheet
+      testID="receive-modal"
+      backgroundColor={'rgba(0,0,0,0.85)'}
+      useAdditionalTopPadding
+      customHeight={IS_ANDROID ? deviceHeight - top : deviceHeight - sharedCoolModalTopOffset}
+      scrollEnabled={false}
+    >
+      <Box alignItems="center" justifyContent="center" height="full" width="full">
         <QRWrapper>
           <QRCode size={QRCodeSize} value={checksummedAddress} />
         </QRWrapper>
@@ -90,10 +81,10 @@ export default function ReceiveModal() {
           </ColumnWithMargins>
         </CopyFloatingEmojis>
         <ShareButton accountAddress={checksummedAddress} />
-      </ColumnWithMargins>
-      <ToastPositionContainer>
-        <CopyToast copiedText={copiedText} copyCount={copyCount} />
-      </ToastPositionContainer>
-    </Container>
+        <ToastPositionContainer>
+          <CopyToast copiedText={copiedText} copyCount={copyCount} />
+        </ToastPositionContainer>
+      </Box>
+    </SimpleSheet>
   );
 }

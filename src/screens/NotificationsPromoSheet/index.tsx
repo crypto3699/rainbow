@@ -1,6 +1,6 @@
 import React from 'react';
 import * as perms from 'react-native-permissions';
-
+import { isNotificationPermissionGranted, requestNotificationPermission } from '@/notifications/permissions';
 import useAppState from '@/hooks/useAppState';
 import { useNavigation } from '@/navigation/Navigation';
 import { CampaignKey } from '@/components/remote-promo-sheet/localCampaignChecks';
@@ -14,36 +14,31 @@ import { useTheme } from '@/theme';
 import * as i18n from '@/languages';
 import { IS_IOS } from '@/env';
 import { logger, RainbowError } from '@/logger';
-import { analyticsV2 } from '@/analytics';
+import { analytics } from '@/analytics';
+import { SettingsPages } from '../SettingsSheet/SettingsPages';
 
 const HEADER_HEIGHT = 255;
 const HEADER_WIDTH = 390;
 const TRANSLATIONS = i18n.l.promos.notifications_launch;
 
 export function NotificationsPromoSheetInner({
-  permissions,
+  status,
   requestNotificationPermissions,
 }: {
-  permissions: perms.NotificationsResponse;
-  requestNotificationPermissions: () => Promise<perms.NotificationsResponse>;
+  status: perms.PermissionStatus;
+  requestNotificationPermissions: () => Promise<perms.PermissionStatus>;
 }) {
   const { colors } = useTheme();
   const { goBack, navigate } = useNavigation();
 
-  const { status, settings } = permissions;
-  /**
-   * Android doesn't return settings, so only useful on iOS
-   * @see https://github.com/zoontek/react-native-permissions#checknotifications
-   */
-  const hasSettingsEnabled = !IS_IOS || Boolean(Object.values(settings).find(s => Boolean(s)));
-  const notificationsEnabled = status === perms.RESULTS.GRANTED;
+  const notificationsEnabled = isNotificationPermissionGranted(status);
   const notificationsDenied = status === perms.RESULTS.DENIED;
   const notificationsBlocked = status === perms.RESULTS.BLOCKED;
 
   React.useEffect(() => {
-    analyticsV2.track(analyticsV2.event.notificationsPromoShown);
+    analytics.track(analytics.event.notificationsPromoShown);
     return () => {
-      analyticsV2.track(analyticsV2.event.notificationsPromoDismissed);
+      analytics.track(analytics.event.notificationsPromoDismissed);
     };
   }, []);
 
@@ -53,7 +48,7 @@ export function NotificationsPromoSheetInner({
       navigate(Routes.SETTINGS_SHEET);
       delay(300).then(() =>
         navigate(Routes.SETTINGS_SHEET, {
-          screen: 'NotificationsSection',
+          screen: SettingsPages.notifications.key,
         })
       );
     });
@@ -61,29 +56,28 @@ export function NotificationsPromoSheetInner({
 
   const primaryButtonOnPress = React.useCallback(async () => {
     if (notificationsDenied) {
-      logger.debug(`NotificationsPromoSheet: notifications permissions denied (could be default state)`);
-      const result = await requestNotificationPermissions();
-      if (result.status === perms.RESULTS.BLOCKED) {
-        analyticsV2.track(analyticsV2.event.notificationsPromoPermissionsBlocked);
+      logger.debug(`[NotificationsPromoSheet]: notifications permissions denied (could be default state)`);
+      const status = await requestNotificationPermissions();
+      if (status === perms.RESULTS.BLOCKED) {
+        analytics.track(analytics.event.notificationsPromoPermissionsBlocked);
         goBack();
-      } else if (result.status === perms.RESULTS.GRANTED) {
-        // only happens on iOS, Android is enabled by default
-        analyticsV2.track(analyticsV2.event.notificationsPromoPermissionsGranted);
+      } else if (isNotificationPermissionGranted(status)) {
+        analytics.track(analytics.event.notificationsPromoPermissionsGranted);
       }
-    } else if (!hasSettingsEnabled || notificationsBlocked) {
-      logger.debug(`NotificationsPromoSheet: notifications permissions either blocked or all settings are disabled`);
-      analyticsV2.track(analyticsV2.event.notificationsPromoSystemSettingsOpened);
+    } else if (notificationsBlocked) {
+      logger.debug(`[NotificationsPromoSheet]: notifications permissions blocked`);
+      analytics.track(analytics.event.notificationsPromoSystemSettingsOpened);
       await perms.openSettings();
     } else if (notificationsEnabled) {
-      logger.debug(`NotificationsPromoSheet: notifications permissions enabled`);
-      analyticsV2.track(analyticsV2.event.notificationsPromoNotificationSettingsOpened);
+      logger.debug(`[NotificationsPromoSheet]: notifications permissions enabled`);
+      analytics.track(analytics.event.notificationsPromoNotificationSettingsOpened);
       navigateToNotifications();
     } else {
       logger.error(new RainbowError(`NotificationsPromoSheet: reached invalid state`), {
-        permissions,
+        status,
       });
     }
-  }, [goBack, permissions, hasSettingsEnabled, notificationsDenied, notificationsEnabled, notificationsBlocked, navigateToNotifications]);
+  }, [notificationsDenied, notificationsBlocked, notificationsEnabled, requestNotificationPermissions, goBack, navigateToNotifications]);
 
   return (
     <PromoSheet
@@ -97,14 +91,15 @@ export function NotificationsPromoSheetInner({
       header={i18n.t(TRANSLATIONS.header)}
       subHeader={i18n.t(TRANSLATIONS.subheader)}
       primaryButtonProps={{
-        label:
-          notificationsEnabled && hasSettingsEnabled
-            ? `􀜊 ${i18n.t(TRANSLATIONS.primary_button.permissions_enabled)}`
-            : `􀝖 ${i18n.t(TRANSLATIONS.primary_button.permissions_not_enabled)}`,
+        label: notificationsEnabled
+          ? `􀜊 ${i18n.t(TRANSLATIONS.primary_button.permissions_enabled)}`
+          : `􀝖 ${i18n.t(TRANSLATIONS.primary_button.permissions_not_enabled)}`,
+        textColor: colors.trueBlack,
         onPress: primaryButtonOnPress,
       }}
       secondaryButtonProps={{
         label: i18n.t(TRANSLATIONS.secondary_button),
+        textColor: colors.whiteLabel,
         onPress: goBack,
       }}
       items={[
@@ -133,25 +128,26 @@ export function NotificationsPromoSheetInner({
 
 export default function NotificationsPromoSheet() {
   const { justBecameActive } = useAppState();
-  const [permissionsCheckResult, setPermissionsCheckResult] = React.useState<perms.NotificationsResponse>();
+  const [permissionStatus, setPermissionStatus] = React.useState<perms.PermissionStatus>();
 
   const checkPermissions = React.useCallback(async () => {
     const result = await perms.checkNotifications();
-    setPermissionsCheckResult(result);
-  }, [setPermissionsCheckResult]);
+    const { status } = result;
+    setPermissionStatus(status);
+  }, []);
 
   const requestNotificationPermissions = React.useCallback(async () => {
-    const result = await perms.requestNotifications(['alert']);
-    setPermissionsCheckResult(result);
-    return result;
-  }, [setPermissionsCheckResult]);
+    const status = await requestNotificationPermission();
+    setPermissionStatus(status);
+    return status;
+  }, []);
 
   // checks initially, then each time after app state becomes active
   React.useEffect(() => {
     checkPermissions();
   }, [justBecameActive, checkPermissions]);
 
-  return permissionsCheckResult !== undefined ? (
-    <NotificationsPromoSheetInner permissions={permissionsCheckResult} requestNotificationPermissions={requestNotificationPermissions} />
+  return permissionStatus !== undefined ? (
+    <NotificationsPromoSheetInner status={permissionStatus} requestNotificationPermissions={requestNotificationPermissions} />
   ) : null;
 }

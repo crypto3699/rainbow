@@ -1,14 +1,22 @@
+import { IS_ANDROID } from '@/env';
+import { maybeAuthenticateWithPIN } from '@/handlers/authentication';
+import {
+  GoogleDriveUserData,
+  deleteAllBackups,
+  getGoogleAccountUserData,
+  login,
+  logoutFromGoogleDrive as logout,
+} from '@/handlers/cloudBackup';
+import { WrappedAlert as Alert } from '@/helpers/alert';
+import * as keychain from '@/keychain';
+import * as i18n from '@/languages';
+import { RainbowError, logger } from '@/logger';
+import { CloudBackupState, backupsStore } from '@/state/backups/backups';
+import { clearAllWalletsBackupStatus } from '@/state/wallets/walletsStore';
+import { showActionSheetWithOptions } from '@/utils';
 import { useCallback, useEffect, useState } from 'react';
-import lang from 'i18n-js';
 import { useDispatch } from 'react-redux';
 import { cloudPlatform } from '../utils/platform';
-import { WrappedAlert as Alert } from '@/helpers/alert';
-import { GoogleDriveUserData, getGoogleAccountUserData, deleteAllBackups, logoutFromGoogleDrive } from '@/handlers/cloudBackup';
-import { clearAllWalletsBackupStatus, updateWalletBackupStatusesBasedOnCloudUserData } from '@/redux/wallets';
-import { showActionSheetWithOptions } from '@/utils';
-import { IS_ANDROID } from '@/env';
-import { RainbowError, logger } from '@/logger';
-import * as i18n from '@/languages';
 
 export default function useManageCloudBackups() {
   const dispatch = useDispatch();
@@ -20,7 +28,7 @@ export default function useManageCloudBackups() {
         setAccountDetails(accountDetails ?? undefined);
       })
       .catch(error => {
-        logger.error(new RainbowError(`Error Fetching google account data for Backups Section`), {
+        logger.error(new RainbowError(`[useManageCloudBackups]: Error Fetching google account data for Backups Section`), {
           error: (error as Error).message,
         });
       });
@@ -44,17 +52,28 @@ export default function useManageCloudBackups() {
       });
     };
 
-    const removeBackupStateFromAllWallets = async () => {
-      await dispatch(clearAllWalletsBackupStatus());
+    const removeBackupStateFromAllWallets = () => {
+      clearAllWalletsBackupStatus();
+    };
+
+    const logoutFromGoogleDrive = async () => {
+      await logout();
+      backupsStore.setState({
+        backupProvider: undefined,
+        backups: { files: [] },
+        mostRecentBackup: undefined,
+        status: CloudBackupState.NotAvailable,
+      });
     };
 
     const loginToGoogleDrive = async () => {
-      await dispatch(updateWalletBackupStatusesBasedOnCloudUserData());
       try {
+        await login();
         const accountDetails = await getGoogleAccountUserData();
+        backupsStore.getState().syncAndFetchBackups();
         setAccountDetails(accountDetails ?? undefined);
       } catch (error) {
-        logger.error(new RainbowError(`Logging into Google Drive failed.`), {
+        logger.error(new RainbowError(`[useManageCloudBackups]: Logging into Google Drive failed.`), {
           error: (error as Error).message,
         });
       }
@@ -67,8 +86,8 @@ export default function useManageCloudBackups() {
         options: buttons,
         title: getTitleForPlatform(),
       },
-      async (_buttonIndex: number) => {
-        if (_buttonIndex === 0) {
+      async buttonIndex => {
+        if (buttonIndex === 0) {
           showActionSheetWithOptions(
             {
               cancelButtonIndex: 1,
@@ -76,25 +95,43 @@ export default function useManageCloudBackups() {
               message: i18n.t(i18n.l.settings.confirm_delete_backups_description, { cloudPlatform }),
               options: [i18n.t(i18n.l.settings.confirm_delete_backups), i18n.t(i18n.l.button.cancel)],
             },
-            async (buttonIndex: any) => {
-              if (buttonIndex === 0) {
-                if (IS_ANDROID) {
-                  logoutFromGoogleDrive();
-                  setAccountDetails(undefined);
-                }
-                removeBackupStateFromAllWallets();
+            async nextButtonIndex => {
+              if (nextButtonIndex === 0) {
+                try {
+                  try {
+                    await maybeAuthenticateWithPIN();
+                  } catch (e) {
+                    Alert.alert(i18n.t(i18n.l.back_up.wrong_pin));
+                    return;
+                  }
 
-                await deleteAllBackups();
-                Alert.alert(lang.t('back_up.backup_deleted_successfully'));
+                  // Prompt for authentication before allowing them to delete backups
+                  await keychain.getAllKeys();
+
+                  if (IS_ANDROID) {
+                    logoutFromGoogleDrive();
+                    setAccountDetails(undefined);
+                  }
+                  removeBackupStateFromAllWallets();
+
+                  await deleteAllBackups();
+                  Alert.alert(i18n.t(i18n.l.back_up.backup_deleted_successfully));
+                } catch (e) {
+                  logger.error(new RainbowError(`[useManageCloudBackups]: Error deleting all backups`), {
+                    error: (e as Error).message,
+                  });
+
+                  Alert.alert(i18n.t(i18n.l.back_up.errors.keychain_access));
+                }
               }
             }
           );
         }
 
-        if (_buttonIndex === 1 && IS_ANDROID) {
+        if (buttonIndex === 1 && IS_ANDROID) {
           logoutFromGoogleDrive();
           setAccountDetails(undefined);
-          removeBackupStateFromAllWallets().then(() => loginToGoogleDrive());
+          loginToGoogleDrive();
         }
       }
     );

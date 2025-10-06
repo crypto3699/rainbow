@@ -1,10 +1,8 @@
 import MaskedView from '@react-native-masked-view/masked-view';
-import { useRoute } from '@react-navigation/native';
-import { IS_TESTING } from 'react-native-dotenv';
-import lang from 'i18n-js';
+import { RouteProp, useRoute } from '@react-navigation/native';
+import * as i18n from '@/languages';
 import React, { useCallback, useMemo } from 'react';
 import { InteractionManager, View } from 'react-native';
-import { MenuActionConfig } from 'react-native-ios-context-menu';
 import LinearGradient from 'react-native-linear-gradient';
 import ActivityIndicator from '../components/ActivityIndicator';
 import IntroMarquee from '../components/ens-registration/IntroMarquee/IntroMarquee';
@@ -17,8 +15,10 @@ import { REGISTRATION_MODES } from '@/helpers/ens';
 import { useAccountENSDomains, useDimensions, useENSAvatar, useENSRecords, useENSRegistration } from '@/hooks';
 import Routes from '@/navigation/routesNames';
 import { useTheme } from '@/theme';
-import { IS_ANDROID } from '@/env';
+import { IS_ANDROID, IS_TEST } from '@/env';
 import ContextMenu from '@/components/context-menu/ContextMenu.android';
+import { RootStackParamList } from '@/navigation/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 enum AnotherENSEnum {
   search = 'search',
@@ -41,7 +41,7 @@ const ContextMenuRenderer = ({ children, handleSelectExistingName, handleNavigat
       menuItems: [
         {
           actionKey: AnotherENSEnum.my_ens,
-          actionTitle: lang.t('profiles.intro.my_ens_names'),
+          actionTitle: i18n.t(i18n.l.profiles.intro.my_ens_names),
           icon: {
             iconType: 'SYSTEM',
             iconValue: 'rectangle.stack.badge.person.crop',
@@ -49,13 +49,13 @@ const ContextMenuRenderer = ({ children, handleSelectExistingName, handleNavigat
         },
         {
           actionKey: AnotherENSEnum.search,
-          actionTitle: lang.t('profiles.intro.search_new_ens'),
+          actionTitle: i18n.t(i18n.l.profiles.intro.search_new_ens),
           icon: {
             iconType: 'SYSTEM',
             iconValue: 'magnifyingglass',
           },
         },
-      ] as MenuActionConfig[],
+      ],
       menuTitle: '',
     };
   }, []);
@@ -110,7 +110,7 @@ const ContextMenuRenderer = ({ children, handleSelectExistingName, handleNavigat
 export default function ENSIntroSheet() {
   const { width: deviceWidth, height: deviceHeight } = useDimensions();
   const { colors } = useTheme();
-  const { params } = useRoute<any>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.ENS_INTRO_SHEET>>();
 
   const { controlledDomains, isLoading, isFetched, nonPrimaryDomains, uniqueDomain } = useAccountENSDomains();
   const { data: ensRecords } = useENSRecords(uniqueDomain?.name || '', {
@@ -172,6 +172,8 @@ export default function ENSIntroSheet() {
     });
   }, [navigate, navigateToAssignRecords]);
 
+  const insets = useSafeAreaInsets();
+
   return (
     <Box background="body (Deprecated)" paddingTop={{ custom: topPadding }} style={{ height: contentHeight }} testID="ens-intro-sheet">
       <Inset top={isSmallPhone ? '15px (Deprecated)' : '36px'}>
@@ -181,14 +183,14 @@ export default function ENSIntroSheet() {
               <Stack space={{ custom: isSmallPhone ? 30 : 38 }}>
                 <Stack alignHorizontal="center" space={{ custom: 17 }}>
                   <Heading align="center" color="primary (Deprecated)" size="34px / 41px (Deprecated)" weight="heavy">
-                    {lang.t('profiles.intro.create_your')}
+                    {i18n.t(i18n.l.profiles.intro.create_your)}
                   </Heading>
                   <Heading align="center" color="action (Deprecated)" size="34px / 41px (Deprecated)" weight="heavy">
-                    {lang.t('profiles.intro.ens_profile')}
+                    {i18n.t(i18n.l.profiles.intro.ens_profile)}
                   </Heading>
                 </Stack>
                 <Stack space={{ custom: isSmallPhone ? 30 : 40 }}>
-                  <Bleed left="10px">{IS_TESTING !== 'true' && <IntroMarquee isSmallPhone={isSmallPhone} />}</Bleed>
+                  <Bleed left="10px">{!IS_TEST && <IntroMarquee isSmallPhone={isSmallPhone} />}</Bleed>
                   <Inset horizontal="34px (Deprecated)">
                     <Separator color="divider60 (Deprecated)" />
                   </Inset>
@@ -198,19 +200,19 @@ export default function ENSIntroSheet() {
                     <Inset top="6px">
                       <Stack space={isSmallPhone ? '24px' : '36px'}>
                         <InfoRow
-                          description={lang.t('profiles.intro.wallet_address_info.description')}
+                          description={i18n.t(i18n.l.profiles.intro.wallet_address_info.description)}
                           icon="􀈠"
-                          title={lang.t('profiles.intro.wallet_address_info.title')}
+                          title={i18n.t(i18n.l.profiles.intro.wallet_address_info.title)}
                         />
                         <InfoRow
-                          description={lang.t('profiles.intro.portable_identity_info.description')}
+                          description={i18n.t(i18n.l.profiles.intro.portable_identity_info.description)}
                           icon="􀪽"
-                          title={lang.t('profiles.intro.portable_identity_info.title')}
+                          title={i18n.t(i18n.l.profiles.intro.portable_identity_info.title)}
                         />
                         <InfoRow
-                          description={lang.t('profiles.intro.stored_on_blockchain_info.description')}
+                          description={i18n.t(i18n.l.profiles.intro.stored_on_blockchain_info.description)}
                           icon="􀐙"
-                          title={lang.t('profiles.intro.stored_on_blockchain_info.title')}
+                          title={i18n.t(i18n.l.profiles.intro.stored_on_blockchain_info.title)}
                         />
                       </Stack>
                     </Inset>
@@ -220,10 +222,9 @@ export default function ENSIntroSheet() {
             </Row>
             <Row height="content">
               <Box paddingBottom="4px">
-                <Inset space="19px (Deprecated)" {...(isSmallPhone && { bottom: '8px' })}>
+                <Inset bottom={{ custom: insets.bottom + 8 }} space="19px (Deprecated)">
                   {isLoading && (
                     <Box alignItems="center" paddingBottom="15px (Deprecated)">
-                      {/* @ts-expect-error JavaScript component */}
                       <ActivityIndicator />
                     </Box>
                   )}
@@ -233,7 +234,7 @@ export default function ENSIntroSheet() {
                         <Inset bottom={android ? '10px' : undefined}>
                           <SheetActionButton
                             color={colors.appleBlue}
-                            label={'􀠎 ' + lang.t('profiles.intro.find_your_name')}
+                            label={'􀠎 ' + i18n.t(i18n.l.profiles.intro.find_your_name)}
                             lightShadows
                             marginBottom={15}
                             onPress={handleNavigateToSearch}
@@ -246,8 +247,8 @@ export default function ENSIntroSheet() {
                           {uniqueDomain?.name ? (
                             <SheetActionButton
                               color={colors.appleBlue}
-                              label={lang.t(profileExists ? 'profiles.intro.edit_name' : 'profiles.intro.use_name', {
-                                name: abbreviateEnsForDisplay(uniqueDomain?.name, 15),
+                              label={i18n.t(profileExists ? i18n.l.profiles.intro.edit_name : i18n.l.profiles.intro.use_name, {
+                                name: abbreviateEnsForDisplay(uniqueDomain?.name, 15) as string,
                               })}
                               lightShadows
                               onPress={handleSelectUniqueDomain}
@@ -256,7 +257,7 @@ export default function ENSIntroSheet() {
                           ) : (
                             <SheetActionButton
                               color={colors.appleBlue}
-                              label={lang.t('profiles.intro.use_existing_name')}
+                              label={i18n.t(i18n.l.profiles.intro.use_existing_name)}
                               lightShadows
                               onPress={handleSelectExistingName}
                               weight="heavy"
@@ -270,7 +271,7 @@ export default function ENSIntroSheet() {
                               <SheetActionButton
                                 color={colors.transparent}
                                 isTransparent
-                                label={lang.t('profiles.intro.choose_another_name')}
+                                label={i18n.t(i18n.l.profiles.intro.choose_another_name)}
                                 textColor={colors.appleBlue}
                                 textSize="lmedium"
                                 weight="bold"
@@ -280,7 +281,7 @@ export default function ENSIntroSheet() {
                             <SheetActionButton
                               color={colors.transparent}
                               isTransparent
-                              label={lang.t('profiles.intro.search_new_name')}
+                              label={i18n.t(i18n.l.profiles.intro.search_new_name)}
                               onPress={handleNavigateToSearch}
                               testID="ens-intro-sheet-search-new-name-button"
                               textColor={colors.appleBlue}

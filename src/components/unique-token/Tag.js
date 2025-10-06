@@ -1,8 +1,7 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import { upperCase, upperFirst } from 'lodash';
 import PropTypes from 'prop-types';
 import React from 'react';
-import { Linking } from 'react-native';
 import { ButtonPressAnimation } from '../animations';
 import { Centered, Column } from '../layout';
 import { Text as TextElement } from '../text';
@@ -11,6 +10,7 @@ import { Inline } from '@/design-system';
 import styled from '@/styled-thing';
 import { padding } from '@/styles';
 import { magicMemo, showActionSheetWithOptions } from '@/utils';
+import { openInBrowser } from '@/utils/openInBrowser';
 
 const HairlineSpace = '\u200a';
 
@@ -22,7 +22,7 @@ const PropertyActionsEnum = {
 const getViewTraitOnNftMarketplaceAction = marketplaceName => {
   return {
     actionKey: PropertyActionsEnum.viewTraitOnNftMarketplace,
-    actionTitle: lang.t('expanded_state.unique_expanded.view_all_with_property'),
+    actionTitle: i18n.t(i18n.l.expanded_state.unique_expanded.view_all_with_property),
     discoverabilityTitle: marketplaceName,
     icon: {
       iconType: 'SYSTEM',
@@ -33,7 +33,7 @@ const getViewTraitOnNftMarketplaceAction = marketplaceName => {
 
 const openTraitURLInBrowserAction = {
   actionKey: PropertyActionsEnum.openURL,
-  actionTitle: lang.t('expanded_state.unique_expanded.open_in_web_browser'),
+  actionTitle: i18n.t(i18n.l.expanded_state.unique_expanded.open_in_web_browser),
   icon: {
     iconType: 'SYSTEM',
     iconValue: 'safari.fill',
@@ -96,13 +96,11 @@ const Tag = ({
   title,
   marketplaceId,
   marketplaceName,
-  maxValue,
   originalValue,
   lowercase,
   hideNftMarketplaceAction,
   ...props
 }) => {
-  const { colors } = useTheme();
   const isURL = typeof originalValue === 'string' && originalValue.toLowerCase().startsWith('https://');
 
   const viewTraitOnNftMarketplaceAction = getViewTraitOnNftMarketplaceAction(marketplaceName);
@@ -111,12 +109,12 @@ const Tag = ({
     ({ nativeEvent: { actionKey } }) => {
       if (actionKey === PropertyActionsEnum.viewTraitOnNftMarketplace) {
         const nftTraitUrl = getNftTraitUrl(marketplaceId, slug, title, originalValue);
-        Linking.openURL(nftTraitUrl);
+        openInBrowser(nftTraitUrl);
       } else if (actionKey === PropertyActionsEnum.openURL) {
-        Linking.openURL(originalValue);
+        openInBrowser(originalValue);
       }
     },
-    [slug, originalValue, marketplaceId, title]
+    [marketplaceId, slug, title, originalValue]
   );
 
   const onPressAndroid = useCallback(() => {
@@ -133,19 +131,18 @@ const Tag = ({
     showActionSheetWithOptions(
       {
         options: androidContractActions,
-        showSeparators: true,
         title: '',
       },
       idx => {
         if (androidContractActions[idx] === viewTraitOnNftMarketplaceAction.actionTitle) {
           const nftTraitUrl = getNftTraitUrl(marketplaceId, slug, title, originalValue);
-          Linking.openURL(nftTraitUrl);
+          openInBrowser(nftTraitUrl);
         } else if (androidContractActions[idx] === openTraitURLInBrowserAction.actionTitle) {
-          Linking.openURL(originalValue);
+          openInBrowser(originalValue);
         }
       }
     );
-  }, [hideNftMarketplaceAction, isURL, slug, title, originalValue, marketplaceId, viewTraitOnNftMarketplaceAction.actionTitle]);
+  }, [hideNftMarketplaceAction, isURL, viewTraitOnNftMarketplaceAction.actionTitle, marketplaceId, slug, title, originalValue]);
 
   const menuConfig = useMemo(() => {
     const menuItems = [];
@@ -191,14 +188,6 @@ const Tag = ({
           <Title color={color}>{upperCase(title)}</Title>
           <Inline wrap={false}>
             <Text>{textWithUpdatedCase}</Text>
-            {maxValue && (
-              <Text>
-                <Text color={colors.alpha(colors.whiteLabel, 0.8)}>
-                  {HairlineSpace}/{HairlineSpace}
-                </Text>
-                {maxValue}
-              </Text>
-            )}
           </Inline>
         </Container>
       </OuterBorder>
@@ -220,7 +209,6 @@ export default magicMemo(Tag, [
   'title',
   'marketplaceId',
   'marketplaceName',
-  'maxValue',
   'originalValue',
   'hideNftMarketplaceAction',
 ]);

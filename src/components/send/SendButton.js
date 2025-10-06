@@ -1,6 +1,6 @@
-import { useWallets } from '@/hooks';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import React from 'react';
+import { useWalletsStore } from '@/state/wallets/walletsStore';
 import { HoldToAuthorizeButton } from '../buttons';
 
 export default function SendButton({
@@ -15,7 +15,7 @@ export default function SendButton({
   ...props
 }) {
   const { colors, isDarkMode } = useTheme();
-  const { isHardwareWallet } = useWallets();
+  const isHardwareWallet = useWalletsStore(state => state.getIsHardwareWallet());
   const colorForAsset = isNft ? colors.appleBlue : backgroundColor;
 
   const shadows = {
@@ -39,10 +39,10 @@ export default function SendButton({
       isAuthorizing={isAuthorizing}
       label={
         disabled && requiresChecks
-          ? `􀄨 ${lang.t('wallet.transaction.complete_check')}`
+          ? `􀄨 ${i18n.t(i18n.l.wallet.transaction.complete_check)}`
           : insufficientEth
-            ? lang.t('button.confirm_exchange.insufficient_funds')
-            : lang.t('button.hold_to_send')
+            ? i18n.t(i18n.l.button.confirm_exchange.insufficient_funds)
+            : i18n.t(i18n.l.button.hold_to_send)
       }
       onLongPress={onLongPress}
       parentHorizontalPadding={19}

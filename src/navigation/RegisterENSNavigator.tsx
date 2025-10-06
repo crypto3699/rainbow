@@ -1,9 +1,8 @@
-import { useRoute } from '@react-navigation/native';
+import { useRoute, RouteProp } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StatusBar } from 'react-native';
 import { useSetRecoilState } from 'recoil';
-import { SheetHandleFixedToTopHeight, SlackSheet } from '../components/sheet';
+import { SlackSheet } from '../components/sheet';
 import ENSAssignRecordsSheet, { ENSAssignRecordsBottomActions } from '../screens/ENSAssignRecordsSheet';
 import ENSIntroSheet from '../screens/ENSIntroSheet';
 import ENSSearchSheet from '../screens/ENSSearchSheet';
@@ -15,13 +14,13 @@ import { useDimensions, useENSRegistration, useENSRegistrationForm, usePrevious 
 import Routes from '@/navigation/routesNames';
 import { useTheme } from '@/theme';
 import { deviceUtils } from '@/utils';
-import { IS_ANDROID } from '@/env';
+import { RootStackParamList } from './types';
 
 const Swipe = createMaterialTopTabNavigator();
 
 const renderTabBar = () => null;
 
-const defaultScreenOptions = {
+export const defaultScreenOptions = {
   [Routes.ENS_ASSIGN_RECORDS_SHEET]: {
     scrollEnabled: true,
     useAccentAsSheetBackground: true,
@@ -41,10 +40,12 @@ const defaultScreenOptions = {
   },
 };
 
-export default function RegisterENSNavigator() {
-  const { params } = useRoute<any>();
+export type ENSRoutes = keyof typeof defaultScreenOptions;
 
-  const sheetRef = useRef<any>();
+export default function RegisterENSNavigator() {
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.REGISTER_ENS_NAVIGATOR>>();
+
+  const sheetRef = useRef<any>(undefined);
 
   const { height: deviceHeight, isSmallPhone } = useDimensions();
 
@@ -53,7 +54,7 @@ export default function RegisterENSNavigator() {
 
   const { colors } = useTheme();
 
-  const contentHeight = deviceHeight - SheetHandleFixedToTopHeight - (!isSmallPhone ? sharedCoolModalTopOffset : 0);
+  const contentHeight = deviceHeight - (!isSmallPhone ? sharedCoolModalTopOffset : 0);
 
   const [isSearchEnabled, setIsSearchEnabled] = useState(true);
 
@@ -63,11 +64,11 @@ export default function RegisterENSNavigator() {
 
   const initialRouteName = useMemo(() => {
     const { ensName, mode } = params || { mode: REGISTRATION_MODES.CREATE };
-    if (mode === REGISTRATION_MODES.EDIT) {
+    if (ensName && mode === REGISTRATION_MODES.EDIT) {
       startRegistration(ensName, REGISTRATION_MODES.EDIT);
       return Routes.ENS_ASSIGN_RECORDS_SHEET;
     }
-    if (mode === REGISTRATION_MODES.SET_NAME) {
+    if (ensName && mode === REGISTRATION_MODES.SET_NAME) {
       startRegistration(ensName, REGISTRATION_MODES.SET_NAME);
       return Routes.ENS_CONFIRM_REGISTER_SHEET;
     }
@@ -111,14 +112,7 @@ export default function RegisterENSNavigator() {
 
   return (
     <>
-      <SlackSheet
-        additionalTopPadding={IS_ANDROID ? !!StatusBar.currentHeight : false}
-        contentHeight={contentHeight}
-        height="100%"
-        ref={sheetRef}
-        removeTopPadding
-        scrollEnabled
-      >
+      <SlackSheet additionalTopPadding contentHeight={contentHeight} height="100%" ref={sheetRef} removeTopPadding scrollEnabled>
         <Box
           style={{
             height: contentHeight,

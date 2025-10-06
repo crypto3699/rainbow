@@ -2,24 +2,26 @@ import React from 'react';
 import { Box, Cover, Text } from '@/design-system';
 import { useTheme } from '@/theme';
 
-type NavbarIconProps = {
+export const NAVBAR_ICON_SIZE = 36;
+
+type NavBarTextIconFrameProps = {
   backgroundOpacity?: number;
-  icon: string;
   color: string;
+  children: React.ReactNode;
 };
 
-export function NavbarTextIcon({ backgroundOpacity, icon, color }: NavbarIconProps) {
+export function NavBarTextIconFrame({ backgroundOpacity, color, children }: NavBarTextIconFrameProps) {
   const { colors, isDarkMode } = useTheme();
   const accentColor = color ?? colors.appleBlue;
 
   return (
     <Box
-      borderRadius={18}
-      height={{ custom: 36 }}
+      borderRadius={NAVBAR_ICON_SIZE / 2}
+      height={{ custom: NAVBAR_ICON_SIZE }}
       style={{
         backgroundColor: colors.alpha(accentColor, backgroundOpacity ?? (isDarkMode ? 0.2 : 0.1)),
       }}
-      width={{ custom: 36 }}
+      width={{ custom: NAVBAR_ICON_SIZE }}
     >
       <Box
         height="full"
@@ -32,11 +34,25 @@ export function NavbarTextIcon({ backgroundOpacity, icon, color }: NavbarIconPro
         width="full"
       >
         <Cover alignHorizontal="center" alignVertical="center">
-          <Text align="center" color={{ custom: accentColor }} size="icon 17px" weight="bold">
-            {icon}
-          </Text>
+          {children}
         </Cover>
       </Box>
     </Box>
+  );
+}
+
+type NavbarIconProps = {
+  backgroundOpacity?: number;
+  icon: string;
+  color: string;
+};
+
+export function NavbarTextIcon({ backgroundOpacity, icon, color }: NavbarIconProps) {
+  return (
+    <NavBarTextIconFrame backgroundOpacity={backgroundOpacity} color={color}>
+      <Text align="center" color={{ custom: color }} size="icon 17px" weight="bold">
+        {icon}
+      </Text>
+    </NavBarTextIconFrame>
   );
 }

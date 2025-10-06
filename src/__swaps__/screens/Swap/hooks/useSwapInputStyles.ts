@@ -1,7 +1,5 @@
-import c from 'chroma-js';
-import { useMemo } from 'react';
-import Animated, {
-  DerivedValue,
+import {
+  SharedValue,
   interpolate,
   interpolateColor,
   useAnimatedStyle,
@@ -9,99 +7,115 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-
+import { SPRING_CONFIGS, TIMING_CONFIGS } from '@/components/animations/animationConfigs';
 import { globalColors, useColorMode } from '@/design-system';
-
-import { NavigationSteps } from './useSwapNavigation';
 import {
   BASE_INPUT_HEIGHT,
   ETH_COLOR_DARK,
   ETH_COLOR_DARK_ACCENT,
   EXPANDED_INPUT_HEIGHT,
   FOCUSED_INPUT_HEIGHT,
-  fadeConfig,
-  springConfig,
 } from '@/__swaps__/screens/Swap/constants';
-import { opacityWorklet } from '@/__swaps__/utils/swaps';
+import { ExtendedAnimatedAssetWithColors } from '@/__swaps__/types/assets';
+import { getColorValueForThemeWorklet, opacityWorklet } from '@/__swaps__/utils/swaps';
+import { NavigationSteps } from './useSwapNavigation';
 
 export const useSwapInputStyles = ({
+  asset,
   bottomInput,
-  color,
   otherInputProgress,
   progress,
 }: {
+  asset: SharedValue<ExtendedAnimatedAssetWithColors | null>;
   bottomInput: boolean | undefined;
-  color: DerivedValue<string | number>;
-  otherInputProgress: Animated.SharedValue<number>;
-  progress: Animated.SharedValue<number>;
+  otherInputProgress: SharedValue<number>;
+  progress: SharedValue<number>;
 }) => {
   const { isDarkMode } = useColorMode();
 
   const bgColor = useDerivedValue(() => {
-    return isDarkMode ? opacityWorklet(color.value.toString(), 0.08) : opacityWorklet(globalColors.white100, 0.8);
-  }, [color, isDarkMode]);
+    return isDarkMode
+      ? opacityWorklet(getColorValueForThemeWorklet(asset.value?.highContrastColor, isDarkMode), 0.08)
+      : opacityWorklet(globalColors.white100, 0.8);
+  });
 
   const expandedBgColor = useDerivedValue(() => {
     return isDarkMode ? bgColor.value : opacityWorklet(globalColors.white100, 0.8);
-  }, [bgColor, isDarkMode]);
+  });
 
   const strokeColor = useDerivedValue(() => {
     return isDarkMode
-      ? opacityWorklet(color.value === ETH_COLOR_DARK ? ETH_COLOR_DARK_ACCENT : color.value.toString(), 0.06)
+      ? opacityWorklet(
+          getColorValueForThemeWorklet(asset.value?.highContrastColor, isDarkMode) === ETH_COLOR_DARK
+            ? ETH_COLOR_DARK_ACCENT
+            : getColorValueForThemeWorklet(asset.value?.highContrastColor, isDarkMode),
+          0.06
+        )
       : globalColors.white100;
-  }, [color, isDarkMode]);
+  });
 
   const expandedStrokeColor = useDerivedValue(() => {
-    return isDarkMode ? opacityWorklet(color.value.toString(), 0.1) : globalColors.white100;
-  }, [color, isDarkMode]);
-
-  const mixedShadowColor = useMemo(() => {
-    return isDarkMode ? 'transparent' : c.mix(color.value.toString(), globalColors.grey100, 0.84).hex();
-  }, [color, isDarkMode]);
+    return isDarkMode
+      ? opacityWorklet(getColorValueForThemeWorklet(asset.value?.highContrastColor, isDarkMode), 0.1)
+      : globalColors.white100;
+  });
 
   const containerStyle = useAnimatedStyle(() => {
-    const getContainerStyleTranslateY = (progress: Animated.SharedValue<number>, bottomInput: boolean | undefined) => {
+    const getContainerStyleTranslateY = (progress: SharedValue<number>, bottomInput: boolean | undefined) => {
+      let yTranslation = 0;
       if (progress.value === NavigationSteps.SEARCH_FOCUSED) {
         if (bottomInput) {
-          return withSpring(-191, springConfig);
+          yTranslation = -191;
         } else {
-          return withSpring(-77, springConfig);
+          yTranslation = -77;
         }
       }
-
-      return withSpring(0, springConfig);
+      return yTranslation;
     };
 
     return {
-      opacity: otherInputProgress.value === NavigationSteps.SEARCH_FOCUSED ? withTiming(0, fadeConfig) : withTiming(1, fadeConfig),
+      opacity:
+        otherInputProgress.value === NavigationSteps.SEARCH_FOCUSED
+          ? withTiming(0, TIMING_CONFIGS.fadeConfig)
+          : withTiming(1, TIMING_CONFIGS.fadeConfig),
+      shadowColor: isDarkMode ? 'transparent' : getColorValueForThemeWorklet(asset.value?.mixedShadowColor, isDarkMode),
       transform: [
         {
-          translateY: getContainerStyleTranslateY(progress, bottomInput),
+          translateY: withSpring(getContainerStyleTranslateY(progress, bottomInput), SPRING_CONFIGS.keyboardConfig),
         },
       ],
     };
-  }, [bottomInput, otherInputProgress, progress]);
+  });
+
+  const inputHeight = useDerivedValue(() =>
+    withSpring(
+      interpolate(progress.value, [0, 1, 2], [BASE_INPUT_HEIGHT, EXPANDED_INPUT_HEIGHT, FOCUSED_INPUT_HEIGHT], 'clamp'),
+      SPRING_CONFIGS.springConfig
+    )
+  );
 
   const inputStyle = useAnimatedStyle(() => {
     return {
-      backgroundColor: withTiming(interpolateColor(progress.value, [0, 1], [bgColor.value, expandedBgColor.value]), fadeConfig),
-      borderColor: withTiming(interpolateColor(progress.value, [0, 1], [strokeColor.value, expandedStrokeColor.value]), fadeConfig),
-      height: withSpring(
-        interpolate(progress.value, [0, 1, 2], [BASE_INPUT_HEIGHT, EXPANDED_INPUT_HEIGHT, FOCUSED_INPUT_HEIGHT], 'clamp'),
-        springConfig
+      backgroundColor: withTiming(
+        interpolateColor(progress.value, [0, 1], [bgColor.value, expandedBgColor.value]),
+        TIMING_CONFIGS.fadeConfig
+      ),
+      borderColor: withTiming(
+        interpolateColor(progress.value, [0, 1], [strokeColor.value, expandedStrokeColor.value]),
+        TIMING_CONFIGS.fadeConfig
       ),
       transform: [
         {
           translateY: bottomInput
             ? withSpring(
                 interpolate(otherInputProgress.value, [0, 1, 2], [0, 0, EXPANDED_INPUT_HEIGHT - FOCUSED_INPUT_HEIGHT], 'clamp'),
-                springConfig
+                SPRING_CONFIGS.springConfig
               )
             : 0,
         },
       ],
     };
-  }, [bottomInput, otherInputProgress, progress, bgColor, expandedBgColor, strokeColor, expandedStrokeColor]);
+  });
 
-  return { containerStyle, inputStyle, mixedShadowColor };
+  return { containerStyle, inputHeight, inputStyle };
 };

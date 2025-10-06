@@ -3,7 +3,6 @@ import { StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Spinner from '../Spinner';
 import { Centered, FlexItem } from '../layout';
-import { StatusBarHelper } from '@/helpers';
 import styled from '@/styled-thing';
 
 const Container = styled(FlexItem)({
@@ -29,15 +28,10 @@ const buildPlayerUrl = options => {
 };
 
 export default function AudioPlayer({ fontColor, imageColor, uri }) {
-  const webviewRef = useRef();
+  const webviewRef = useRef(undefined);
   const { colors } = useTheme();
   const [ready, setReady] = useState(false);
   const [closed, setClosed] = useState(false);
-  useEffect(() => {
-    StatusBarHelper.setBackgroundColor('transparent', false);
-    StatusBarHelper.setTranslucent(true);
-    StatusBarHelper.setDarkContent();
-  }, []);
 
   const playerUri = useMemo(() => {
     const waveColor = formatColor(imageColor);

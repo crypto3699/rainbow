@@ -1,13 +1,20 @@
 import React, { forwardRef, ReactNode, useMemo } from 'react';
-import { View, ViewStyle } from 'react-native';
+import { StyleProp, View, ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useForegroundColor, useForegroundColors } from '../../color/useForegroundColor';
 import { useColorMode } from '../../color/ColorMode';
 import { Shadow, shadows } from '../../layout/shadow';
 import { Height, heights, Width, widths } from '../../layout/size';
 import { NegativeSpace, negativeSpace, positionSpace, PositionSpace, Space, space } from '../../layout/space';
-import { BackgroundProvider, BackgroundProviderProps } from '../BackgroundProvider/BackgroundProvider';
+import { BackgroundProvider } from '../BackgroundProvider/BackgroundProvider';
+import { Border, BorderProps } from '../Border/Border';
 import { ApplyShadow } from '../private/ApplyShadow/ApplyShadow';
 import type * as Polymorphic from './polymorphic';
+import { IS_TEST } from '@/env';
+import LinearGradient from 'react-native-linear-gradient';
+import { BackgroundColor } from '@/design-system/color/palettes';
+
+const COMPONENTS_TO_OVERRIDE_IN_TEST_MODE = [LinearGradient];
 
 const positions = ['absolute'] as const;
 type Position = (typeof positions)[number];
@@ -26,6 +33,8 @@ export type BoxProps = {
   borderTopRightRadius?: number;
   borderBottomLeftRadius?: number;
   borderBottomRightRadius?: number;
+  borderColor?: BorderProps['borderColor'];
+  borderWidth?: BorderProps['borderWidth'];
   bottom?: PositionSpace;
   children?: ReactNode;
   flexBasis?: 0;
@@ -33,7 +42,7 @@ export type BoxProps = {
   flexGrow?: 0 | 1;
   flexShrink?: 0 | 1;
   flexWrap?: 'wrap';
-  height?: Height;
+  height?: Height | number;
   left?: PositionSpace;
   gap?: number;
   zIndex?: number;
@@ -45,6 +54,7 @@ export type BoxProps = {
   marginRight?: NegativeSpace;
   marginTop?: NegativeSpace;
   marginVertical?: NegativeSpace;
+  overflow?: 'visible' | 'hidden' | 'scroll';
   padding?: Space;
   paddingBottom?: Space;
   paddingHorizontal?: Space;
@@ -55,13 +65,12 @@ export type BoxProps = {
   position?: Position;
   right?: PositionSpace;
   top?: PositionSpace;
-  width?: Width;
+  width?: Width | number;
   backgroundColor?: string;
   shadowColor?: string;
   elevation?: number;
   shadowOpacity?: number;
   shadowRadius?: number;
-  overflow?: 'visible' | 'hidden' | 'scroll' | 'auto';
 } & (
   | {
       borderBottomRadius?: number;
@@ -78,12 +87,22 @@ export type BoxProps = {
 ) &
   (
     | {
-        background?: BackgroundProviderProps['color'];
+        background?: BackgroundColor | 'accent';
         shadow?: never;
       }
     | {
-        background: BackgroundProviderProps['color'];
+        background: BackgroundColor | 'accent';
         shadow: Shadow;
+      }
+    | {
+        background?: never;
+        backgroundColor: string;
+        shadow: Shadow;
+      }
+    | {
+        background?: never;
+        shadow: Shadow;
+        style: StyleProp<ViewStyle> & { backgroundColor: string };
       }
   );
 
@@ -100,15 +119,18 @@ export const Box = forwardRef(function Box(
     alignItems,
     as: Component = View,
     background,
+    backgroundColor,
     borderBottomLeftRadius,
     borderBottomRadius,
     borderBottomRightRadius,
+    borderColor,
     borderLeftRadius,
     borderRadius,
     borderRightRadius,
     borderTopLeftRadius,
     borderTopRadius,
     borderTopRightRadius,
+    borderWidth,
     bottom: bottomProp,
     children,
     flexBasis,
@@ -134,6 +156,7 @@ export const Box = forwardRef(function Box(
     paddingRight: paddingRightProp,
     paddingTop: paddingTopProp,
     paddingVertical: paddingVerticalProp,
+    pointerEvents,
     position,
     right: rightProp,
     shadow,
@@ -165,14 +188,26 @@ export const Box = forwardRef(function Box(
   const right = resolveToken(positionSpace, rightProp);
   const top = resolveToken(positionSpace, topProp);
 
-  const width = resolveToken(widths, widthProp);
-  const height = resolveToken(heights, heightProp);
+  const width = typeof widthProp === 'number' ? widthProp : resolveToken(widths, widthProp);
+  const height = typeof heightProp === 'number' ? heightProp : resolveToken(heights, heightProp);
+
+  const ComponentToUse = IS_TEST && COMPONENTS_TO_OVERRIDE_IN_TEST_MODE.some(_C => Component instanceof _C) ? View : Component;
+  const isView = ComponentToUse === View || ComponentToUse === Animated.View;
+
+  const shadowStylesExist =
+    !!styleProp &&
+    ('shadowColor' in styleProp ||
+      'shadowOffset' in styleProp ||
+      'shadowOpacity' in styleProp ||
+      'shadowRadius' in styleProp ||
+      'elevation' in styleProp);
 
   const shadows = useShadow(shadow);
 
   const styles = useMemo(() => {
     return {
       alignItems,
+      borderRadius: borderRadius, // Apply this first as certain components don't support individual corner radii
       borderBottomLeftRadius: borderBottomLeftRadius ?? borderBottomRadius ?? borderLeftRadius ?? borderRadius,
       borderBottomRightRadius: borderBottomRightRadius ?? borderBottomRadius ?? borderRightRadius ?? borderRadius,
       borderCurve: 'continuous' as ViewStyle['borderCurve'],
@@ -194,6 +229,7 @@ export const Box = forwardRef(function Box(
       marginRight,
       marginTop,
       marginVertical,
+      ...((isView || borderRadius) && !shadowStylesExist && { overflow: borderRadius ? 'hidden' : overflow }),
       padding,
       paddingBottom,
       paddingHorizontal,
@@ -201,6 +237,7 @@ export const Box = forwardRef(function Box(
       paddingRight,
       paddingTop,
       paddingVertical,
+      pointerEvents,
       position,
       right,
       top,
@@ -224,6 +261,7 @@ export const Box = forwardRef(function Box(
     flexShrink,
     flexWrap,
     height,
+    isView,
     justifyContent,
     left,
     margin,
@@ -233,6 +271,7 @@ export const Box = forwardRef(function Box(
     marginRight,
     marginTop,
     marginVertical,
+    overflow,
     padding,
     paddingBottom,
     paddingHorizontal,
@@ -240,28 +279,60 @@ export const Box = forwardRef(function Box(
     paddingRight,
     paddingTop,
     paddingVertical,
+    pointerEvents,
     position,
     right,
+    shadowStylesExist,
     top,
     width,
   ]);
 
   const style = useMemo(() => [styles, styleProp], [styles, styleProp]);
 
-  return background ? (
-    <BackgroundProvider color={background} style={style}>
-      {({ backgroundColor, backgroundStyle }) => (
-        <ApplyShadow backgroundColor={backgroundColor} shadows={shadows}>
-          <Component style={backgroundStyle} {...restProps} ref={ref}>
-            {children}
-          </Component>
-        </ApplyShadow>
-      )}
+  const styleHasBackgroundColor = !!(styleProp && 'backgroundColor' in styleProp && styleProp.backgroundColor !== 'transparent');
+  const backgroundToUse =
+    styleHasBackgroundColor && typeof styleProp.backgroundColor === 'string' ? styleProp.backgroundColor : background ?? backgroundColor;
+
+  return backgroundToUse ? (
+    <BackgroundProvider color={backgroundToUse} style={style}>
+      {({ backgroundColor, backgroundStyle }) => {
+        return (
+          <ApplyShadow backgroundColor={backgroundColor} shadows={shadows}>
+            {/* eslint-disable-next-line react/jsx-props-no-spreading */}
+            <ComponentToUse style={backgroundStyle} {...restProps} ref={ref}>
+              {children}
+              {borderColor || borderWidth ? (
+                <Border
+                  borderBottomLeftRadius={styles.borderBottomLeftRadius}
+                  borderBottomRightRadius={styles.borderBottomRightRadius}
+                  borderColor={borderColor}
+                  borderTopLeftRadius={styles.borderTopLeftRadius}
+                  borderTopRightRadius={styles.borderTopRightRadius}
+                  borderWidth={borderWidth}
+                  enableInLightMode
+                />
+              ) : null}
+            </ComponentToUse>
+          </ApplyShadow>
+        );
+      }}
     </BackgroundProvider>
   ) : (
-    <Component style={style} {...restProps} ref={ref}>
+    // eslint-disable-next-line react/jsx-props-no-spreading
+    <ComponentToUse style={style} {...restProps} ref={ref}>
       {children}
-    </Component>
+      {borderColor || borderWidth ? (
+        <Border
+          borderBottomLeftRadius={styles.borderBottomLeftRadius}
+          borderBottomRightRadius={styles.borderBottomRightRadius}
+          borderColor={borderColor}
+          borderTopLeftRadius={styles.borderTopLeftRadius}
+          borderTopRightRadius={styles.borderTopRightRadius}
+          borderWidth={borderWidth}
+          enableInLightMode
+        />
+      ) : null}
+    </ComponentToUse>
   );
 }) as PolymorphicBox;
 

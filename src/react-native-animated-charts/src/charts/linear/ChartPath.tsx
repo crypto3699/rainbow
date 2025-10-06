@@ -1,34 +1,38 @@
-import React, { useEffect } from 'react';
-import { Platform, View, ViewProps } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { View } from 'react-native';
 import {
   LongPressGestureHandler,
   LongPressGestureHandlerGestureEvent,
   LongPressGestureHandlerProperties,
 } from 'react-native-gesture-handler';
-import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import Animated, {
+  FadeIn,
   cancelAnimation,
-  runOnJS,
   runOnUI,
   useAnimatedGestureHandler,
   useAnimatedProps,
   useAnimatedReaction,
-  useAnimatedStyle,
   useSharedValue,
-  useWorkletCallback,
   withDelay,
   WithSpringConfig,
   withTiming,
   WithTimingConfig,
+  interpolateColor,
+  useDerivedValue,
+  interpolate,
 } from 'react-native-reanimated';
 import { getYForX } from 'react-native-redash';
 import Svg, { Path, PathProps } from 'react-native-svg';
+import { triggerHaptics } from 'react-native-turbo-haptics';
+// @ts-ignore this library is no longer maintained independently of the app, so this is fine
+import { IS_ANDROID, IS_IOS } from '@/env';
 import { ChartData, PathData } from '../../helpers/ChartContext';
 import { requireOnWorklet, useWorkletValue } from '../../helpers/requireOnWorklet';
 import { useChartData } from '../../helpers/useChartData';
 
-export const FIX_CLIPPED_PATH_MAGIC_NUMBER = 22;
-const FIX_CLIPPED_PATH_FOR_CARD_MAGIC_NUMBER = 3;
+// These not being set to 0 makes it harder to reason about the chart height, and I cannot see any difference when they are set to 0. Keeping in place in case it is needed for some reason.
+export const FIX_CLIPPED_PATH_MAGIC_NUMBER = 0; // 22
+export const FIX_CLIPPED_PATH_FOR_CARD_MAGIC_NUMBER = 0; // 3
 
 function least(length: number, compare: (value: number) => number) {
   'worklet';
@@ -59,16 +63,11 @@ function least(length: number, compare: (value: number) => number) {
   }
 }
 
-function impactHeavy() {
-  'worklet';
-  runOnJS(() => ReactNativeHapticFeedback.trigger('impactHeavy'));
-}
-
 const timingFeedbackDefaultConfig = {
   duration: 80,
 };
 
-const timingAnimationDefaultConfig = {
+export const timingAnimationDefaultConfig = {
   duration: 300,
 };
 
@@ -79,11 +78,10 @@ interface ChartPathProps extends PathProps {
   hitSlop?: number;
   fill?: string;
   height: number;
-  width: number;
-  selectedStrokeWidth?: number;
-  selectedOpacity?: number;
-  strokeWidth?: number;
   stroke?: string;
+  width: number;
+  strokeWidth?: number;
+  selectedStrokeWidth?: number;
   gestureEnabled?: boolean;
   springConfig?: WithSpringConfig;
   longPressGestureHandlerProps?: LongPressGestureHandlerProperties;
@@ -107,13 +105,14 @@ const ChartPathInner = React.memo(
   ({
     hitSlop = 0,
     stroke = 'black',
-    selectedStrokeWidth = 1,
+    selectedStroke = 'blue',
     strokeWidth = 1,
+    selectedStrokeWidth = 1,
     gestureEnabled = true,
-    selectedOpacity = 0.7,
     hapticsEnabled,
     width,
     height,
+    containerWidth,
     timingFeedbackConfig,
     timingAnimationConfig,
     longPressGestureHandlerProps,
@@ -124,46 +123,55 @@ const ChartPathInner = React.memo(
     state,
     isActive,
     progress,
-    pathOpacity,
     currentPath,
     previousPath,
     isCard,
     ...props
-  }: ChartPathProps & Omit<ChartData, 'data' | 'dotScale'>) => {
+  }: ChartPathProps & Omit<ChartData, 'data' | 'dotScale' | 'color'> & { containerWidth: number }) => {
     ChartPathInner.displayName = 'chartPathInner';
     const interpolatorWorklet = useWorkletValue();
 
-    const translationX = useSharedValue<number | null>(null);
-    const translationY = useSharedValue<number | null>(null);
+    const selectedStrokeProgress = useSharedValue(0);
 
-    const setOriginData = useWorkletCallback((path: PathData, index?: number) => {
-      if (!path.data.length) {
-        return;
+    const strokeColorAnimated = useDerivedValue(() => {
+      return interpolateColor(selectedStrokeProgress.value, [0, 1], [stroke, selectedStroke]);
+    });
+    const strokeWidthAnimated = useDerivedValue(() => {
+      return interpolate(selectedStrokeProgress.value, [0, 1], [strokeWidth, selectedStrokeWidth]);
+    });
+
+    useAnimatedReaction(
+      () => isActive.value,
+      isActive => {
+        if (isActive) {
+          selectedStrokeProgress.value = withTiming(1, timingFeedbackConfig || timingFeedbackDefaultConfig);
+        } else {
+          selectedStrokeProgress.value = withTiming(0, timingFeedbackConfig || timingFeedbackDefaultConfig);
+        }
       }
+    );
 
-      if (typeof index === 'undefined') {
-        originalX.value = '';
-        originalY.value = '';
-        return;
-      }
+    const setOriginData = useCallback(
+      (path: PathData, index?: number) => {
+        'worklet';
+        if (!path.data.length) {
+          return;
+        }
 
-      originalX.value = path.data[index].x.toString();
-      originalY.value = path.data[index].y.toString();
-    }, []);
+        if (typeof index === 'undefined') {
+          originalX.value = '';
+          originalY.value = '';
+          return;
+        }
 
-    const resetGestureState = useWorkletCallback(() => {
-      originalX.value = '';
-      originalY.value = '';
-      positionY.value = -1;
-      isActive.value = false;
-      pathOpacity.value = withTiming(1, timingFeedbackConfig || timingFeedbackDefaultConfig);
-      translationX.value = null;
-      translationY.value = null;
-    }, []);
+        originalX.value = path.data[index].x.toString();
+        originalY.value = path.data[index].y.toString();
+      },
+      [originalX, originalY]
+    );
 
     useEffect(() => {
       runOnUI(() => {
-        'worklet';
         if (currentPath) {
           setOriginData(currentPath);
         }
@@ -186,7 +194,7 @@ const ChartPathInner = React.memo(
 
           progress.value = 0;
 
-          progress.value = withDelay(Platform.OS === 'ios' ? 0 : 100, withTiming(1, timingAnimationConfig || timingAnimationDefaultConfig));
+          progress.value = withDelay(IS_IOS ? 0 : 100, withTiming(1, timingAnimationConfig || timingAnimationDefaultConfig));
         } else {
           interpolatorWorklet().value = undefined;
           progress.value = 1;
@@ -196,50 +204,50 @@ const ChartPathInner = React.memo(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPath?.path, previousPath?.path]);
 
-    useAnimatedReaction(
-      () => ({ x: translationX.value, y: translationY.value }),
-      values => {
-        if (!currentPath || !currentPath.parsed || progress.value === 0 || values.x === null || values.y === null) {
+    const updatePosition = useCallback(
+      ({ x, y }: { x: number | null; y: number | null }) => {
+        'worklet';
+        if (!currentPath || !currentPath.parsed || progress.value === 0 || x === null || y === null) {
           return;
         }
 
-        const yForX = getYForX(currentPath.parsed, values.x);
+        const yForX = getYForX(currentPath.parsed, x);
 
         if (yForX !== null) {
           positionY.value = yForX;
         }
 
-        positionX.value = values.x;
+        positionX.value = x;
 
         // refer to this article for more details about this code
         // https://observablehq.com/@d3/multi-line-chart
         const index = least(currentPath.points.length, i => {
-          if (typeof i === 'undefined' || values.x === null) {
+          if (typeof i === 'undefined' || x === null) {
             return 0;
           }
 
-          return Math.abs(currentPath.points[i].x - values.x);
+          return Math.abs(currentPath.points[i].x - x);
         });
 
         const pointX = currentPath.points[index]?.originalX;
 
         let adjustedPointX = pointX;
-        if (currentPath.points[index].x > values.x) {
+        if (currentPath.points[index].x > x) {
           const prevPointOriginalX = currentPath.points[index - 1]?.originalX;
           if (prevPointOriginalX) {
-            const distance = (currentPath.points[index].x - values.x) / (currentPath.points[index].x - currentPath.points[index - 1].x);
+            const distance = (currentPath.points[index].x - x) / (currentPath.points[index].x - currentPath.points[index - 1].x);
             adjustedPointX = prevPointOriginalX * distance + pointX * (1 - distance);
           }
         } else {
           const nextPointOriginalX = currentPath.points[index + 1]?.originalX;
           if (nextPointOriginalX) {
-            const distance = (values.x - currentPath.points[index].x) / (currentPath.points[index + 1].x - currentPath.points[index].x);
+            const distance = (x - currentPath.points[index].x) / (currentPath.points[index + 1].x - currentPath.points[index].x);
             adjustedPointX = nextPointOriginalX * distance + pointX * (1 - distance);
           }
         }
 
         const dataIndex = least(currentPath.data.length, i => {
-          if (typeof i === 'undefined' || values.x === null) {
+          if (typeof i === 'undefined' || x === null) {
             return 0;
           }
 
@@ -248,29 +256,32 @@ const ChartPathInner = React.memo(
 
         setOriginData(currentPath, dataIndex);
       },
-      [currentPath]
+      [currentPath, positionX, positionY, progress, setOriginData]
     );
 
-    const animatedProps = useAnimatedProps(() => {
-      const props: PathProps & ViewProps = {};
+    const resetGestureState = useCallback(() => {
+      'worklet';
+      originalX.value = '';
+      originalY.value = '';
+      positionY.value = -1;
+      isActive.value = false;
+      updatePosition({ x: null, y: null });
+    }, [originalX, originalY, positionY, isActive, updatePosition]);
 
+    const animatedProps = useAnimatedProps(() => {
       if (!currentPath) {
         return {
           d: '',
+          strokeWidth,
+          stroke,
         };
       }
 
-      props.d = interpolatorWorklet().value ? interpolatorWorklet().value(progress.value) : currentPath.path;
-
-      props.strokeWidth = pathOpacity.value * (Number(strokeWidth) - Number(selectedStrokeWidth)) + Number(selectedStrokeWidth);
-
-      if (Platform.OS === 'ios') {
-        props.style = {
-          opacity: pathOpacity.value * (1 - selectedOpacity) + selectedOpacity,
-        };
-      }
-
-      return props;
+      return {
+        d: interpolatorWorklet().value ? interpolatorWorklet().value(progress.value) : currentPath.path,
+        strokeWidth: strokeWidthAnimated.value,
+        stroke: strokeColorAnimated.value,
+      };
     }, [currentPath]);
 
     const onGestureEvent = useAnimatedGestureHandler<LongPressGestureHandlerGestureEvent>(
@@ -278,17 +289,10 @@ const ChartPathInner = React.memo(
         onActive: event => {
           if (!isActive.value) {
             isActive.value = true;
-
-            pathOpacity.value = withTiming(0, timingFeedbackConfig || timingFeedbackDefaultConfig);
-
-            if (hapticsEnabled) {
-              impactHeavy();
-            }
+            if (hapticsEnabled) triggerHaptics('soft');
           }
-
           state.value = event.state;
-          translationX.value = positionXWithMargin(event.x, hitSlop, width);
-          translationY.value = event.y;
+          updatePosition({ x: positionXWithMargin(event.x, hitSlop, width), y: event.y });
         },
         onCancel: event => {
           state.value = event.state;
@@ -298,9 +302,7 @@ const ChartPathInner = React.memo(
           state.value = event.state;
           resetGestureState();
 
-          if (hapticsEnabled) {
-            impactHeavy();
-          }
+          if (hapticsEnabled) triggerHaptics('soft');
         },
         onFail: event => {
           state.value = event.state;
@@ -310,51 +312,39 @@ const ChartPathInner = React.memo(
           // WARNING: the following code does not run on using iOS, but it does on Android.
           // I use the same code from onActive
           // platform is for safety
-          if (Platform.OS === 'android') {
+          if (IS_ANDROID) {
             state.value = event.state;
             isActive.value = true;
-            pathOpacity.value = withTiming(0, timingFeedbackConfig || timingFeedbackDefaultConfig);
 
-            if (hapticsEnabled) {
-              impactHeavy();
-            }
+            if (hapticsEnabled) triggerHaptics('soft');
           }
         },
       },
-      [width, height, hapticsEnabled, hitSlop, timingFeedbackConfig]
+      [width, height, hapticsEnabled, hitSlop, timingFeedbackConfig, updatePosition]
     );
 
-    const pathAnimatedStyles = useAnimatedStyle(() => {
-      return {
-        opacity: pathOpacity.value * (1 - selectedOpacity) + selectedOpacity,
-      };
-    });
-
     return (
-      // @ts-ignore
       <LongPressGestureHandler
         enabled={gestureEnabled}
         maxDist={100000}
         minDurationMs={0}
         onGestureEvent={onGestureEvent}
         shouldCancelWhenOutside={false}
+        // eslint-disable-next-line react/jsx-props-no-spreading
         {...longPressGestureHandlerProps}
       >
         <Animated.View>
           <Svg
             style={{
               height: height + (isCard ? FIX_CLIPPED_PATH_FOR_CARD_MAGIC_NUMBER : FIX_CLIPPED_PATH_MAGIC_NUMBER),
-              width,
+              width: containerWidth,
             }}
-            viewBox={`0 0 ${width} ${height}`}
+            viewBox={`0 0 ${containerWidth} ${height}`}
           >
             <AnimatedPath
               animatedProps={animatedProps}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
               strokeLinecap="round"
-              // @ts-ignore
-              style={pathAnimatedStyles}
+              // eslint-disable-next-line react/jsx-props-no-spreading
               {...props}
             />
           </Svg>
@@ -370,59 +360,67 @@ export const ChartPath = React.memo(
     width,
     height,
     hitSlop,
-    stroke,
     selectedStrokeWidth,
     strokeWidth,
     gestureEnabled,
-    selectedOpacity,
     timingFeedbackConfig,
     timingAnimationConfig,
     longPressGestureHandlerProps = {},
     isCard = false,
     ...props
   }: ChartPathProps) => {
-    const { positionX, positionY, originalX, originalY, state, isActive, progress, pathOpacity, currentPath, previousPath } =
-      useChartData();
+    const {
+      positionX,
+      positionY,
+      originalX,
+      originalY,
+      state,
+      isActive,
+      progress,
+      currentPath,
+      previousPath,
+      stroke,
+      width: chartPathWidth,
+      selectedStroke,
+    } = useChartData();
 
-    let renderPath = null;
-
-    // this is workaround to avoid unnecessary rerenders of the path component
-    // and sometimes blank SvgPath the currentPath's path string is empty
-    // due to some broken logic in the Rainbow app
-    if (currentPath?.path) {
-      renderPath = (
-        <ChartPathInner
-          {...{
-            ...props,
-            currentPath,
-            isCard,
-            gestureEnabled,
-            hapticsEnabled,
-            height,
-            hitSlop,
-            isActive,
-            longPressGestureHandlerProps,
-            originalX,
-            originalY,
-            pathOpacity,
-            positionX,
-            positionY,
-            previousPath,
-            progress,
-            selectedOpacity,
-            selectedStrokeWidth,
-            state,
-            stroke,
-            strokeWidth,
-            timingAnimationConfig,
-            timingFeedbackConfig,
-            width,
-          }}
-        />
-      );
-    }
-
-    return <View style={{ height, width }}>{renderPath}</View>;
+    return (
+      <View style={{ height, width }}>
+        {currentPath?.path ? (
+          <Animated.View entering={FadeIn.duration(140)}>
+            <ChartPathInner
+              // eslint-disable-next-line react/jsx-props-no-spreading
+              {...{
+                ...props,
+                currentPath,
+                isCard,
+                gestureEnabled,
+                hapticsEnabled,
+                height,
+                hitSlop,
+                isActive,
+                longPressGestureHandlerProps,
+                originalX,
+                originalY,
+                positionX,
+                positionY,
+                previousPath,
+                progress,
+                selectedStrokeWidth,
+                state,
+                stroke,
+                selectedStroke,
+                strokeWidth,
+                timingAnimationConfig,
+                timingFeedbackConfig,
+                width: chartPathWidth,
+                containerWidth: width,
+              }}
+            />
+          </Animated.View>
+        ) : null}
+      </View>
+    );
   }
 );
 

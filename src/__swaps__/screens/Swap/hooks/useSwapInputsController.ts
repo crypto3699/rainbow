@@ -1,1094 +1,663 @@
-import { useCallback, useRef } from 'react';
-import { SharedValue, runOnJS, runOnUI, useAnimatedReaction, useDerivedValue, useSharedValue, withSpring } from 'react-native-reanimated';
-import { useDebouncedCallback } from 'use-debounce';
-
-import { ETH_COLOR, ETH_COLOR_DARK, SCRUBBER_WIDTH, SLIDER_WIDTH, snappySpringConfig } from '@/__swaps__/screens/Swap/constants';
-import { SWAP_FEE } from '@/__swaps__/screens/Swap/dummyValues';
-import { inputKeys, inputMethods } from '@/__swaps__/types/swap';
-import { RainbowError, logger } from '@/logger';
+import {
+  SCRUBBER_WIDTH,
+  SLIDER_ROUND_THRESHOLD_END,
+  SLIDER_ROUND_THRESHOLD_START,
+  SLIDER_WIDTH,
+  snappySpringConfig,
+} from '@/__swaps__/screens/Swap/constants';
+import { ExtendedAnimatedAssetWithColors } from '@/__swaps__/types/assets';
+import { InputKeys, InputMethods, InputValues, RequestNewQuoteParams } from '@/__swaps__/types/swap';
+import { valueBasedDecimalFormatter } from '@/__swaps__/utils/decimalFormatter';
+import { getInputValuesForSliderPositionWorklet } from '@/__swaps__/utils/flipAssets';
 import {
   addCommasToNumber,
+  addSymbolToNativeDisplayWorklet,
+  buildQuoteParams,
   clamp,
-  clampJS,
-  countDecimalPlaces,
-  findNiceIncrement,
-  getDefaultSlippage,
-  getDefaultSlippageWorklet,
-  isUnwrapEth,
-  isWrapEth,
-  niceIncrementFormatter,
-  priceForAsset,
+  getQuotePrice,
   trimTrailingZeros,
-  valueBasedDecimalFormatter,
 } from '@/__swaps__/utils/swaps';
-import { ChainId } from '@/__swaps__/types/chains';
-import { ParsedSearchAsset } from '@/__swaps__/types/assets';
-import { useColorMode } from '@/design-system';
-import { isSameAssetWorklet } from '@/__swaps__/utils/assets';
+import { analytics } from '@/analytics';
+import { SPRING_CONFIGS } from '@/components/animations/animationConfigs';
+import { NativeCurrencyKey } from '@/entities';
 import {
-  CrosschainQuote,
-  ETH_ADDRESS,
-  Quote,
-  QuoteError,
-  QuoteParams,
-  Slippage,
-  SlippageError,
-  SlippageParams,
-  Source,
-  SwapType,
-  getCrosschainQuote,
-  getQuote,
-  getSlippage,
-} from '@rainbow-me/swaps';
-import { useRemoteConfig } from '@/model/remoteConfig';
-import { useAccountSettings } from '@/hooks';
-import { convertAmountToRawAmount, convertRawAmountToBalance, convertRawAmountToNativeDisplay } from '@/__swaps__/utils/numbers';
-import ethereumUtils from '@/utils/ethereumUtils';
-import { FormattedExternalAsset, fetchExternalToken } from '@/resources/assets/externalAssetsQuery';
+  convertAmountToNativeDisplayWorklet,
+  convertRawAmountToDecimalFormat,
+  handleSignificantDecimalsWorklet,
+} from '@/helpers/utilities';
+import { useAnimatedInterval } from '@/hooks/reanimated/useAnimatedInterval';
+import { logger } from '@/logger';
+import { divWorklet, equalWorklet, greaterThanWorklet, isNumberStringWorklet, mulWorklet, toFixedWorklet } from '@/safe-math/SafeMath';
+import { swapsStore } from '@/state/swaps/swapsStore';
+import { getAccountAddress } from '@/state/wallets/walletsStore';
+import { CrosschainQuote, Quote, QuoteError, getCrosschainQuote, getQuote } from '@rainbow-me/swaps';
+import { useCallback } from 'react';
+import { SharedValue, runOnJS, runOnUI, useAnimatedReaction, useDerivedValue, useSharedValue, withSpring } from 'react-native-reanimated';
+import { triggerHaptics } from 'react-native-turbo-haptics';
+import { useDebouncedCallback } from 'use-debounce';
+import { SwapsParams } from '../navigateToSwaps';
+import { analyticsTrackQuoteFailed } from './analyticsTrackQuoteFailed';
+import { NavigationSteps } from './useSwapNavigation';
 
-const QUOTE_REFETCH_INTERVAL = 5_000;
-const PRICE_REFETCH_INTERVAL = 10_000;
+function applyInitialInputValues({
+  inputAsset,
+  inputAmount,
+  inputNativeValue,
+  outputAsset,
+  outputAmount,
+  outputNativeValue,
+  percentageToSell = 0.5,
+}: SwapsParams & {
+  outputAmount?: string | undefined;
+  outputNativeValue?: string | undefined;
+}) {
+  if (inputAsset && inputAmount) {
+    const nativeValue = inputNativeValue ?? mulWorklet(inputAmount, inputAsset?.price?.value ?? 0);
+    return { inputAmount, inputNativeValue: nativeValue, outputAmount: 0, outputNativeValue: 0 };
+  }
+  if (outputAsset && outputAmount) {
+    const nativeValue = outputNativeValue ?? mulWorklet(outputAmount, outputAsset?.price?.value ?? 0);
+    return { inputAmount: 0, inputNativeValue: 0, outputAmount, outputNativeValue: nativeValue };
+  }
+
+  const slider = getInputValuesForSliderPositionWorklet({
+    inputNativePrice: inputAsset?.nativePrice ?? inputAsset?.price?.value ?? 0,
+    percentageToSwap: percentageToSell,
+    selectedInputAsset: inputAsset,
+    sliderXPosition: percentageToSell * SLIDER_WIDTH,
+  });
+  return { inputAmount: slider.inputAmount, inputNativeValue: slider.inputNativeValue, outputAmount: 0, outputNativeValue: 0 };
+}
 
 export function useSwapInputsController({
+  currentCurrency,
   focusedInput,
+  initialValues,
+  inputProgress,
+  internalSelectedInputAsset,
+  internalSelectedOutputAsset,
   isFetching,
-  sliderXPosition,
-  handleExitSearch,
-  handleInputPress,
-  handleOutputPress,
+  isQuoteStale,
+  lastTypedInput,
   outputProgress,
+  quote,
+  sliderXPosition,
 }: {
-  focusedInput: SharedValue<inputKeys>;
-  isFetching: SharedValue<boolean>;
-  sliderXPosition: SharedValue<number>;
-  handleExitSearch: () => void;
-  handleFocusInputSearch: () => void;
-  handleFocusOutputSearch: () => void;
-  handleInputPress: () => void;
-  handleOutputPress: () => void;
+  currentCurrency: NativeCurrencyKey;
+  focusedInput: SharedValue<InputKeys>;
+  initialValues: SwapsParams;
   inputProgress: SharedValue<number>;
+  internalSelectedInputAsset: SharedValue<ExtendedAnimatedAssetWithColors | null>;
+  internalSelectedOutputAsset: SharedValue<ExtendedAnimatedAssetWithColors | null>;
+  isFetching: SharedValue<boolean>;
+  isQuoteStale: SharedValue<number>;
+  lastTypedInput: SharedValue<InputKeys>;
   outputProgress: SharedValue<number>;
+  quote: SharedValue<Quote | CrosschainQuote | QuoteError | null>;
+  sliderXPosition: SharedValue<number>;
 }) {
-  const { accountAddress: currentAddress, nativeCurrency: currentCurrency } = useAccountSettings();
-  const config = useRemoteConfig();
-  const { isDarkMode } = useColorMode();
-  const assetToSell = useSharedValue<ParsedSearchAsset | null>(null);
-  const assetToBuy = useSharedValue<ParsedSearchAsset | null>(null);
-  const outputChainId = useSharedValue<ChainId>(ChainId.mainnet);
-  const searchQuery = useSharedValue('');
-
-  // NOTE: Setting to -1 to indicate that the price needs to be re-fetched
-  const assetToSellPrice = useSharedValue<number>(0);
-  const assetToBuyPrice = useSharedValue<number>(0);
-
-  const quote = useSharedValue<Quote | CrosschainQuote | QuoteError | null>(null);
-  const fee = useSharedValue<number | string>(0);
-  const source = useSharedValue<Source | 'auto'>('auto');
-  const slippage = useSharedValue<string>(getDefaultSlippage(assetToSell.value?.chainId || ChainId.mainnet, config));
-  const flashbots = useSharedValue<boolean>(false);
-
-  const inputValues = useSharedValue<{ [key in inputKeys]: number | string }>({
-    inputAmount: 0,
-    inputNativeValue: 0,
-    outputAmount: 0,
-    outputNativeValue: 0,
-  });
-  const inputMethod = useSharedValue<inputMethods>('slider');
-  const isQuoteStale = useSharedValue(0);
-
-  const topColor = useDerivedValue(() => {
-    return assetToSell.value?.colors?.primary ?? assetToSell.value?.colors?.fallback ?? (isDarkMode ? ETH_COLOR_DARK : ETH_COLOR);
-  });
-
-  const bottomColor = useDerivedValue(() => {
-    return assetToBuy.value?.colors?.primary ?? assetToBuy.value?.colors?.fallback ?? (isDarkMode ? ETH_COLOR_DARK : ETH_COLOR);
-  });
-
-  const assetToSellSymbol = useDerivedValue(() => {
-    return assetToSell.value?.symbol ?? '';
-  });
-
-  const assetToSellIconUrl = useDerivedValue(() => {
-    return assetToSell.value?.icon_url ?? '';
-  });
-
-  const assetToBuySymbol = useDerivedValue(() => {
-    return assetToBuy.value?.symbol ?? '';
-  });
-
-  const assetToBuyIconUrl = useDerivedValue(() => {
-    return assetToBuy.value?.icon_url ?? '';
-  });
-
-  const topColorShadow = useDerivedValue(() => {
-    return assetToSell.value?.colors?.shadow ?? (isDarkMode ? ETH_COLOR_DARK : ETH_COLOR);
-  });
-
-  const bottomColorShadow = useDerivedValue(() => {
-    return assetToBuy.value?.colors?.shadow ?? (isDarkMode ? ETH_COLOR_DARK : ETH_COLOR);
-  });
+  const inputValues = useSharedValue<InputValues>(applyInitialInputValues(initialValues));
+  const inputMethod = useSharedValue<InputMethods>(initialValues.inputMethod || 'slider');
 
   const percentageToSwap = useDerivedValue(() => {
     return Math.round(clamp((sliderXPosition.value - SCRUBBER_WIDTH / SLIDER_WIDTH) / SLIDER_WIDTH, 0, 1) * 100) / 100;
   });
 
-  const niceIncrement = useDerivedValue(() => {
-    if (!assetToSell.value?.balance.amount) return 0.1;
-    return findNiceIncrement(Number(assetToSell.value?.balance.amount));
+  const inputNativePrice = useDerivedValue(() => {
+    const quotePrice =
+      getQuotePrice(internalSelectedInputAsset, quote, 'input') || getQuotePrice(internalSelectedInputAsset, quote, 'output');
+    return quotePrice || internalSelectedInputAsset.value?.nativePrice || internalSelectedInputAsset.value?.price?.value || 0;
   });
-  const incrementDecimalPlaces = useDerivedValue(() => countDecimalPlaces(niceIncrement.value));
+
+  const outputNativePrice = useDerivedValue(() => {
+    const quotePrice =
+      getQuotePrice(internalSelectedOutputAsset, quote, 'output') || getQuotePrice(internalSelectedOutputAsset, quote, 'input');
+    return quotePrice || internalSelectedOutputAsset.value?.nativePrice || internalSelectedOutputAsset.value?.price?.value || 0;
+  });
 
   const formattedInputAmount = useDerivedValue(() => {
-    const price = priceForAsset({
-      asset: assetToSell.value,
-      assetType: 'assetToSell',
-      assetToSellPrice: assetToSellPrice,
-      assetToBuyPrice: assetToBuyPrice,
-    });
-    const balance = Number(assetToSell.value?.balance.amount);
-    if (
-      (inputMethod.value === 'slider' && percentageToSwap.value === 0) ||
-      !inputValues.value.inputAmount ||
-      !assetToSell.value ||
-      !price
-    ) {
+    if (!internalSelectedInputAsset.value) return '0';
+    const currentInputMethod = inputMethod.value;
+
+    if ((currentInputMethod === 'slider' && percentageToSwap.value === 0) || !inputValues.value.inputAmount) {
       return '0';
     }
 
-    if (inputMethod.value === 'inputAmount' || typeof inputValues.value.inputAmount === 'string') {
-      return addCommasToNumber(inputValues.value.inputAmount);
+    if (
+      greaterThanWorklet(internalSelectedInputAsset.value.maxSwappableAmount, 0) &&
+      ((currentInputMethod !== 'inputAmount' &&
+        equalWorklet(inputValues.value.inputAmount, internalSelectedInputAsset.value.maxSwappableAmount)) ||
+        (currentInputMethod === 'inputAmount' && inputValues.value.inputAmount === internalSelectedInputAsset.value.maxSwappableAmount))
+    ) {
+      const formattedAmount = handleSignificantDecimalsWorklet(inputValues.value.inputAmount, internalSelectedInputAsset.value.decimals);
+      return trimTrailingZeros(formattedAmount);
     }
 
-    if (inputMethod.value === 'outputAmount') {
-      return valueBasedDecimalFormatter(
-        inputValues.value.inputAmount,
-        price,
-        'up',
-        -1,
-        assetToSell.value?.type === 'stablecoin' ?? false,
-        false
-      );
+    if (currentInputMethod === 'inputAmount') {
+      return addCommasToNumber(inputValues.value.inputAmount, '0');
     }
 
-    return niceIncrementFormatter(
-      incrementDecimalPlaces.value,
-      balance,
-      price,
-      niceIncrement.value,
-      percentageToSwap.value,
-      sliderXPosition.value
-    );
+    if (currentInputMethod === 'outputAmount' || currentInputMethod === 'inputNativeValue' || currentInputMethod === 'outputNativeValue') {
+      return valueBasedDecimalFormatter({
+        amount: inputValues.value.inputAmount,
+        nativePrice: inputNativePrice.value,
+        roundingMode: 'up',
+        isStablecoin: internalSelectedInputAsset.value?.type === 'stablecoin',
+        stripSeparators: false,
+      });
+    }
+
+    return addCommasToNumber(inputValues.value.inputAmount, '0');
   });
 
   const formattedInputNativeValue = useDerivedValue(() => {
-    if ((inputMethod.value === 'slider' && percentageToSwap.value === 0) || !inputValues.value.inputNativeValue) {
-      return '$0.00';
+    const currentInputMethod = inputMethod.value;
+    if (currentInputMethod === 'inputNativeValue') {
+      return addSymbolToNativeDisplayWorklet(inputValues.value.inputNativeValue, currentCurrency);
     }
 
-    const nativeValue = `$${inputValues.value.inputNativeValue.toLocaleString('en-US', {
-      useGrouping: true,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+    if (
+      (currentInputMethod === 'slider' && percentageToSwap.value === 0) ||
+      !inputValues.value.inputNativeValue ||
+      !isNumberStringWorklet(inputValues.value.inputNativeValue.toString()) ||
+      equalWorklet(inputValues.value.inputNativeValue, 0)
+    ) {
+      return convertAmountToNativeDisplayWorklet(0, currentCurrency, false, true);
+    }
 
-    return nativeValue || '$0.00';
+    const nativeInputAmount = toFixedWorklet(
+      mulWorklet(inputValues.value.inputAmount, inputNativePrice.value),
+      internalSelectedInputAsset.value?.decimals ?? 18
+    );
+
+    return convertAmountToNativeDisplayWorklet(nativeInputAmount, currentCurrency, false, true);
   });
 
   const formattedOutputAmount = useDerivedValue(() => {
-    const price = priceForAsset({
-      asset: assetToBuy.value,
-      assetType: 'assetToBuy',
-      assetToSellPrice: assetToSellPrice,
-      assetToBuyPrice: assetToBuyPrice,
-    });
+    if (!internalSelectedOutputAsset.value) return '0';
+    const currentInputMethod = inputMethod.value;
 
-    if (
-      (inputMethod.value === 'slider' && percentageToSwap.value === 0) ||
-      !inputValues.value.outputAmount ||
-      !assetToBuy.value ||
-      !price
-    ) {
+    if ((currentInputMethod === 'slider' && percentageToSwap.value === 0) || !inputValues.value.outputAmount) {
       return '0';
     }
 
-    if (inputMethod.value === 'outputAmount' || typeof inputValues.value.outputAmount === 'string') {
-      return addCommasToNumber(inputValues.value.outputAmount);
+    if (currentInputMethod === 'outputAmount') {
+      return addCommasToNumber(inputValues.value.outputAmount, '0');
     }
 
-    return valueBasedDecimalFormatter(
-      inputValues.value.outputAmount,
-      price,
-      'down',
-      -1,
-      assetToBuy.value?.type === 'stablecoin' ?? false,
-      false
-    );
+    return valueBasedDecimalFormatter({
+      amount: inputValues.value.outputAmount,
+      nativePrice: outputNativePrice.value,
+      roundingMode: 'down',
+      isStablecoin: internalSelectedOutputAsset.value?.type === 'stablecoin',
+      stripSeparators: false,
+    });
   });
 
   const formattedOutputNativeValue = useDerivedValue(() => {
-    if ((inputMethod.value === 'slider' && percentageToSwap.value === 0) || !inputValues.value.outputNativeValue) {
-      return '$0.00';
+    const currentInputMethod = inputMethod.value;
+    if (currentInputMethod === 'outputNativeValue') {
+      return addSymbolToNativeDisplayWorklet(inputValues.value.outputNativeValue, currentCurrency);
     }
 
-    const nativeValue = `$${inputValues.value.outputNativeValue.toLocaleString('en-US', {
-      useGrouping: true,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+    if (
+      (currentInputMethod === 'slider' && percentageToSwap.value === 0) ||
+      !inputValues.value.outputNativeValue ||
+      !isNumberStringWorklet(inputValues.value.outputNativeValue.toString()) ||
+      equalWorklet(inputValues.value.outputNativeValue, 0)
+    ) {
+      return convertAmountToNativeDisplayWorklet(0, currentCurrency, false, true);
+    }
 
-    return nativeValue || '$0.00';
+    const nativeOutputAmount = toFixedWorklet(
+      mulWorklet(inputValues.value.outputAmount, outputNativePrice.value),
+      internalSelectedOutputAsset.value?.decimals ?? 18
+    );
+
+    return convertAmountToNativeDisplayWorklet(nativeOutputAmount, currentCurrency, false, true);
   });
 
-  const spinnerTimer = useRef<NodeJS.Timeout | null>(null);
-  const animationFrameId = useRef<number | null>(null);
-
-  const pricesRefetchTimer = useRef<NodeJS.Timeout | null>(null);
-  const quoteRefetchTimer = useRef<NodeJS.Timeout | null>(null);
-
-  const resetTimers = useCallback(() => {
-    if (spinnerTimer.current) clearTimeout(spinnerTimer.current);
-    if (animationFrameId.current !== null) cancelAnimationFrame(animationFrameId.current);
-    if (quoteRefetchTimer.current) clearTimeout(quoteRefetchTimer.current);
+  const updateQuoteStore = useCallback((data: Quote | CrosschainQuote | QuoteError | null) => {
+    swapsStore.setState({ quote: data });
   }, []);
 
-  const onChangedPercentage = useDebouncedCallback((percentage: number, setStale = true) => {
-    resetTimers();
+  const resetFetchingStatus = useCallback(
+    ({
+      fromError = false,
+      quoteFetchingInterval,
+    }: {
+      fromError: boolean;
+      quoteFetchingInterval: ReturnType<typeof useAnimatedInterval>;
+    }) => {
+      'worklet';
 
-    const amount = percentage * Number(assetToSell.value?.balance.amount);
-    if (amount > 0) {
-      isFetching.value = true;
-
-      if (setStale) isQuoteStale.value = 1;
-      animationFrameId.current = requestAnimationFrame(async () => {
-        await handleInputAmountLogic(amount);
-      });
-    } else {
       isFetching.value = false;
       isQuoteStale.value = 0;
-    }
 
-    return () => {
-      resetTimers();
-    };
-  }, 200);
-
-  // Refactored onTypedNumber function
-  const onTypedNumber = useDebouncedCallback(async (amount: number, inputKey: inputKeys, preserveAmount = true, setStale = true) => {
-    resetTimers();
-
-    if (amount > 0) {
-      if (setStale) isQuoteStale.value = 1;
-
-      if (inputKey === 'inputAmount') {
-        inputValues.value.inputAmount = amount;
-        await handleInputAmountLogic(amount);
-      } else if (inputKey === 'outputAmount') {
-        inputValues.value.outputAmount = amount;
-        await handleOutputAmountLogic(amount);
+      // This ensures that after a quote has been applied, if neither token list is expanded, we resume quote fetching interval timer
+      if (inputProgress.value <= NavigationSteps.INPUT_ELEMENT_FOCUSED && outputProgress.value <= NavigationSteps.INPUT_ELEMENT_FOCUSED) {
+        quoteFetchingInterval.restart();
       }
-    } else {
-      const resetValuesToZero = () => {
-        isFetching.value = false;
 
-        const updateWorklet = () => {
-          'worklet';
-          const keysToReset = ['inputAmount', 'inputNativeValue', 'outputAmount', 'outputNativeValue'];
-          const updatedValues = keysToReset.reduce(
-            (acc, key) => {
-              const castedKey = key as keyof typeof inputValues.value;
-              acc[castedKey] = castedKey === inputKey && preserveAmount ? inputValues.value[castedKey] : 0;
-              return acc;
-            },
-            {} as Partial<typeof inputValues.value>
-          );
-          inputValues.modify(values => {
-            return {
-              ...values,
-              ...updatedValues,
-            };
-          });
-          sliderXPosition.value = withSpring(0, snappySpringConfig);
-          isQuoteStale.value = 0;
-        };
-
-        runOnUI(updateWorklet)();
-      };
-
-      animationFrameId.current = requestAnimationFrame(resetValuesToZero);
-    }
-
-    return () => {
-      resetTimers();
-    };
-  }, 400);
-
-  const fetchAssetPrices = async ({
-    assetToSell,
-    assetToBuy,
-  }: {
-    assetToSell: ParsedSearchAsset | null;
-    assetToBuy: ParsedSearchAsset | null;
-  }) => {
-    const fetchPriceForAsset = async (asset: ParsedSearchAsset | null, assetType: 'assetToSell' | 'assetToBuy') => {
-      if (!asset) return;
-
-      const assetWithPriceData = await fetchExternalToken({
-        address: asset.address,
-        network: ethereumUtils.getNetworkFromChainId(asset.chainId),
-        currency: currentCurrency,
-      });
-
-      if (!assetWithPriceData) return;
-
-      switch (assetType) {
-        case 'assetToSell':
-          runOnUI((asset: FormattedExternalAsset) => {
-            if (asset.price.value) {
-              assetToSellPrice.value = Number(asset.price.value);
-            } else if (asset.native.price.amount) {
-              assetToSellPrice.value = Number(asset.native.price.amount);
-            }
-
-            inputValues.value.inputNativeValue = Number(inputValues.value.inputAmount) * assetToSellPrice.value;
-          })(assetWithPriceData);
-          break;
-        case 'assetToBuy':
-          runOnUI((asset: FormattedExternalAsset) => {
-            if (asset.price.value) {
-              assetToBuyPrice.value = Number(asset.price.value);
-            } else if (asset.native.price.amount) {
-              assetToBuyPrice.value = Number(asset.native.price.amount);
-            }
-
-            inputValues.value.outputNativeValue = Number(inputValues.value.outputAmount) * assetToBuyPrice.value;
-          })(assetWithPriceData);
-          break;
+      if (!fromError) {
+        return;
       }
-    };
 
-    const fetchPrices = async () => {
-      const promises = ['assetToSell', 'assetToBuy'].map(assetType => {
-        return fetchPriceForAsset(assetType === 'assetToSell' ? assetToSell : assetToBuy, assetType as 'assetToSell' | 'assetToBuy');
-      });
-
-      Promise.allSettled(promises);
-    };
-
-    if (pricesRefetchTimer.current) {
-      clearInterval(pricesRefetchTimer.current);
-    }
-
-    pricesRefetchTimer.current = setInterval(fetchPrices, PRICE_REFETCH_INTERVAL);
-    return fetchPrices();
-  };
-
-  // Shared function to fetch quote and update values
-  const fetchAndUpdateQuote = async (amount: number, isInputAmount: boolean) => {
-    if (!assetToSell.value || !assetToBuy.value) return;
-
-    const updateQuoteWithResponse = async (quoteResponse: Quote | CrosschainQuote | QuoteError) => {
-      'worklet';
-      quote.value = quoteResponse;
-
-      if ((quoteResponse as QuoteError)?.error) {
-        inputValues.modify(prev => {
-          return {
-            ...prev,
-            outputAmount: 0,
-            outputNativeValue: 0,
-          };
-        });
-        isQuoteStale.value = 0;
-        isFetching.value = false;
+      // NOTE: if we encounter a quote error, let's make sure to update the outputAmount and inputAmount to 0 accordingly
+      if (lastTypedInput.value === 'inputAmount' || lastTypedInput.value === 'inputNativeValue') {
+        inputValues.modify(prev => ({
+          ...prev,
+          outputAmount: 0,
+          outputNativeValue: 0,
+        }));
+      } else if (lastTypedInput.value === 'outputAmount' || lastTypedInput.value === 'outputNativeValue') {
+        inputValues.modify(prev => ({
+          ...prev,
+          inputAmount: 0,
+          inputNativeValue: 0,
+        }));
       }
-    };
+    },
+    [inputProgress, inputValues, isFetching, isQuoteStale, lastTypedInput, outputProgress]
+  );
 
-    const isCrosschainSwap = assetToSell.value.chainId !== assetToBuy.value.chainId;
-
-    const quoteParams: QuoteParams = {
-      source: source.value === 'auto' ? undefined : source.value,
-      swapType: isCrosschainSwap ? SwapType.crossChain : SwapType.normal,
-      fromAddress: currentAddress,
-      chainId: assetToSell.value.chainId,
-      toChainId: isCrosschainSwap ? assetToBuy.value.chainId : assetToSell.value.chainId,
-      sellTokenAddress: assetToSell.value.isNativeAsset ? ETH_ADDRESS : assetToSell.value.address,
-      buyTokenAddress: assetToBuy.value.isNativeAsset ? ETH_ADDRESS : assetToBuy.value.address,
-      // TODO: Sometimes decimals are present here which messes with the quote
-      sellAmount: isInputAmount ? convertAmountToRawAmount(amount, assetToSell.value.decimals) : undefined,
-      // TODO: Sometimes decimals are present here which messes with the quote
-      buyAmount: isInputAmount ? undefined : convertAmountToRawAmount(amount, assetToBuy.value.decimals),
-      slippage: Number(slippage.value),
-      refuel: false,
-    };
-
-    logger.debug(`[useSwapInputsController] quoteParams`, { quoteParams });
-
-    const quoteResponse = (
-      quoteParams.swapType === SwapType.crossChain ? await getCrosschainQuote(quoteParams) : await getQuote(quoteParams)
-    ) as Quote | CrosschainQuote | QuoteError;
-
-    runOnUI(updateQuoteWithResponse)(quoteResponse);
-    logger.debug(`[useSwapInputsController] quote response`, { quoteResponse });
-    if (!quoteResponse || (quoteResponse as QuoteError)?.error) {
-      logger.debug(`[useSwapInputsController] quote error`, { error: quoteResponse });
-      return null;
-    }
-
-    const data = quoteResponse as Quote | CrosschainQuote;
-    const isWrapOrUnwrapEth =
-      isWrapEth({
-        buyTokenAddress: data.buyTokenAddress,
-        sellTokenAddress: data.sellTokenAddress,
-        chainId: assetToSell.value.chainId,
-      }) ||
-      isUnwrapEth({
-        buyTokenAddress: data.buyTokenAddress,
-        sellTokenAddress: data.sellTokenAddress,
-        chainId: assetToSell.value.chainId,
-      });
-
-    const outputAmount = valueBasedDecimalFormatter(
-      Number(convertRawAmountToBalance(data.buyAmountMinusFees.toString(), { decimals: assetToBuy.value.decimals || 18 }).amount),
-      assetToBuyPrice.value,
-      'down',
-      -1,
-      assetToBuy.value?.type === 'stablecoin' ?? false,
-      false
-    );
-    const outputNativeValue =
-      !data.buyAmountMinusFees || !assetToBuyPrice.value
-        ? '0'
-        : convertRawAmountToNativeDisplay(
-            data.buyAmountMinusFees.toString(),
-            assetToBuy.value.decimals || 18,
-            assetToBuyPrice.value,
-            currentCurrency
-          ).display.slice(1);
-
-    const inputAmount = valueBasedDecimalFormatter(
-      Number(convertRawAmountToBalance(data.sellAmount.toString(), { decimals: assetToSell.value.decimals || 18 }).amount),
-      assetToSellPrice.value,
-      'down',
-      -1,
-      assetToSell.value?.type === 'stablecoin' ?? false,
-      false
-    );
-    const inputNativeValue =
-      !data.sellAmount || !assetToSellPrice.value
-        ? '0'
-        : convertRawAmountToNativeDisplay(
-            data.sellAmount.toString(),
-            assetToSell.value.decimals || 18,
-            assetToSellPrice.value,
-            currentCurrency
-          ).display.slice(1);
-
-    return {
+  const setQuote = useCallback(
+    ({
       data,
       inputAmount,
-      inputNativeValue,
+      inputPrice,
+      originalQuoteParams,
       outputAmount,
-      outputNativeValue,
-      isWrapOrUnwrapEth,
-    };
-  };
+      outputPrice,
+      quoteFetchingInterval,
+    }: {
+      data: Quote | CrosschainQuote | QuoteError | null;
+      inputAmount: number | undefined;
+      inputPrice: number | undefined | null;
+      originalQuoteParams: RequestNewQuoteParams;
+      outputAmount: number | undefined;
+      outputPrice: number | undefined | null;
+      quoteFetchingInterval: ReturnType<typeof useAnimatedInterval>;
+    }) => {
+      'worklet';
+      // Check whether the quote has been superseded by new user input so we don't introduce conflicting updates
+      const isLastTypedInputStillValid = originalQuoteParams.lastTypedInput === lastTypedInput.value;
 
-  const updateQuoteWorklet = ({
-    data,
-    updatedSliderPosition,
-    inputAmount,
-    inputNativeValue,
-    outputAmount,
-    outputNativeValue,
-    isInputAmount,
-    isWrapOrUnwrapEth,
-  }: {
-    data: Quote | CrosschainQuote;
-    updatedSliderPosition?: number;
-    inputAmount: string;
-    inputNativeValue: string;
-    outputAmount: string;
-    outputNativeValue: string;
-    isInputAmount: boolean;
-    isWrapOrUnwrapEth: boolean;
-  }) => {
-    'worklet';
-    // TODO: Need to convert big number to native value properly here...
-    // example: "fee": "3672850000000000",
-    fee.value = isWrapOrUnwrapEth ? '0' : data.feeInEth.toString();
+      // Check whether the selected assets are still the same
+      const isInputUniqueIdStillValid = originalQuoteParams.assetToBuyUniqueId === internalSelectedOutputAsset.value?.uniqueId;
+      const isOutputUniqueIdStillValid = originalQuoteParams.assetToSellUniqueId === internalSelectedInputAsset.value?.uniqueId;
+      const areSelectedAssetsStillValid = isInputUniqueIdStillValid && isOutputUniqueIdStillValid;
 
-    inputValues.modify(values => {
-      return {
-        ...values,
-        inputAmount: isInputAmount ? values.inputAmount : inputAmount,
-        inputNativeValue,
-        outputAmount: !isInputAmount ? values.outputAmount : outputAmount,
-        outputNativeValue,
-      };
-    });
-    if (inputMethod.value !== 'slider' && updatedSliderPosition) {
-      sliderXPosition.value = withSpring(updatedSliderPosition, snappySpringConfig);
-    }
-    isQuoteStale.value = 0;
-    isFetching.value = false;
-  };
+      // Check whether the input and output amounts are still the same
+      const areInputAmountsStillValid =
+        originalQuoteParams.lastTypedInput === 'inputAmount' || originalQuoteParams.lastTypedInput === 'inputNativeValue'
+          ? equalWorklet(originalQuoteParams.inputAmount, inputValues.value.inputAmount)
+          : equalWorklet(originalQuoteParams.outputAmount, inputValues.value.outputAmount);
 
-  // Function to handle inputAmount logic
-  const handleInputAmountLogic = async (amount: number) => {
-    const updateData = await fetchAndUpdateQuote(amount, true);
-    const updatedSliderPosition = clampJS((amount / Number(assetToSell.value?.balance.amount)) * SLIDER_WIDTH, 0, SLIDER_WIDTH);
-    if (updateData) {
-      runOnUI(updateQuoteWorklet)({ ...updateData, updatedSliderPosition, isInputAmount: true });
-    }
-  };
+      const hasQuoteBeenSuperseded = !(isLastTypedInputStillValid && areSelectedAssetsStillValid && areInputAmountsStillValid);
 
-  // Function to handle outputAmount logic
-  const handleOutputAmountLogic = async (amount: number) => {
-    const updateData = await fetchAndUpdateQuote(amount, false);
-    if (updateData) {
-      runOnUI(updateQuoteWorklet)({ ...updateData, isInputAmount: false });
-    }
-  };
+      if (hasQuoteBeenSuperseded) {
+        // If the quote has been superseded, isQuoteStale and isFetching should already be correctly set in response
+        // to the newer input, as long as the inputs aren't empty, so we handle the empty inputs case and then return,
+        // discarding the result of the superseded quote.
+        const areInputsEmpty = equalWorklet(inputValues.value.inputAmount, 0) && equalWorklet(inputValues.value.outputAmount, 0);
 
-  const onExecuteSwap = async () => {
-    const quoteData = quote.value as Quote | CrosschainQuote;
-    /**
-     * NOTE: Before executing a swap, we want to check several things:
-     * 1. assetToSell && assetToBuy addresses match the quote values
-     * 2. outputNative matches quote value
-     * 3. buyAmount > 0 (should we check this? because we can have missing price data)
-     * 4. both chainId and toChain match the quote data
-     */
-    const failedConditions: string[] = [];
-    // Ensure assetToSell and assetToBuy are not null or undefined before proceeding
-    if (!assetToBuy.value || !assetToSell.value) {
-      logger.debug('[onExecuteSwap]: Missing assetToSell or assetToBuy');
-      return;
-    }
-    if ((quote.value as QuoteError)?.error) failedConditions.push('quote error');
-    if (quoteData.buyAmountMinusFees.toString() === '0') failedConditions.push('buyAmountMinusFees is 0');
-    if (quoteData.buyTokenAddress !== assetToBuy.value.address) failedConditions.push('buyTokenAddress mismatch');
-    if (quoteData.sellTokenAddress !== assetToSell.value.address) failedConditions.push('sellTokenAddress mismatch');
-    if (quoteData.swapType === SwapType.normal && quoteData.chainId !== assetToSell.value.chainId)
-      failedConditions.push('chainId mismatch for swapType normal');
-    if (quoteData.swapType === SwapType.crossChain && quoteData.chainId === assetToSell.value.chainId)
-      failedConditions.push('chainId mismatch for swapType crossChain');
-
-    if (failedConditions.length > 0) {
-      logger.debug(`[onExecuteSwap]: Not executing swap due to failed conditions: ${failedConditions.join(', ')}`);
-      return;
-    }
-
-    const isCrosschainSwap = assetToSell.value.chainId !== assetToBuy.value.chainId;
-    const slippageParams: SlippageParams = {
-      chainId: assetToSell.value.chainId,
-      toChainId: isCrosschainSwap ? assetToBuy.value.chainId : assetToSell.value.chainId,
-      sellTokenAddress: assetToSell.value.isNativeAsset ? ETH_ADDRESS : assetToSell.value.address,
-      buyTokenAddress: assetToBuy.value.isNativeAsset ? ETH_ADDRESS : assetToBuy.value.address,
-      sellAmount: quoteData.sellAmount,
-      buyAmount: quoteData.buyAmountMinusFees,
-    };
-
-    let slippageToUse = slippage.value;
-
-    const defaultSlippage = getDefaultSlippage(assetToSell.value?.chainId || ChainId.mainnet, config);
-    // NOTE: if slippage === default slippage, update the slippage because we can assume that the user wanted the default slippage if they haven't adjusted it.
-    if (slippage.value === defaultSlippage) {
-      try {
-        const backendSlippage = await getSlippage(slippageParams);
-        if (!backendSlippage) {
-          throw new RainbowError('[useSwapInputsController] Error fetching slippage', {
-            cause: 'Slippage not found',
-          });
+        if (areInputsEmpty) {
+          isFetching.value = false;
+          isQuoteStale.value = 0;
         }
+        return;
+      }
 
-        if ((backendSlippage as SlippageError)?.error) {
-          throw new RainbowError('[useSwapInputsController] Error fetching slippage', {
-            cause: backendSlippage as SlippageError,
-          });
-        }
+      quote.value = data;
 
-        const percentage = (backendSlippage as Slippage).slippagePercent;
-        slippageToUse = `${percentage}`;
-      } catch (e) {
-        if (e instanceof RainbowError) {
-          logger.error(e);
+      if (!data || 'error' in data) {
+        resetFetchingStatus({ fromError: true, quoteFetchingInterval });
+        analyticsTrackQuoteFailed(data, {
+          inputAsset: internalSelectedInputAsset.value,
+          outputAsset: internalSelectedOutputAsset.value,
+          inputAmount,
+          outputAmount,
+        });
+        return;
+      }
+
+      if (inputAmount !== undefined) {
+        inputValues.modify(prev => ({
+          ...prev,
+          inputAmount,
+          inputNativeValue: mulWorklet(inputAmount, inputPrice || inputNativePrice.value),
+        }));
+      }
+
+      if (outputAmount !== undefined) {
+        inputValues.modify(prev => ({
+          ...prev,
+          outputAmount,
+          outputNativeValue: mulWorklet(outputAmount, outputPrice || outputNativePrice.value),
+        }));
+      }
+
+      // Handle updating the slider position if the quote was output based
+      if (originalQuoteParams.lastTypedInput === 'outputAmount' || originalQuoteParams.lastTypedInput === 'outputNativeValue') {
+        if (!inputAmount || inputAmount === 0) {
+          sliderXPosition.value = withSpring(0, snappySpringConfig);
         } else {
-          logger.error(
-            new RainbowError('[useSwapInputsController] Error fetching slippage', {
-              cause: JSON.stringify(e),
-            })
-          );
+          const inputBalance = internalSelectedInputAsset.value?.maxSwappableAmount || '0';
+          const updatedSliderPosition = greaterThanWorklet(inputBalance, 0)
+            ? clamp(Number(divWorklet(inputAmount, inputBalance)) * SLIDER_WIDTH, 0, SLIDER_WIDTH)
+            : 0;
+          sliderXPosition.value = withSpring(updatedSliderPosition, snappySpringConfig);
         }
       }
+
+      resetFetchingStatus({ fromError: false, quoteFetchingInterval });
+
+      runOnJS(updateQuoteStore)(data);
+    },
+    [
+      inputNativePrice,
+      inputValues,
+      internalSelectedInputAsset,
+      internalSelectedOutputAsset,
+      isFetching,
+      isQuoteStale,
+      lastTypedInput,
+      outputNativePrice,
+      quote,
+      resetFetchingStatus,
+      sliderXPosition,
+      updateQuoteStore,
+    ]
+  );
+
+  const fetchAndUpdateQuote = async ({ inputAmount, lastTypedInput: lastTypedInputParam, outputAmount }: RequestNewQuoteParams) => {
+    const originalInputAssetUniqueId = internalSelectedInputAsset.value?.uniqueId;
+    const originalOutputAssetUniqueId = internalSelectedOutputAsset.value?.uniqueId;
+
+    const isSwappingMaxBalance = internalSelectedInputAsset.value && inputMethod.value === 'slider' && percentageToSwap.value >= 1;
+    const maxAdjustedInputAmount =
+      (isSwappingMaxBalance && internalSelectedInputAsset.value?.maxSwappableAmount) || inputValues.value.inputAmount;
+
+    const currentAddress = getAccountAddress();
+
+    const params = buildQuoteParams({
+      currentAddress,
+      inputAmount: maxAdjustedInputAmount,
+      inputAsset: internalSelectedInputAsset.value,
+      lastTypedInput: lastTypedInputParam,
+      outputAmount,
+      outputAsset: internalSelectedOutputAsset.value,
+    });
+
+    const isCrosschainSwap = internalSelectedInputAsset.value?.chainId !== internalSelectedOutputAsset.value?.chainId;
+
+    logger.debug(`[useSwapInputsController]: quote params`, {
+      data: params,
+    });
+
+    if (!params) {
+      runOnUI(resetFetchingStatus)({ fromError: true, quoteFetchingInterval });
+      return;
     }
 
-    logger.debug(`[onExecuteSwap] slippageToUse`, { slippageToUse });
-    // const flashbotsEnabled =
-    //   assetToSell.value.chainId === ChainId.mainnet ? flashbots.value : false;
-    // const rapType = getSwapRapTypeByExchangeType(isCrosschainSwap);
+    const originalQuoteParams = {
+      assetToBuyUniqueId: originalOutputAssetUniqueId,
+      assetToSellUniqueId: originalInputAssetUniqueId,
+      inputAmount: inputAmount,
+      lastTypedInput: lastTypedInputParam,
+      outputAmount: outputAmount,
+    };
 
-    // console.log({ isCrosschainSwap, flashbotsEnabled, rapType });
+    try {
+      const quoteResponse = await (isCrosschainSwap ? getCrosschainQuote(params) : getQuote(params));
 
-    // const data = quote.value as Quote | CrosschainQuote;
-    // const currentNetwork = ethereumUtils.getNetworkFromChainId(assetToSell.value.chainId);
-    // const nonce = await getNextNonce({ address: currentAddress, network: currentNetwork });
-    // const provider = await getProviderForNetwork(currentNetwork);
-    // const wallet = await loadWallet(currentAddress, false, provider);
+      const inputAsset = internalSelectedInputAsset.value;
+      const outputAsset = internalSelectedOutputAsset.value;
 
-    // console.log({
-    //   currentNetwork,
-    //   nonce,
-    //   provider,
-    //   wallet,
-    // });
+      analytics.track(analytics.event.swapsReceivedQuote, {
+        inputAsset,
+        outputAsset,
+        quote: quoteResponse,
+      });
 
-    // if (!wallet) {
-    //   // TODO: Handle error
-    //   return;
-    // }
+      if (!quoteResponse || 'error' in quoteResponse) {
+        runOnUI(() => {
+          setQuote({
+            data: quoteResponse,
+            inputAmount: undefined,
+            inputPrice: undefined,
+            outputAmount: undefined,
+            outputPrice: undefined,
+            originalQuoteParams,
+            quoteFetchingInterval,
+          });
+        })();
 
-    // const swapParameters: SwapActionParameters = {
-    //   chainId: assetToSell.value.chainId,
-    //   flashbots: flashbotsEnabled,
-    //   inputAmount: data.sellAmount.toString(),
-    //   outputAmount: data.buyAmount.toString(),
-    //   provider,
-    //   nonce,
-    //   tradeDetails: data,
-    //   meta: {
-    //     flashbots: flashbotsEnabled,
-    //     inputAsset: {
-    //       ...assetToSell.value,
-    //       network: ethereumUtils.getNetworkFromChainId(assetToSell.value.chainId),
-    //     } as SwappableAsset,
-    //     outputAsset: {
-    //       ...assetToBuy.value,
-    //       network: ethereumUtils.getNetworkFromChainId(assetToBuy.value.chainId),
-    //     } as SwappableAsset,
-    //     independentField: 'inputAmount' as SwapModalField,
-    //     independentValue: '' as string,
-    //     slippage: Number(slippage.value),
-    //     route: data.source as Source,
-    //     selectedGas: selectedGas as GasFeeParams,
-    //     gasFeeParamsBySpeed: gasFeeParamsBySpeed as GasFeeParamsBySpeed,
-    //   },
-    // };
+        return;
+      }
 
-    // console.log(JSON.stringify(swapParameters, null, 2));
+      const quotedInputAmount =
+        lastTypedInputParam === 'outputAmount' || lastTypedInputParam === 'outputNativeValue'
+          ? Number(
+              convertRawAmountToDecimalFormat(
+                quoteResponse.sellAmount.toString(),
+                inputAsset?.networks[inputAsset.chainId]?.decimals ?? inputAsset?.decimals ?? 18
+              )
+            )
+          : undefined;
 
-    // try {
-    //   await executeRap(wallet, rapType, swapParameters, onSwapResponse);
-    // } catch (error) {
-    //   console.log(error);
-    // }
+      const quotedOutputAmount =
+        lastTypedInputParam === 'inputAmount' || lastTypedInputParam === 'inputNativeValue'
+          ? Number(
+              convertRawAmountToDecimalFormat(
+                quoteResponse.buyAmountMinusFees.toString(),
+                outputAsset?.networks[outputAsset.chainId]?.decimals ?? outputAsset?.decimals ?? 18
+              )
+            )
+          : undefined;
+
+      runOnUI(() => {
+        setQuote({
+          data: quoteResponse,
+          inputAmount: quotedInputAmount,
+          inputPrice: quoteResponse?.sellTokenAsset?.price?.value,
+          outputAmount: quotedOutputAmount,
+          outputPrice: quoteResponse?.buyTokenAsset?.price?.value,
+          originalQuoteParams,
+          quoteFetchingInterval,
+        });
+      })();
+    } catch {
+      runOnUI(resetFetchingStatus)({ fromError: true, quoteFetchingInterval });
+    }
   };
 
-  const onChangeSearchQuery = (text: string) => {
+  const fetchQuote = () => {
     'worklet';
-    searchQuery.value = text;
+
+    const areAllInputsZero =
+      equalWorklet(inputValues.value.inputAmount, '0') &&
+      equalWorklet(inputValues.value.inputNativeValue, '0') &&
+      equalWorklet(inputValues.value.outputAmount, '0') &&
+      equalWorklet(inputValues.value.outputNativeValue, '0');
+
+    // If both inputs are 0 or the assets aren't set, return early
+    if (!internalSelectedInputAsset.value || !internalSelectedOutputAsset.value || areAllInputsZero) {
+      if (isQuoteStale.value !== 0) isQuoteStale.value = 0;
+      if (isFetching.value) isFetching.value = false;
+      return;
+    }
+
+    isFetching.value = true;
+    if (isQuoteStale.value !== 1) isQuoteStale.value = 1;
+
+    runOnJS(fetchAndUpdateQuote)({
+      assetToBuyUniqueId: internalSelectedOutputAsset.value?.uniqueId,
+      assetToSellUniqueId: internalSelectedInputAsset.value?.uniqueId,
+      inputAmount: inputValues.value.inputAmount,
+      lastTypedInput: lastTypedInput.value,
+      outputAmount: inputValues.value.outputAmount,
+    });
   };
 
-  const onSetAssetToSell = (parsedAsset: ParsedSearchAsset) => {
+  const quoteFetchingInterval = useAnimatedInterval({
+    intervalMs: 12_000,
+    onIntervalWorklet: fetchQuote,
+    autoStart: false,
+  });
+
+  const onChangedPercentage = useDebouncedCallback(
+    (percentage: number) => {
+      lastTypedInput.value = 'inputAmount';
+
+      if (percentage > 0) {
+        runOnUI(fetchQuote)();
+      } else {
+        if (isFetching.value) isFetching.value = false;
+        if (isQuoteStale.value !== 0) isQuoteStale.value = 0;
+      }
+    },
+    200,
+    { leading: false, trailing: true }
+  );
+
+  const setValueToMaxSwappableAmount = () => {
     'worklet';
-    // if the user has an asset to buy selected and the asset to sell is the same, we need to clear the asset to buy
-    if (assetToBuy.value && isSameAssetWorklet(assetToBuy.value, parsedAsset)) {
-      assetToBuy.value = null;
-      assetToBuyPrice.value = 0;
+    if (!internalSelectedInputAsset.value?.maxSwappableAmount || equalWorklet(internalSelectedInputAsset.value.maxSwappableAmount, 0)) {
+      return;
     }
+    inputMethod.value = 'slider';
 
-    assetToSell.value = parsedAsset;
-    assetToSellPrice.value = 0;
-    if (!assetToBuy.value) {
-      outputChainId.value = parsedAsset.chainId;
+    const currentInputValue = inputValues.value.inputAmount;
+    const maxSwappableAmount = internalSelectedInputAsset.value?.maxSwappableAmount;
+
+    const isAlreadyMax = maxSwappableAmount ? equalWorklet(currentInputValue, maxSwappableAmount) : false;
+    const exceedsMax = maxSwappableAmount ? greaterThanWorklet(currentInputValue, maxSwappableAmount) : false;
+
+    if (isAlreadyMax) {
+      triggerHaptics('impactMedium');
+    } else {
+      quoteFetchingInterval.stop();
+
+      if (exceedsMax) {
+        sliderXPosition.value = SLIDER_WIDTH * 0.999;
+      } else {
+        isQuoteStale.value = 1;
+      }
+
+      sliderXPosition.value = withSpring(SLIDER_WIDTH, SPRING_CONFIGS.snappySpringConfig, isFinished => {
+        if (isFinished) {
+          runOnJS(onChangedPercentage)(1);
+        }
+      });
     }
+  };
 
-    let initialAmount = 0;
-    let initialNativeValue = 0;
-    if (assetToSell.value.price?.value) {
-      initialAmount = percentageToSwap.value * Number(assetToSell.value.balance.amount);
-      initialNativeValue = initialAmount * assetToSell.value.price.value;
-    }
+  const updateMaxSwappableAmount = (newMaxSwappableAmount: string) => {
+    'worklet';
+    const prevMaxSwappableAmount = internalSelectedInputAsset.value?.maxSwappableAmount;
+    const isSwappingMaxBalance = inputValues.value.inputAmount === prevMaxSwappableAmount;
 
-    inputValues.modify(values => {
+    internalSelectedInputAsset.modify(prev => {
+      if (!prev) return prev;
       return {
-        ...values,
-        inputAmount: initialAmount,
-        inputNativeValue: initialNativeValue,
+        ...prev,
+        maxSwappableAmount: newMaxSwappableAmount,
       };
     });
 
-    // if the user doesn't have an asset to buy selected, let's open that list
-    if (!assetToBuy.value) {
-      handleOutputPress();
-    } else {
-      if (initialAmount > 0) {
-        isFetching.value = true;
-        isQuoteStale.value = 1;
+    if (isSwappingMaxBalance) {
+      inputValues.modify(prev => ({
+        ...prev,
+        inputAmount: newMaxSwappableAmount,
+        inputNativeValue: mulWorklet(newMaxSwappableAmount, inputNativePrice.value),
+      }));
 
-        runOnJS(handleInputAmountLogic)(initialAmount);
-      }
-      handleInputPress();
+      fetchQuote();
     }
   };
 
-  const onSetAssetToBuy = (parsedAsset: ParsedSearchAsset) => {
-    const updateValues = () => {
-      'worklet';
-      assetToBuy.value = parsedAsset;
-      if (assetToSell.value && isSameAssetWorklet(assetToSell.value, parsedAsset)) {
-        assetToSell.value = null;
-        handleInputPress();
-        handleExitSearch();
-      } else {
-        handleOutputPress();
-        handleExitSearch();
-      }
+  const resetValuesToZeroWorklet = ({ updateSlider, inputKey }: { updateSlider: boolean; inputKey?: InputKeys }) => {
+    'worklet';
+    quoteFetchingInterval.stop();
+    if (isFetching.value) isFetching.value = false;
+    if (isQuoteStale.value !== 0) isQuoteStale.value = 0;
+
+    const resetValues = {
+      inputAmount: 0,
+      inputNativeValue: 0,
+      outputAmount: 0,
+      outputNativeValue: 0,
     };
 
-    runOnUI(updateValues)();
-
-    const inputAmount = Number(inputValues.value.inputAmount);
-    if (assetToSell.value && assetToSellPrice.value) {
-      if (inputAmount > 0) {
-        isFetching.value = true;
-        isQuoteStale.value = 1;
-
-        animationFrameId.current = requestAnimationFrame(async () => {
-          await handleInputAmountLogic(inputAmount);
-        });
-      }
+    if (!inputKey) {
+      inputValues.modify(values => ({ ...values, ...resetValues }));
+      if (updateSlider) sliderXPosition.value = withSpring(0, snappySpringConfig);
+      return;
     }
+
+    const inputKeyValue = inputValues.value[inputKey];
+    const hasDecimal = inputKeyValue.toString().includes('.');
+
+    inputValues.modify(values => ({
+      ...values,
+      ...resetValues,
+      [inputKey]: hasDecimal ? inputKeyValue : 0,
+    }));
+
+    if (updateSlider) sliderXPosition.value = withSpring(0, snappySpringConfig);
   };
 
-  const onSwapAssets = () => {
-    const swapValues = () => {
-      'worklet';
+  const debouncedFetchQuote = useDebouncedCallback(
+    () => {
+      runOnUI(fetchQuote)();
+    },
+    300,
+    { leading: false, trailing: true }
+  );
 
-      const prevAssetToSell = assetToSell.value;
-      const prevAssetToBuy = assetToBuy.value;
+  /**
+   * Observes changes in the selected assets and initiates new quote fetches when necessary.
+   * Also handles flipping the inputValues when the assets are flipped.
+   */
+  useAnimatedReaction(
+    () => ({
+      assetToBuyId: internalSelectedOutputAsset.value?.uniqueId,
+      assetToSellId: internalSelectedInputAsset.value?.uniqueId,
+    }),
+    (current, previous) => {
+      const didInputAssetChange = current.assetToSellId !== previous?.assetToSellId;
+      const didOutputAssetChange = current.assetToBuyId !== previous?.assetToBuyId;
 
-      const prevAssetToSellPrice = assetToSellPrice.value;
-      const prevAssetToBuyPrice = assetToBuyPrice.value;
+      if (!didInputAssetChange && !didOutputAssetChange) return;
 
-      // reset the quote no matter what
-      quote.value = null;
+      const areBothAssetsSet = internalSelectedInputAsset.value && internalSelectedOutputAsset.value;
+      if (areBothAssetsSet) fetchQuote();
+    },
+    []
+  );
 
-      if (prevAssetToSell) {
-        assetToBuy.value = prevAssetToSell;
-        assetToBuyPrice.value = prevAssetToSellPrice;
-        outputChainId.value = prevAssetToSell.chainId;
-        inputValues.value.outputAmount = 0;
-        inputValues.value.outputNativeValue = 0;
-      } else {
-        assetToBuy.value = null;
-        assetToBuyPrice.value = 0;
-        inputValues.value.outputAmount = 0;
-        inputValues.value.outputNativeValue = 0;
-      }
-
-      if (prevAssetToBuy) {
-        assetToSell.value = prevAssetToBuy;
-        assetToSellPrice.value = prevAssetToBuyPrice;
-        outputChainId.value = prevAssetToBuy.chainId;
-
-        const balance = Number(assetToSell.value.balance.amount);
-        const price = priceForAsset({
-          asset: assetToSell.value,
-          assetType: 'assetToSell',
-          assetToSellPrice: assetToSellPrice,
-          assetToBuyPrice: assetToBuyPrice,
-        });
-
-        if (!balance || !price) {
-          inputValues.modify(values => {
-            return {
-              ...values,
-              inputAmount: 0,
-              inputNativeValue: 0,
-              outputAmount: 0,
-              outputNativeValue: 0,
-            };
-          });
-          return;
-        }
-
-        const getNiceIncrement = () => {
-          if (!prevAssetToBuy) return 0.1;
-          return findNiceIncrement(Number(prevAssetToBuy.balance.amount));
-        };
-
-        const niceIncrement = getNiceIncrement();
-        const decimalPlaces = countDecimalPlaces(niceIncrement);
-        const inputAmount = niceIncrementFormatter(
-          decimalPlaces,
-          balance,
-          price,
-          niceIncrement,
-          percentageToSwap.value,
-          sliderXPosition.value,
-          true
-        );
-        const inputNativeValue = Number(inputAmount) * price;
-        inputValues.modify(values => {
-          return {
-            ...values,
-            inputAmount,
-            inputNativeValue,
-          };
-        });
-
-        if (Number(inputAmount) > 0 && assetToBuy.value) {
-          isFetching.value = true;
-          isQuoteStale.value = 1;
-
-          animationFrameId.current = requestAnimationFrame(async () => {
-            runOnJS(handleInputAmountLogic)(Number(inputAmount));
-          });
-        }
-      } else {
-        assetToSell.value = null;
-        assetToSellPrice.value = 0;
-        inputValues.modify(values => {
-          return {
-            ...values,
-            inputAmount: 0,
-            inputNativeValue: 0,
-            outputAmount: 0,
-            outputNativeValue: 0,
-          };
-        });
-      }
-
-      // TODO: if !prevAssetToBuy => focus assetToSell input
-      // TODO: if !prevAssetToSell => focus assetToBuy input
-
-      if (outputProgress.value === 1) {
-        handleOutputPress();
-      }
-    };
-
-    runOnUI(swapValues)();
-  };
-
-  // This handles cleaning up typed amounts when the input focus changes
+  /**
+   * Observes the user-focused input and cleans up typed amounts when the input focus changes
+   */
   useAnimatedReaction(
     () => ({ focusedInput: focusedInput.value }),
     (current, previous) => {
-      if (previous && current !== previous && typeof inputValues.value[previous.focusedInput] === 'string') {
+      if (previous && current !== previous) {
         const typedValue = inputValues.value[previous.focusedInput].toString();
-        if (Number(typedValue) === 0) {
-          inputValues.modify(values => {
-            return {
-              ...values,
-              [previous.focusedInput]: 0,
-            };
-          });
-        } else {
-          inputValues.modify(values => {
-            return {
-              ...values,
-              [previous.focusedInput]: trimTrailingZeros(typedValue),
-            };
-          });
-        }
-      }
-    },
-    []
-  );
-
-  // This handles the updating of input values based on the input method
-  useAnimatedReaction(
-    () => ({
-      sliderXPosition: sliderXPosition.value,
-      values: inputValues.value,
-      assetToSell: assetToSell.value,
-      assetToBuy: assetToBuy.value,
-    }),
-    (current, previous) => {
-      if (!previous) {
-        // Handle setting of initial values using niceIncrementFormatter,
-        // because we will likely set a percentage-based default input value
-        if (!current.assetToSell || !current.assetToBuy) return;
-
-        const balance = Number(current.assetToSell.balance.amount);
-        const sellAssetPrice = priceForAsset({
-          asset: current.assetToSell,
-          assetType: 'assetToSell',
-          assetToSellPrice: assetToSellPrice,
-          assetToBuyPrice: assetToBuyPrice,
-        });
-        const buyAssetPrice = priceForAsset({
-          asset: current.assetToBuy,
-          assetType: 'assetToBuy',
-          assetToSellPrice: assetToSellPrice,
-          assetToBuyPrice: assetToBuyPrice,
-        });
-
-        if (!sellAssetPrice || !buyAssetPrice) return;
-
-        const inputAmount = niceIncrementFormatter(
-          incrementDecimalPlaces.value,
-          balance,
-          sellAssetPrice,
-          niceIncrement.value,
-          percentageToSwap.value,
-          sliderXPosition.value,
-          true
-        );
-        const inputNativeValue = Number(inputAmount) * sellAssetPrice;
-        const outputAmount = (inputNativeValue / buyAssetPrice) * (1 - SWAP_FEE); // TODO: Implement swap fee
-        const outputNativeValue = outputAmount * buyAssetPrice;
-
-        inputValues.modify(values => {
-          return {
+        if (equalWorklet(typedValue, 0)) {
+          inputValues.modify(values => ({
             ...values,
-            inputAmount,
-            inputNativeValue,
-            outputAmount,
-            outputNativeValue,
-          };
-        });
-      } else if (current !== previous) {
-        // Handle updating input values based on the input method
-        if (inputMethod.value === 'slider' && current.sliderXPosition !== previous.sliderXPosition) {
-          // If the slider position changes
-          if (percentageToSwap.value === 0) {
-            // If the change set the slider position to 0
-            inputValues.modify(values => {
-              return {
-                ...values,
-                inputAmount: 0,
-                inputNativeValue: 0,
-                outputAmount: 0,
-                outputNativeValue: 0,
-              };
-            });
-            isQuoteStale.value = 0;
-          } else {
-            if (!current.assetToSell) return;
-
-            const sellAssetPrice = priceForAsset({
-              asset: current.assetToSell,
-              assetType: 'assetToSell',
-              assetToSellPrice: assetToSellPrice,
-              assetToBuyPrice: assetToBuyPrice,
-            });
-            const balance = Number(current.assetToSell.balance.amount);
-
-            if (!balance || !sellAssetPrice) {
-              inputValues.modify(values => {
-                return {
-                  ...values,
-                  inputAmount: 0,
-                  inputNativeValue: 0,
-                  outputAmount: 0,
-                  outputNativeValue: 0,
-                };
-              });
-              return;
-            }
-
-            // If the change set the slider position to > 0
-            const inputAmount = niceIncrementFormatter(
-              incrementDecimalPlaces.value,
-              balance,
-              sellAssetPrice,
-              niceIncrement.value,
-              percentageToSwap.value,
-              sliderXPosition.value,
-              true
-            );
-            const inputNativeValue = Number(inputAmount) * sellAssetPrice;
-
-            inputValues.modify(values => {
-              return {
-                ...values,
-                inputAmount,
-                inputNativeValue,
-              };
-            });
-          }
-        }
-        if (inputMethod.value === 'inputAmount' && Number(current.values.inputAmount) !== Number(previous.values.inputAmount)) {
-          // If the number in the input field changes
-          if (Number(current.values.inputAmount) === 0) {
-            // If the input amount was set to 0
-            const hasDecimal = current.values.inputAmount.toString().includes('.');
-
-            sliderXPosition.value = withSpring(0, snappySpringConfig);
-            inputValues.modify(values => {
-              return {
-                ...values,
-                inputAmount: hasDecimal ? current.values.inputAmount : 0,
-                inputNativeValue: 0,
-                outputAmount: 0,
-                outputNativeValue: 0,
-              };
-            });
-            isQuoteStale.value = 0;
-
-            if (hasDecimal) {
-              runOnJS(onTypedNumber)(0, 'inputAmount', true);
-            } else {
-              runOnJS(onTypedNumber)(0, 'inputAmount');
-            }
-          } else {
-            if (!current.assetToSell || !assetToSellPrice.value) return;
-            // If the input amount was set to a non-zero value
-            const inputNativeValue = Number(current.values.inputAmount) * assetToSellPrice.value;
-
-            isQuoteStale.value = 1;
-            inputValues.modify(values => {
-              return {
-                ...values,
-                inputNativeValue,
-              };
-            });
-
-            runOnJS(onTypedNumber)(Number(current.values.inputAmount), 'inputAmount', true);
-          }
-        }
-        if (inputMethod.value === 'outputAmount' && Number(current.values.outputAmount) !== Number(previous.values.outputAmount)) {
-          // If the number in the output field changes
-          if (Number(current.values.outputAmount) === 0) {
-            // If the output amount was set to 0
-            const hasDecimal = current.values.outputAmount.toString().includes('.');
-
-            sliderXPosition.value = withSpring(0, snappySpringConfig);
-            inputValues.modify(values => {
-              return {
-                ...values,
-                inputAmount: 0,
-                inputNativeValue: 0,
-                outputAmount: hasDecimal ? current.values.outputAmount : 0,
-                outputNativeValue: 0,
-              };
-            });
-
-            isQuoteStale.value = 0;
-
-            if (hasDecimal) {
-              runOnJS(onTypedNumber)(0, 'outputAmount', true);
-            } else {
-              runOnJS(onTypedNumber)(0, 'outputAmount');
-            }
-          } else if (Number(current.values.outputAmount) > 0) {
-            // If the output amount was set to a non-zero value
-            if (!assetToBuy.value || !assetToBuyPrice.value) return;
-
-            const outputAmount = Number(current.values.outputAmount);
-            const outputNativeValue = outputAmount * assetToBuyPrice.value;
-
-            isQuoteStale.value = 1;
-            inputValues.modify(values => {
-              return {
-                ...values,
-                outputNativeValue,
-              };
-            });
-
-            runOnJS(onTypedNumber)(Number(current.values.outputAmount), 'outputAmount');
+            [previous.focusedInput]: 0,
+          }));
+        } else if (typedValue.includes('.')) {
+          const trimmedValue = trimTrailingZeros(typedValue);
+          if (trimmedValue !== typedValue) {
+            inputValues.modify(values => ({
+              ...values,
+              [previous.focusedInput]: trimmedValue,
+            }));
           }
         }
       }
@@ -1096,71 +665,170 @@ export function useSwapInputsController({
     []
   );
 
-  // NOTE: Updates the default slippage value when the asset chain ID changes
+  /**
+   * Observes value changes in the active inputMethod, which can be any of the following:
+   *  - inputAmount
+   *  - inputNativeValue
+   *  - outputAmount
+   *  - outputNativeValue (TODO)
+   *  - sliderXPosition
+   *
+   * And then updates the remaining input methods based on the entered values.
+   */
   useAnimatedReaction(
-    () => ({
-      assetToSellChainId: assetToSell.value?.chainId || ChainId.mainnet,
-    }),
+    () => {
+      const sliderPosition = sliderXPosition.value;
+      const shouldRoundSliderPosition = sliderPosition > SLIDER_ROUND_THRESHOLD_START && sliderPosition < SLIDER_ROUND_THRESHOLD_END;
+      return {
+        sliderXPosition: shouldRoundSliderPosition ? Math.round(sliderPosition) : sliderPosition,
+        values: inputValues.value,
+      };
+    },
     (current, previous) => {
-      if (current.assetToSellChainId !== previous?.assetToSellChainId) {
-        slippage.value = getDefaultSlippageWorklet(current.assetToSellChainId, config);
-      }
-    }
-  );
+      if (previous) {
+        switch (inputMethod.value) {
+          case 'slider':
+            if (current.sliderXPosition !== previous.sliderXPosition && internalSelectedInputAsset.value) {
+              // If the slider position changed
+              const balance = internalSelectedInputAsset.value.maxSwappableAmount;
+              if (!balance || equalWorklet(balance, 0)) return;
 
-  // NOTE: refetches asset prices when the assets change
-  useAnimatedReaction(
-    () => ({
-      assetToBuy: assetToBuy.value,
-      assetToSell: assetToSell.value,
-    }),
-    (current, previous) => {
-      if (
-        (current.assetToBuy || current.assetToSell) &&
-        (previous?.assetToSell !== current.assetToSell || previous?.assetToBuy !== current.assetToBuy)
-      ) {
-        runOnJS(fetchAssetPrices)({
-          assetToSell: current.assetToSell,
-          assetToBuy: current.assetToBuy,
-        });
+              if (current.sliderXPosition === 0) {
+                resetValuesToZeroWorklet({ updateSlider: false });
+              } else {
+                // If the change set the slider position to > 0
+                const { inputAmount, inputNativeValue } = getInputValuesForSliderPositionWorklet({
+                  inputNativePrice: inputNativePrice.value,
+                  selectedInputAsset: internalSelectedInputAsset.value,
+                  percentageToSwap: percentageToSwap.value,
+                  sliderXPosition: current.sliderXPosition,
+                });
+
+                inputValues.modify(values => ({
+                  ...values,
+                  inputAmount,
+                  inputNativeValue,
+                }));
+              }
+            }
+            return;
+
+          case 'inputAmount':
+            if (!equalWorklet(current.values.inputAmount, previous.values.inputAmount)) {
+              // If the number in the input field changes
+              lastTypedInput.value = 'inputAmount';
+              if (equalWorklet(current.values.inputAmount, 0)) {
+                // If the input amount was set to 0
+                resetValuesToZeroWorklet({ updateSlider: true, inputKey: 'inputAmount' });
+              } else {
+                // If the input amount was set to a non-zero value
+                if (!internalSelectedInputAsset.value) return;
+
+                if (isQuoteStale.value !== 1) isQuoteStale.value = 1;
+                const inputNativeValue = mulWorklet(current.values.inputAmount, inputNativePrice.value);
+
+                inputValues.modify(values => ({ ...values, inputNativeValue }));
+
+                const inputAssetBalance = internalSelectedInputAsset.value?.maxSwappableAmount || '0';
+
+                if (equalWorklet(inputAssetBalance, 0)) {
+                  sliderXPosition.value = withSpring(0, snappySpringConfig);
+                } else {
+                  const updatedSliderPosition = clamp(
+                    Number(divWorklet(current.values.inputAmount, inputAssetBalance)) * SLIDER_WIDTH,
+                    0,
+                    SLIDER_WIDTH
+                  );
+                  sliderXPosition.value = withSpring(updatedSliderPosition, snappySpringConfig);
+                }
+
+                runOnJS(debouncedFetchQuote)();
+              }
+            }
+            return;
+
+          case 'outputAmount':
+            if (!equalWorklet(current.values.outputAmount, previous.values.outputAmount)) {
+              // If the number in the output field changes
+              lastTypedInput.value = 'outputAmount';
+              if (equalWorklet(current.values.outputAmount, 0)) {
+                // If the output amount was set to 0
+                resetValuesToZeroWorklet({ updateSlider: true, inputKey: 'outputAmount' });
+              } else if (greaterThanWorklet(current.values.outputAmount, 0)) {
+                // If the output amount was set to a non-zero value
+                if (isQuoteStale.value !== 1) isQuoteStale.value = 1;
+
+                const outputNativeValue = mulWorklet(current.values.outputAmount, outputNativePrice.value);
+
+                inputValues.modify(values => ({ ...values, outputNativeValue }));
+
+                runOnJS(debouncedFetchQuote)();
+              }
+            }
+            return;
+
+          case 'inputNativeValue':
+          case 'outputNativeValue': {
+            const inputMethodValue = inputMethod.value;
+            const isNativeInputMethod = inputMethodValue === 'inputNativeValue';
+            const asset = isNativeInputMethod ? internalSelectedInputAsset.value : internalSelectedOutputAsset.value;
+            const nativePrice = isNativeInputMethod ? inputNativePrice.value : outputNativePrice.value;
+
+            if (!equalWorklet(current.values[inputMethodValue], previous.values[inputMethodValue])) {
+              // If the number in the native field changes
+              lastTypedInput.value = inputMethodValue;
+              if (equalWorklet(current.values[inputMethodValue], 0)) {
+                // If the native amount was set to 0
+                resetValuesToZeroWorklet({ updateSlider: true, inputKey: inputMethodValue });
+              } else {
+                // If the native amount was set to a non-zero value
+                if (!asset || equalWorklet(nativePrice, 0)) return;
+
+                if (isQuoteStale.value !== 1) isQuoteStale.value = 1;
+                const decimalPlaces = asset?.decimals;
+                const amount = toFixedWorklet(divWorklet(current.values[inputMethodValue], nativePrice), decimalPlaces ?? 18);
+                const amountKey = isNativeInputMethod ? 'inputAmount' : 'outputAmount';
+
+                inputValues.modify(values => ({ ...values, [amountKey]: amount }));
+
+                if (isNativeInputMethod) {
+                  const inputAssetBalance = asset?.maxSwappableAmount || '0';
+
+                  if (equalWorklet(inputAssetBalance, 0)) {
+                    sliderXPosition.value = withSpring(0, snappySpringConfig);
+                  } else {
+                    const updatedSliderPosition = clamp(Number(divWorklet(amount, inputAssetBalance)) * SLIDER_WIDTH, 0, SLIDER_WIDTH);
+                    sliderXPosition.value = withSpring(updatedSliderPosition, snappySpringConfig);
+                  }
+                }
+
+                runOnJS(debouncedFetchQuote)();
+              }
+            }
+          }
+        }
       }
-    }
+    },
+    []
   );
 
   return {
+    debouncedFetchQuote,
     formattedInputAmount,
     formattedInputNativeValue,
     formattedOutputAmount,
     formattedOutputNativeValue,
     inputMethod,
+    inputNativePrice,
     inputValues,
-    searchQuery,
-    assetToSell,
-    assetToSellPrice,
-    assetToBuy,
-    assetToBuyPrice,
-    assetToSellSymbol,
-    assetToSellIconUrl,
-    assetToBuySymbol,
-    assetToBuyIconUrl,
-    fee,
-    quote,
-    source,
-    slippage,
-    flashbots,
-    topColor,
-    bottomColor,
-    topColorShadow,
-    bottomColorShadow,
-    outputChainId,
-    isQuoteStale,
     onChangedPercentage,
+    outputNativePrice,
     percentageToSwap,
-    onSetAssetToSell,
-    onSetAssetToBuy,
-    onSwapAssets,
-    onChangeSearchQuery,
-    onExecuteSwap,
-    fetchAssetPrices,
+    quoteFetchingInterval,
+    fetchQuote,
+    resetValuesToZeroWorklet,
+    setQuote,
+    setValueToMaxSwappableAmount,
+    updateMaxSwappableAmount,
   };
 }

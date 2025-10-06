@@ -1,4 +1,4 @@
-import { useRoute } from '@react-navigation/native';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadAllKeys } from '@/model/keychain';
 import { useNavigation } from '@/navigation';
@@ -19,19 +19,20 @@ import { createAndShareStateDumpFile } from './helpers/createAndShareStateDumpFi
 import { haptics } from '@/utils';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { SimpleSheet } from '@/components/sheet/SimpleSheet';
+import { RootStackParamList } from '@/navigation/types';
 
 const encryptor = new AesEncryptor();
 
 export const WalletDiagnosticsSheet = () => {
   const { navigate, goBack } = useNavigation();
-  const { params } = useRoute<any>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.DIAGNOSTICS_SHEET>>();
 
   const [keys, setKeys] = useState<UserCredentials[] | undefined>();
   const [userPin, setUserPin] = useState(params?.userPin);
   const [pinRequired, setPinRequired] = useState(false);
   const [uuid, setUuid] = useState<string | undefined>();
   const [toastVisible, setToastVisible] = useState(false);
-  const toastTimeout = useRef<NodeJS.Timeout>();
+  const toastTimeout = useRef<NodeJS.Timeout>(undefined);
 
   const walletsWithBalancesAndNames = useWalletsWithBalancesAndNames();
 
@@ -102,7 +103,7 @@ export const WalletDiagnosticsSheet = () => {
           setKeys(processedKeys);
         }
       } catch (error) {
-        logger.error(new RainbowError('Error processing keys for wallet diagnostics'), {
+        logger.error(new RainbowError('[WalletDiagnosticsSheet]: Error processing keys for wallet diagnostics'), {
           message: (error as Error).message,
           context: 'init',
         });

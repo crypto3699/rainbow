@@ -1,4 +1,4 @@
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import { startCase } from 'lodash';
 import React from 'react';
 import Link from '../../Link';
@@ -27,9 +27,9 @@ const CommunityLink = styled(Link).attrs({
   paddingTop: ios ? 9.5 : 5,
 });
 
-export default function SocialLinks({ address, color, isNativeAsset, links, marginTop, type }) {
-  const etherscanURL = ethereumUtils.getEtherscanHostForNetwork(type);
-  const blockExplorerName = ethereumUtils.getBlockExplorer(type);
+export default function SocialLinks({ address, color, isNativeAsset, links, marginTop, chainId }) {
+  const etherscanURL = ethereumUtils.getEtherscanHostForNetwork({ chainId });
+  const blockExplorerName = ethereumUtils.getBlockExplorer({ chainId });
   return (
     <>
       <Carousel height={59} marginBottom={1} marginTop={marginTop || 0}>
@@ -45,8 +45,8 @@ export default function SocialLinks({ address, color, isNativeAsset, links, marg
         {!!links?.twitter?.url && (
           <CommunityLink
             color={color}
-            display={lang.t('expanded_state.asset.social.twitter')}
-            emojiName="twitter"
+            display={i18n.t(i18n.l.expanded_state.asset.social.twitter)}
+            emojiName="x"
             transformOrigin="center"
             url={links.twitter.url}
           />
@@ -54,7 +54,7 @@ export default function SocialLinks({ address, color, isNativeAsset, links, marg
         {!!links?.homepage?.url && (
           <CommunityLink
             color={color}
-            display={lang.t('expanded_state.asset.social.homepage')}
+            display={i18n.t(i18n.l.expanded_state.asset.social.homepage)}
             transformOrigin="center"
             url={links.homepage.url}
           />
@@ -62,7 +62,7 @@ export default function SocialLinks({ address, color, isNativeAsset, links, marg
         {!!links?.telegram?.url && (
           <CommunityLink
             color={color}
-            display={lang.t('expanded_state.asset.social.telegram')}
+            display={i18n.t(i18n.l.expanded_state.asset.social.telegram)}
             emojiName="telegram"
             transformOrigin="center"
             url={links.telegram.url}
@@ -71,7 +71,7 @@ export default function SocialLinks({ address, color, isNativeAsset, links, marg
         {!!links?.reddit?.url && (
           <CommunityLink
             color={color}
-            display={lang.t('expanded_state.asset.social.reddit')}
+            display={i18n.t(i18n.l.expanded_state.asset.social.reddit)}
             emojiName="reddit"
             transformOrigin="center"
             url={links?.subreddit_url}
@@ -80,7 +80,7 @@ export default function SocialLinks({ address, color, isNativeAsset, links, marg
         {!!links?.facebook?.url && (
           <CommunityLink
             color={color}
-            display={lang.t('expanded_state.asset.social.facebook')}
+            display={i18n.t(i18n.l.expanded_state.asset.social.facebook)}
             emojiName="facebook"
             transformOrigin="center"
             url={links.facebook.url}

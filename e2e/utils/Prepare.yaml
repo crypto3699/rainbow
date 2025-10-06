@@ -1,0 +1,19 @@
+appId: ${APP_ID}
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          text: 'Close app'
+          waitToSettleTimeoutMs: 500
+          optional: true
+# There are time where there is a lingering Open in popup.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Cancel'
+          waitToSettleTimeoutMs: 500
+          optional: true

@@ -1,7 +1,15 @@
-diff --git a/node_modules/react-native-text-input-mask/.DS_Store b/node_modules/react-native-text-input-mask/.DS_Store
-new file mode 100644
-index 0000000..5902d8c
-Binary files /dev/null and b/node_modules/react-native-text-input-mask/.DS_Store differ
+diff --git a/node_modules/react-native-text-input-mask/android/build.gradle b/node_modules/react-native-text-input-mask/android/build.gradle
+index ba1e645..18630dc 100644
+--- a/node_modules/react-native-text-input-mask/android/build.gradle
++++ b/node_modules/react-native-text-input-mask/android/build.gradle
+@@ -26,6 +26,6 @@ android {
+ 
+ dependencies {
+     implementation 'com.facebook.react:react-native:+'
+-    implementation 'com.redmadrobot:inputmask:4.1.0'
++    implementation 'com.github.RedMadRobot:input-mask-android:4.1.0'
+     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.3.21'
+ }
 diff --git a/node_modules/react-native-text-input-mask/index.js b/node_modules/react-native-text-input-mask/index.js
 index 408edad..3905a6f 100644
 --- a/node_modules/react-native-text-input-mask/index.js
@@ -59,7 +67,3 @@ index 408edad..3905a6f 100644
 +export { mask, unmask, setMask };
 +
 +export default forwardRef(ForwardedTextInputMask);
-diff --git a/node_modules/react-native-text-input-mask/ios/.DS_Store b/node_modules/react-native-text-input-mask/ios/.DS_Store
-new file mode 100644
-index 0000000..66750e8
-Binary files /dev/null and b/node_modules/react-native-text-input-mask/ios/.DS_Store differ

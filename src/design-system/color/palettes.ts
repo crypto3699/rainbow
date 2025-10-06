@@ -200,7 +200,7 @@ export type BackgroundColorValue = {
   mode: ColorMode;
 };
 
-export const backgroundColors: Record<BackgroundColor, BackgroundColorValue | ContextualColorValue<BackgroundColorValue>> = {
+export const backgroundColors: Record<BackgroundColor, ContextualColorValue<BackgroundColorValue>> = {
   'surfacePrimary': {
     light: {
       color: globalColors.white100,
@@ -400,8 +400,14 @@ export const backgroundColors: Record<BackgroundColor, BackgroundColorValue | Co
     },
   },
   'swap (Deprecated)': {
-    color: deprecatedColors.swapPurple,
-    mode: 'darkTinted',
+    dark: {
+      color: deprecatedColors.swapPurple,
+      mode: 'darkTinted',
+    },
+    light: {
+      color: deprecatedColors.swapPurple,
+      mode: 'darkTinted',
+    },
   },
 };
 
@@ -410,6 +416,7 @@ export type ForegroundColor =
   | 'labelSecondary'
   | 'labelTertiary'
   | 'labelQuaternary'
+  | 'labelQuinary'
   | 'blue'
   | 'green'
   | 'red'
@@ -459,14 +466,11 @@ export type ForegroundColor =
   | 'zora'
   | 'bsc'
   | 'avalanche'
-  | 'blast';
+  | 'blast'
+  | 'degen';
 
-function selectBackgroundAsForeground(backgroundName: BackgroundColor): string | ContextualColorValue<string> {
+function selectBackgroundAsForeground(backgroundName: BackgroundColor): ContextualColorValue<string> {
   const bg = backgroundColors[backgroundName];
-
-  if ('color' in bg) {
-    return bg.color;
-  }
 
   return {
     dark: bg.dark.color,
@@ -476,7 +480,7 @@ function selectBackgroundAsForeground(backgroundName: BackgroundColor): string |
   };
 }
 
-export const foregroundColors: Record<ForegroundColor, string | ContextualColorValue<string>> = {
+export const foregroundColors: Record<ForegroundColor, ContextualColorValue<string>> = {
   'label': {
     light: globalColors.grey100,
     dark: globalColors.white100,
@@ -492,6 +496,10 @@ export const foregroundColors: Record<ForegroundColor, string | ContextualColorV
   'labelQuaternary': {
     light: globalColors.grey60,
     dark: globalColors.white60,
+  },
+  'labelQuinary': {
+    light: globalColors.grey50,
+    dark: globalColors.white50,
   },
   'blue': selectBackgroundAsForeground('blue'),
   'green': selectBackgroundAsForeground('green'),
@@ -631,12 +639,18 @@ export const foregroundColors: Record<ForegroundColor, string | ContextualColorV
     darkTinted: deprecatedColors.white80,
     light: deprecatedColors.grey80,
   },
-  'shadowNear': globalColors.grey100,
+  'shadowNear': {
+    light: globalColors.grey100,
+    dark: globalColors.grey100,
+  },
   'shadowFar': {
     dark: globalColors.grey100,
     light: '#25292E',
   },
-  'swap (Deprecated)': deprecatedColors.swapPurple,
+  'swap (Deprecated)': {
+    light: deprecatedColors.swapPurple,
+    dark: deprecatedColors.swapPurple,
+  },
   'mainnet': {
     light: '#6D6D6D',
     dark: '#999BA1',
@@ -673,6 +687,10 @@ export const foregroundColors: Record<ForegroundColor, string | ContextualColorV
     light: '#FCFC06',
     dark: '#FCFC06',
   },
+  'degen': {
+    light: '#A36EFD',
+    dark: '#A36EFD',
+  },
 };
 
 /**
@@ -681,6 +699,7 @@ export const foregroundColors: Record<ForegroundColor, string | ContextualColorV
  * some color modes can inherit from others, e.g. `"dark"` and `"darkTinted"`.
  */
 export function getValueForColorMode<Value>(value: Value | ContextualColorValue<Value>, colorMode: ColorMode): Value {
+  'worklet';
   if (typeof value === 'object' && value !== null && 'light' in value) {
     if (colorMode === 'darkTinted') {
       return value.darkTinted ?? value.dark;
@@ -697,8 +716,8 @@ export function getValueForColorMode<Value>(value: Value | ContextualColorValue<
 }
 
 export function getDefaultAccentColorForColorMode(colorMode: ColorMode) {
+  'worklet';
   const defaultAccentColor = backgroundColors.blue;
-
   return getValueForColorMode(defaultAccentColor, colorMode);
 }
 
@@ -710,10 +729,6 @@ export type Palette = {
 function createPalette(colorMode: ColorMode): Palette {
   return {
     backgroundColors: mapValues(backgroundColors, value => {
-      if ('color' in value) {
-        return value;
-      }
-
       if (colorMode === 'darkTinted') {
         return value.darkTinted ?? value.dark;
       }
@@ -745,6 +760,7 @@ export const textColors = selectForegroundColors(
   'labelSecondary',
   'labelTertiary',
   'labelQuaternary',
+  'labelQuinary',
   'blue',
   'green',
   'red',
@@ -772,7 +788,8 @@ export const textColors = selectForegroundColors(
   'zora',
   'bsc',
   'avalanche',
-  'blast'
+  'blast',
+  'degen'
 );
 export type TextColor = (typeof textColors)[number];
 

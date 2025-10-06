@@ -1,68 +1,61 @@
-import { useCallback, useRef } from 'react';
+/* eslint-disable @typescript-eslint/no-var-requires */
 import { InteractionManager, NativeModules } from 'react-native';
-import SplashScreen from 'react-native-splash-screen';
-import { PerformanceContextMap } from '../performance/PerformanceContextMap';
-import { StartTime } from '../performance/start-time';
-import { PerformanceTracking } from '../performance/tracking';
-import { PerformanceMetrics } from '../performance/tracking/types/PerformanceMetrics';
-import { StatusBarHelper } from '@/helpers';
-import { analytics } from '@/analytics';
+import { PerformanceReports, PerformanceReportSegments, PerformanceTracking } from '../performance/tracking';
+import { IS_ANDROID, IS_IOS } from '@/env';
 import { onHandleStatusBar } from '@/navigation/onNavigationStateChange';
 import { getAppIcon } from '@/handlers/localstorage/globalSettings';
 import { RainbowError, logger } from '@/logger';
 import { AppIconKey } from '@/appIcons/appIcons';
-const Sound = require('react-native-sound');
+import { SystemBars } from 'react-native-edge-to-edge';
+const { RainbowSplashScreen } = NativeModules;
 
-const { RainbowSplashScreen, RNBootSplash } = NativeModules;
+let alreadyLoggedPerformance = false;
+let splashScreenHidden = false;
 
-export default function useHideSplashScreen() {
-  const alreadyLoggedPerformance = useRef(false);
+export const isSplashScreenHidden = () => splashScreenHidden;
 
-  return useCallback(async () => {
-    if (!!RainbowSplashScreen && RainbowSplashScreen.hideAnimated) {
+export const hideSplashScreen = async () => {
+  splashScreenHidden = true;
+  try {
+    if (RainbowSplashScreen?.hideAnimated) {
       RainbowSplashScreen.hideAnimated();
-    } else {
-      if (android) {
-        RNBootSplash.hide(true);
-      } else {
-        SplashScreen.hide();
-      }
-    }
-
-    if (android) {
-      StatusBarHelper.setBackgroundColor('transparent', false);
-      StatusBarHelper.setTranslucent(true);
-      StatusBarHelper.setDarkContent();
+    } else if (IS_ANDROID) {
+      const RNBootSplash = require('react-native-bootsplash');
+      await RNBootSplash.hide({ fade: true });
     }
 
     onHandleStatusBar();
-    (ios && StatusBarHelper.setHidden(false, 'fade')) ||
-      InteractionManager.runAfterInteractions(() => {
-        StatusBarHelper.setHidden(false, 'fade');
-      });
 
-    if (!alreadyLoggedPerformance.current) {
-      const initialRoute = PerformanceContextMap.get('initialRoute');
-      const additionalParams = initialRoute !== undefined ? { initialRoute } : undefined;
-      PerformanceTracking.finishMeasuring(PerformanceMetrics.timeToInteractive, additionalParams);
-      PerformanceTracking.logDirectly(PerformanceMetrics.completeStartupTime, Date.now() - StartTime.START_TIME, additionalParams);
-      analytics.track('Application became interactive');
-      alreadyLoggedPerformance.current = true;
+    if (IS_IOS) {
+      SystemBars.setHidden({ statusBar: false });
+    } else {
+      InteractionManager.runAfterInteractions(() => {
+        SystemBars.setHidden({ statusBar: false });
+      });
+    }
+
+    if (!alreadyLoggedPerformance) {
+      alreadyLoggedPerformance = true;
+      PerformanceTracking.logReportSegmentRelative(PerformanceReports.appStartup, PerformanceReportSegments.appStartup.hideSplashScreen);
 
       // need to load setting straight from storage, redux isnt ready yet
       const appIcon = (await getAppIcon()) as AppIconKey;
       if (appIcon === 'poolboy') {
-        const sound = new Sound(require('../assets/sounds/RainbowSega.mp3'), (error: any) => {
+        const Sound = require('react-native-sound');
+
+        const sound = new Sound(require('../assets/sounds/RainbowSega.mp3'), (error: unknown) => {
           if (error) {
-            logger.error(new RainbowError('Error playing poolboy sound'));
+            logger.error(new RainbowError('[useHideSplashScreen]: Error playing poolboy sound'));
             return;
           }
 
-          sound.play((success: any) => {
-            logger.debug('playing poolboy sound');
-          });
+          sound.play(() => logger.debug('[useHideSplashScreen]: playing poolboy sound'));
         });
       }
     }
-  }, []);
-}
+  } catch (e) {
+    logger.error(new RainbowError('[useHideSplashScreen]: Error hiding splash screen'), {
+      error: e,
+    });
+  }
+};

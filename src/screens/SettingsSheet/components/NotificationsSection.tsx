@@ -1,41 +1,41 @@
-import lang from 'i18n-js';
+import { POINTS, POINTS_NOTIFICATIONS_TOGGLE, useExperimentalFlag } from '@/config';
+import { Box } from '@/design-system';
+import { IS_TEST } from '@/env';
+import { isTestnetChain } from '@/handlers/web3';
+import { removeFirstEmojiFromString, returnStringFirstEmoji } from '@/helpers/emojiHandler';
+import WalletTypes from '@/helpers/walletTypes';
+import { useAccountSettings, useAppState } from '@/hooks';
+import { useRemoteConfig } from '@/model/remoteConfig';
+import { RainbowAccount } from '@/model/wallet';
+import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
+import { isNotificationPermissionGranted, requestNotificationPermission } from '@/notifications/permissions';
+import {
+  useAllNotificationSettingsFromStorage,
+  useWalletGroupNotificationSettings,
+  WalletNotificationRelationship,
+  WalletNotificationSettings,
+} from '@/notifications/settings';
+import { GlobalNotificationTopic } from '@/notifications/settings/constants';
+import { toggleGlobalNotificationTopic } from '@/notifications/settings/settings';
+import { getNotificationSettingsForWalletWithAddress, setAllGlobalNotificationSettingsToStorage } from '@/notifications/settings/storage';
+import { GlobalNotificationTopics, GlobalNotificationTopicType } from '@/notifications/settings/types';
+import { SettingsLoadingIndicator } from '@/screens/SettingsSheet/components/SettingsLoadingIndicator';
+import { showNotificationSubscriptionErrorAlert, showOfflineAlert } from '@/screens/SettingsSheet/components/notificationAlerts';
+import { abbreviations, deviceUtils } from '@/utils';
+import profileUtils from '@/utils/profileUtils';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { useFocusEffect } from '@react-navigation/native';
+import * as i18n from '@/languages';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Switch } from 'react-native';
+import { checkNotifications, RESULTS } from 'react-native-permissions';
 import { ContactAvatar } from '../../../components/contacts';
 import ImageAvatar from '../../../components/contacts/ImageAvatar';
+import { useWallets, useWalletsStore } from '@/state/wallets/walletsStore';
 import Menu from './Menu';
 import MenuContainer from './MenuContainer';
 import MenuItem from './MenuItem';
-import { checkNotifications, RESULTS } from 'react-native-permissions';
-import { useNavigation } from '@/navigation';
-import Routes from '@/navigation/routesNames';
-import WalletTypes from '@/helpers/walletTypes';
-import { useAccountSettings, useAppState, useWallets } from '@/hooks';
-import { requestPermission } from '@/notifications/permissions';
-import profileUtils from '@/utils/profileUtils';
-import { abbreviations, deviceUtils } from '@/utils';
-import { Box } from '@/design-system';
-import { removeFirstEmojiFromString, returnStringFirstEmoji } from '@/helpers/emojiHandler';
-import { RainbowAccount } from '@/model/wallet';
-import { isTestnetNetwork } from '@/handlers/web3';
-import { useFocusEffect } from '@react-navigation/native';
-import { SettingsLoadingIndicator } from '@/screens/SettingsSheet/components/SettingsLoadingIndicator';
-import { showNotificationSubscriptionErrorAlert, showOfflineAlert } from '@/screens/SettingsSheet/components/notificationAlerts';
-import { useNetInfo } from '@react-native-community/netinfo';
-import {
-  WalletNotificationRelationship,
-  updateSettingsForWalletsWithRelationshipType,
-  useAllNotificationSettingsFromStorage,
-  useWalletGroupNotificationSettings,
-  WalletNotificationSettings,
-} from '@/notifications/settings';
-import { getNotificationSettingsForWalletWithAddress, setAllGlobalNotificationSettingsToStorage } from '@/notifications/settings/storage';
-import { toggleGlobalNotificationTopic } from '@/notifications/settings/settings';
-import { GlobalNotificationTopicType, GlobalNotificationTopics } from '@/notifications/settings/types';
-import { GlobalNotificationTopic } from '@/notifications/settings/constants';
-import { useRemoteConfig } from '@/model/remoteConfig';
-import { POINTS, POINTS_NOTIFICATIONS_TOGGLE, useExperimentalFlag } from '@/config';
-import { IS_TEST } from '@/env';
 
 type WalletRowProps = {
   ens: string;
@@ -56,34 +56,34 @@ const AMOUNT_OF_TOPICS_TO_DISPLAY = DEVICE_WIDTH > 400 ? 3 : 2;
 
 const WalletRowLabel = ({ notifications, groupOff }: WalletRowLabelProps) => {
   const composedLabel = useMemo(() => {
-    if (!notifications) return lang.t('settings.notifications_section.off');
+    if (!notifications) return i18n.t(i18n.l.settings.notifications_section.off);
     const allTopicsEnabled = Object.values(notifications.topics).every(topic => topic);
     const allTopicsDisabled = groupOff || Object.values(notifications.topics).every(topic => !topic);
     const enabledTopics = Object.keys(notifications.topics).filter(topic => notifications.topics[topic as unknown as number]);
 
     if (allTopicsDisabled) {
-      return lang.t('settings.notifications_section.off');
+      return i18n.t(i18n.l.settings.notifications_section.off);
     }
 
     if (notifications.enabled) {
       if (allTopicsEnabled) {
-        return lang.t('settings.notifications_section.all');
+        return i18n.t(i18n.l.settings.notifications_section.all);
       }
 
       if (enabledTopics.length > AMOUNT_OF_TOPICS_TO_DISPLAY) {
         const limitedTopics = enabledTopics
           .slice(0, AMOUNT_OF_TOPICS_TO_DISPLAY)
-          .map(topic => lang.t(`settings.notifications_section.${topic}`))
+          .map(topic => i18n.t((i18n.l.settings.notifications_section as any)[topic]))
           .join(', ');
 
-        return `${limitedTopics} ${lang.t('settings.notifications_section.plus_n_more', {
+        return `${limitedTopics} ${i18n.t(i18n.l.settings.notifications_section.plus_n_more, {
           n: enabledTopics.length - AMOUNT_OF_TOPICS_TO_DISPLAY,
         })}`;
       } else {
-        return enabledTopics.map(topic => lang.t(`settings.notifications_section.${topic}`)).join(', ');
+        return enabledTopics.map(topic => i18n.t((i18n.l.settings.notifications_section as any)[topic])).join(', ');
       }
     } else {
-      return lang.t('settings.notifications_section.off');
+      return i18n.t(i18n.l.settings.notifications_section.off);
     }
   }, [groupOff, notifications]);
 
@@ -110,8 +110,8 @@ const WalletRow = ({ ens, groupOff, isTestnet, loading, notificationSettings, wa
         });
       } else {
         Alert.alert(
-          lang.t('settings.notifications_section.no_settings_for_address_title'),
-          lang.t('settings.notifications_section.no_settings_for_address_content'),
+          i18n.t(i18n.l.settings.notifications_section.no_settings_for_address_title),
+          i18n.t(i18n.l.settings.notifications_section.no_settings_for_address_content),
           [{ text: 'OK' }]
         );
       }
@@ -157,9 +157,10 @@ const WalletRow = ({ ens, groupOff, isTestnet, loading, notificationSettings, wa
 const NotificationsSection = () => {
   const { justBecameActive } = useAppState();
   const { navigate } = useNavigation();
-  const { network } = useAccountSettings();
-  const isTestnet = isTestnetNetwork(network);
-  const { wallets, walletNames } = useWallets();
+  const { chainId } = useAccountSettings();
+  const isTestnet = isTestnetChain({ chainId });
+  const wallets = useWallets();
+  const walletNames = useWalletsStore(state => state.walletNames);
   const { isConnected } = useNetInfo();
   const { points_enabled, points_notifications_toggle } = useRemoteConfig();
   const pointsEnabled = useExperimentalFlag(POINTS) || points_enabled || IS_TEST;
@@ -221,44 +222,34 @@ const NotificationsSection = () => {
   const neverGranted = permissionStatus === RESULTS.DENIED;
   const disabledInSystem = permissionStatus === RESULTS.BLOCKED;
 
-  const toggleAllOwnedNotifications = useCallback(() => {
+  const toggleAllOwnedNotifications = useCallback(async () => {
     if (!isConnected) {
       showOfflineAlert();
       return;
     }
     setOwnedState(prev => ({ status: !prev.status, loading: true }));
-    updateGroupSettingsAndSubscriptions(WalletNotificationRelationship.OWNER, !storedOwnerEnabled)
-      .then(() => {
-        setOwnedState(prev => ({ ...prev, loading: false }));
-        updateSettingsForWalletsWithRelationshipType(WalletNotificationRelationship.OWNER, {
-          successfullyFinishedInitialSubscription: true,
-          enabled: !storedOwnerEnabled,
-        });
-      })
-      .catch(() => {
-        showNotificationSubscriptionErrorAlert();
-        setOwnedState(prev => ({ status: !prev.status, loading: false }));
-      });
+    const isSuccess = await updateGroupSettingsAndSubscriptions(WalletNotificationRelationship.OWNER, !storedOwnerEnabled);
+    if (isSuccess) {
+      setOwnedState(prev => ({ ...prev, loading: false }));
+    } else {
+      showNotificationSubscriptionErrorAlert();
+      setOwnedState(prev => ({ status: !prev.status, loading: false }));
+    }
   }, [storedOwnerEnabled, updateGroupSettingsAndSubscriptions, isConnected]);
 
-  const toggleAllWatchedNotifications = useCallback(() => {
+  const toggleAllWatchedNotifications = useCallback(async () => {
     if (!isConnected) {
       showOfflineAlert();
       return;
     }
     setWatchedState(prev => ({ status: !prev.status, loading: true }));
-    updateGroupSettingsAndSubscriptions(WalletNotificationRelationship.WATCHER, !storedWatcherEnabled)
-      .then(() => {
-        setWatchedState(prev => ({ ...prev, loading: false }));
-        updateSettingsForWalletsWithRelationshipType(WalletNotificationRelationship.WATCHER, {
-          successfullyFinishedInitialSubscription: true,
-          enabled: !storedWatcherEnabled,
-        });
-      })
-      .catch(() => {
-        showNotificationSubscriptionErrorAlert();
-        setWatchedState(prev => ({ status: !prev.status, loading: false }));
-      });
+    const isSuccess = await updateGroupSettingsAndSubscriptions(WalletNotificationRelationship.WATCHER, !storedWatcherEnabled);
+    if (isSuccess) {
+      setWatchedState(prev => ({ ...prev, loading: false }));
+    } else {
+      showNotificationSubscriptionErrorAlert();
+      setWatchedState(prev => ({ status: !prev.status, loading: false }));
+    }
   }, [updateGroupSettingsAndSubscriptions, storedWatcherEnabled, isConnected]);
 
   const toggleTopic = useCallback(
@@ -291,13 +282,13 @@ const NotificationsSection = () => {
   const openNetworkSettings = useCallback(() => navigate(Routes.NETWORK_SWITCHER), [navigate]);
 
   const requestNotificationPermissions = useCallback(async () => {
-    requestPermission().then(allowed => {
-      if (allowed) {
-        setPermissionStatus(RESULTS.GRANTED);
-      } else {
-        openSystemSettings();
-      }
-    });
+    const status = await requestNotificationPermission();
+    const allowed = isNotificationPermissionGranted(status);
+    if (allowed) {
+      setPermissionStatus(RESULTS.GRANTED);
+    } else {
+      openSystemSettings();
+    }
   }, [openSystemSettings]);
 
   const checkPermissions = useCallback(async () => {
@@ -318,13 +309,13 @@ const NotificationsSection = () => {
         key={permissionStatus}
       >
         {neverGranted && (
-          <Menu description={lang.t('settings.notifications_section.no_first_time_permissions')}>
+          <Menu description={i18n.t(i18n.l.settings.notifications_section.no_first_time_permissions)}>
             <MenuItem
               hasSfSymbol
               size={52}
               leftComponent={<MenuItem.TextIcon icon="􀝖" isLink />}
               titleComponent={
-                <MenuItem.Title text={lang.t('settings.notifications_section.first_time_allow_notifications')} weight="bold" isLink />
+                <MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.first_time_allow_notifications)} weight="bold" isLink />
               }
               onPress={requestNotificationPermissions}
             />
@@ -332,30 +323,32 @@ const NotificationsSection = () => {
         )}
 
         {disabledInSystem && (
-          <Menu description={lang.t('settings.notifications_section.no_permissions')}>
+          <Menu description={i18n.t(i18n.l.settings.notifications_section.no_permissions)}>
             <MenuItem
               hasSfSymbol
               size={52}
               leftComponent={<MenuItem.TextIcon icon="􀍟" isLink />}
-              titleComponent={<MenuItem.Title text={lang.t('settings.notifications_section.open_system_settings')} weight="bold" isLink />}
+              titleComponent={
+                <MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.open_system_settings)} weight="bold" isLink />
+              }
               onPress={openSystemSettings}
             />
           </Menu>
         )}
 
         {isTestnet ? (
-          <Menu description={lang.t('settings.notifications_section.unsupported_network')}>
+          <Menu description={i18n.t(i18n.l.settings.notifications_section.unsupported_network)}>
             <MenuItem
               hasSfSymbol
               size={52}
               leftComponent={<MenuItem.TextIcon icon="􀇂" isLink />}
-              titleComponent={<MenuItem.Title text={lang.t('settings.notifications_section.change_network')} weight="bold" isLink />}
+              titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.change_network)} weight="bold" isLink />}
               onPress={openNetworkSettings}
             />
           </Menu>
         ) : (
           <>
-            <Menu description={noOwnedWallets ? lang.t('settings.notifications_section.no_owned_wallets') : ''}>
+            <Menu description={noOwnedWallets ? i18n.t(i18n.l.settings.notifications_section.no_owned_wallets) : ''}>
               <MenuItem
                 disabled
                 rightComponent={
@@ -369,7 +362,7 @@ const NotificationsSection = () => {
                   </>
                 }
                 size={52}
-                titleComponent={<MenuItem.Title text={lang.t('settings.notifications_section.my_wallets')} weight="bold" />}
+                titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.my_wallets)} weight="bold" />}
               />
               {ownedWallets.map(wallet => (
                 <WalletRow
@@ -383,7 +376,7 @@ const NotificationsSection = () => {
                 />
               ))}
             </Menu>
-            <Menu description={noWatchedWallets ? lang.t('settings.notifications_section.no_watched_wallets') : ''}>
+            <Menu description={noWatchedWallets ? i18n.t(i18n.l.settings.notifications_section.no_watched_wallets) : ''}>
               <MenuItem
                 disabled
                 rightComponent={
@@ -397,7 +390,7 @@ const NotificationsSection = () => {
                   </>
                 }
                 size={52}
-                titleComponent={<MenuItem.Title text={lang.t('settings.notifications_section.watched_wallets')} weight="bold" />}
+                titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.watched_wallets)} weight="bold" />}
               />
               {watchedWallets.map(wallet => (
                 <WalletRow
@@ -428,7 +421,7 @@ const NotificationsSection = () => {
                 </>
               }
               size={52}
-              titleComponent={<MenuItem.Title text={lang.t('settings.notifications_section.points')} weight="bold" />}
+              titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.notifications_section.points)} weight="bold" />}
             />
           )}
         </Menu>

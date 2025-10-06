@@ -16,6 +16,7 @@
       "tab_balances": "잔고",
       "tab_balances_empty_state": "균형",
       "tab_balances_tooltip": "이더리움 및 토큰 잔고",
+      "tab_claimables": "청구 가능",
       "tab_collectibles": "수집품",
       "tab_interactions": "상호작용",
       "tab_interactions_tooltip": "스마트 계약 상호작용",
@@ -24,6 +25,7 @@
       "tab_showcase": "쇼케이스",
       "tab_points": "포인트",
       "tab_positions": "포지션",
+      "tab_rewards": "보상",
       "tab_transactions": "거래",
       "tab_transactions_tooltip": "거래 및 토큰 이전",
       "tab_uniquetokens": "고유한 토큰",
@@ -45,6 +47,7 @@
       "unknown_token": "알 수 없는 토큰"
     },
     "activity_list": {
+      "title": "활동",
       "empty_state": {
         "default_label": "아직 거래 없음",
         "recycler_label": "아직 거래 없음",
@@ -91,7 +94,11 @@
         "no_backups_found": "이전 백업을 찾을 수 없습니다!",
         "cant_get_encrypted_data": "현재 백업에 접근할 수 없습니다. 나중에 다시 시도해 주세요.",
         "missing_pin": "PIN 코드 처리 중 문제가 발생했습니다. 나중에 다시 시도해 주세요.",
-        "generic": "백업을 시도하던 중에 오류가 발생했습니다. 오류 코드: %{errorCodes}"
+        "generic": "백업을 시도하던 중에 오류가 발생했습니다. 오류 코드: %{errorCodes}",
+        "no_keys_found": "키를 찾을 수 없습니다. 다시 시도해 주세요.",
+        "backup_not_found": "백업을 찾을 수 없습니다. 다시 시도해 주세요.",
+        "no_account_found": "백업 파일을 가져올 수 없습니다. 로그인했는지 확인하세요.",
+        "damaged_wallet": "지갑을 백업할 수 없습니다. 키체인 데이터가 누락되었습니다."
       },
       "wrong_pin": "입력하신 PIN 코드가 잘못되어 백업을 만들 수 없습니다. 정확한 코드로 다시 시도해 주세요.",
       "already_backed_up": {
@@ -101,17 +108,64 @@
         "imported": "가져옴",
         "imported_message": "지갑이 가져와졌습니다"
       },
+      "wallet_group_title_plural": "지갑 그룹 %{walletGroupNumber}",
+      "wallet_group_title_singular": "지갑 그룹",
+      "private_key_plural": "개인 키 %{privateKeyNumber}",
+      "private_key_singluar": "개인 키",
       "backup_deleted_successfully": "백업이 성공적으로 삭제됨",
       "cloud": {
+        "no_backups": "백업을 찾을 수 없습니다",
+        "failed_to_fetch_backups": "백업을 가져오지 못했습니다",
+        "retry": "다시 시도",
+        "refresh": "새로고침",
+        "syncing_cloud_store": "%{cloudPlatformName}에 동기화 중",
+        "fetching_backups": "%{cloudPlatformName}에서 백업 가져오는 중",
         "back_up_to_platform": "%{cloudPlatformName}으로 백업",
-        "manage_platform_backups": "%{cloudPlatformName} 백업 관리",
+        "restore_from_platform": "%{cloudPlatformName}에서 복원하기",
+        "restoration_in_progress": "복원 진행 중",
+        "how_would_you_like_to_backup": "지갑을 어떻게 백업하시겠습니까?",
+        "manage_platform_backups": "%{cloudPlatformName} 백업 보기",
+        "cloud_platform_backup_settings": "%{cloudPlatformName} 백업 설정",
+        "cloud_backup": "클라우드 백업",
+        "backing_up": "백업 중...",
+        "backup_success": "백업 성공",
+        "backup_failed": "백업 실패",
+        "manual_backup": "수동 백업",
+        "back_to_cloud_platform_now": "지금 %{cloudPlatform}으로 백업하기",
+        "add_wallet_to_cloud_backups": "이 지갑을 클라우드 백업에 추가하시겠습니까?",
+        "enable_cloud_backups": "클라우드 백업 활성화",
+        "mayber_later": "나중에 하기",
+        "recommended_for_beginners": "초보자에게 권장합니다.",
+        "choose_backup": "복원할 백업을 선택하세요",
+        "backup_to_cloud_now": "지금 %{cloudPlatformName}으로 백업",
+        "choose_backup_cloud_description": "기기를 분실하거나 새 기기를 사용할 경우 복원할 수 있도록 %{cloudPlatform}에 안전하게 지갑을 백업하세요.",
+        "choose_backup_manual_description": "암호를 안전한 곳에 보관하여 지갑을 수동으로 백업하세요.",
+        "enable_cloud_backups_description": "지갑을 수동으로 백업하려면 아래에서 진행할 수 있습니다.",
+        "latest_backup": "최신 백업: %{date}",
+        "back_up_all_wallets_to_cloud": "모든 지갑을 %{cloudPlatformName}에 백업",
+        "most_recent_backup": "가장 최근 백업",
+        "out_of_date": "구버전",
+        "up_to_date": "최신 상태",
+        "older_backups": "오래된 백업",
+        "no_older_backups": "오래된 백업 없음",
+        "older_backups_title": "%{date} %{time}",
+        "statuses": {
+          "not_enabled": "비활성화됨",
+          "syncing": "동기화 중",
+          "out_of_date": "구버전",
+          "up_to_date": "최신 상태"
+        },
         "password": {
-          "a_password_youll_remember": "기억하실 수 있는 비밀번호를 사용해 주세요.",
-          "backup_password": "백업 비밀번호",
-          "choose_a_password": "비밀번호를 선택하세요",
+          "a_password_youll_remember_part_one": "이 비밀번호는",
+          "not": "복구할 수 없습니다. 기억할 수 있는 비밀번호를 선택하세요.",
+          "a_password_youll_remember_part_two": "복원할 수 없습니다. 기억할 수 있는 비밀번호를 선택하세요.",
+          "backup_password": "비밀번호",
+          "choose_a_password": "백업을 보호하기 위해 비밀번호를 생성하세요",
           "confirm_backup": "백업 확인",
+          "enter_backup_password": "백업 비밀번호를 입력하세요",
+          "to_restore_from_backup": "이 백업에서 복원하려면, 백업할 때 생성한 비밀번호를 입력하세요",
           "confirm_password": "비밀번호 확인",
-          "confirm_placeholder": "비밀번호 확인",
+          "confirm_placeholder": "비밀번호 다시 입력",
           "it_cant_be_recovered": "복구할 수 없습니다!",
           "minimum_characters": "최소 %{minimumLength} 문자",
           "passwords_dont_match": "비밀번호가 일치하지 않습니다",
@@ -133,22 +187,31 @@
       },
       "explainers": {
         "backup": "이 비밀번호를 잊지 마세요! 이것은 귀하의 %{cloudPlatformName} 비밀번호와 다르며, 안전한 위치에 저장해야 합니다.\n\n미래에 백업에서 지갑을 복원하기 위해 필요합니다.",
+        "add_to_backups": "백업해야 하는 지갑이 여러 개 있습니다. 보안상의 이유로 현재는 한 번에 하나의 지갑만 백업할 수 있습니다.",
         "if_lose_cloud": "이 기기를 잃어버린 경우, 암호화된 지갑 백업을 %{cloudPlatformName}에서 복구할 수 있습니다.",
         "if_lose_imported": "이 기기를 잃어버린 경우, 원래 가져온 키로 지갑을 복원할 수 있습니다.",
         "if_lose_manual": "이 기기를 잃어버린 경우, 저장한 비밀 문구로 지갑을 복원할 수 있습니다."
       },
       "manual": {
-        "label": "귀하의 비밀 문구",
+        "backup_manually": "수동 백업",
+        "label": "%{typeName} 저장",
+        "with_your_label": "당신의 %{typeName}",
+        "backup_manually_now": "이 지갑을 백업하시겠습니까?",
+        "back_up_now": "지금 백업",
+        "already_backed_up": "이미 백업됨",
         "pkey": {
-          "confirm_save": "내 키를 저장했습니다",
+          "confirm_save": "􀆅 내가 키를 저장했습니다",
           "save_them": "복사하여 패스워드 관리자나 다른 안전한 곳에 저장하십시오.",
-          "these_keys": "이것이 지갑의 열쇠입니다!"
+          "these_keys": "이것이 지갑의 열쇠입니다!",
+          "description": "이 키를 가진 사람은 여러분의 지갑에 접근할 수 있습니다! 절대 공유해서는 안 됩니다."
         },
         "seed": {
-          "confirm_save": "이 단어들을 저장했습니다",
+          "confirm_save": "􀆅 이 단어들을 저장했습니다",
           "save_them": "그것들을 적어두거나 패스워드 관리자에 저장하십시오.",
-          "these_keys": "이 단어들은 당신의 지갑에 대한 키입니다!"
-        }
+          "these_keys": "이 단어들은 당신의 지갑에 대한 키입니다!",
+          "description": "이 단어들은 여러분의 지갑에 접근할 수 있는 키입니다. 안전한 장소에 보관하세요."
+        },
+        "create_new_secret_phrase": "새 비밀 문구 생성"
       },
       "needs_backup": {
         "back_up_your_wallet": "당신의 지갑을 백업하십시오",
@@ -177,6 +240,15 @@
         "view_private_key": "개인 키 보기",
         "view_secret_phrase": "비밀 구문 보기",
         "you_need_to_authenticate": "귀하의 복구 %{typeName}에 접근하기 위해 인증이 필요합니다."
+      },
+      "warning": {
+        "before_you_proceed": "계속하기 전에",
+        "title": "View your %{typeName}",
+        "never_share": "절대 %{typeName}을 공유하거나 앱이나 웹사이트에 입력하지 마세요.",
+        "access": "누구든지 여러분의 %{typeName}을 가지고 있다면 전체 지갑에 접근할 수 있습니다.",
+        "hide": "%{typeName}을 볼 때 다른 사람이 화면을 볼 수 없도록 주의하세요.",
+        "support": "Rainbow 지원팀은 절대로 %{typeName}을 요청하지 않습니다.",
+        "button": "􀎽 %{typeName} 보기"
       }
     },
     "bluetooth": {
@@ -274,6 +346,7 @@
       "receive": "받기",
       "remove": "제거",
       "save": "저장",
+      "skip": "건너뛰기",
       "send": "보내기",
       "send_another": "다른 것 보내기",
       "share": "공유",
@@ -371,6 +444,57 @@
         "description": "\n주소를 길게 눌러 복사할 수도 있습니다."
       }
     },
+    "check_identifier": {
+      "title": "인증 필요",
+      "description": "기기를 변경하거나 레인보우를 재설치한 것 같습니다. 키체인 데이터의 건강 상태를 확인할 수 있도록 인증해 주시기 바랍니다.",
+      "action": "인증",
+      "dismiss": "거부",
+      "error_alert": {
+        "title": "키체인 검증 오류",
+        "message": "키체인 데이터를 검증하는 중에 오류가 발생했습니다. 다시 시도해 주세요. 문제가 계속되면 지원팀에 문의해 주세요.",
+        "contact_support": "지원팀에 문의",
+        "cancel": "취소"
+      },
+      "failure_alert": {
+        "title": "키체인 데이터 무효",
+        "message": "키체인 데이터의 무결성을 확인할 수 없었습니다. 지갑을 복원하고 다시 시도해 주세요. 문제가 계속되면 지원팀에 문의해 주세요.",
+        "action": "계속"
+      }
+    },
+    "claimables": {
+      "panel": {
+        "estimating_gas_fee": "가스 수수료 예상 중...",
+        "gas_error": "가스 오류",
+        "quote_error": "견적 오류",
+        "no_route_found": "경로를 찾을 수 없음",
+        "fetching_quote": "견적 가져오는 중...",
+        "rainbow_eth_rewards": "레인보우 ETH 리워드",
+        "merkl_claimable": "%{dappName} 볼트",
+        "merkl_claimable_description": "%{assetSymbols} 전략",
+        "select_a_network": "네트워크 선택",
+        "select_a_token": "토큰 선택",
+        "amount_to_claim_on_network": "%{amount}을(를) %{network}에서 청구",
+        "claim": "청구",
+        "claiming": "청구 중",
+        "claim_in_progress": "청구 진행 중...",
+        "claimed": "청구 완료!",
+        "claiming_failed": "청구 실패",
+        "insufficient_funds": "자금이 부족합니다",
+        "hold_to_claim": "청구하려면 유지",
+        "creator_lp_fees": "크리에이터 LP 수수료",
+        "rainbow_token_launcher": "레인보우 토큰 런처",
+        "claim_amount": "%{amount} 청구",
+        "done": "완료",
+        "try_again": "다시 시도하기",
+        "tokens_on_the_way": "토큰이 도착 중입니다!",
+        "a_token": "토큰",
+        "a_network": "네트워크",
+        "swap_failed": "교환 실패",
+        "receive": "받기",
+        "on": "켜짐",
+        "reset": "리셋"
+      }
+    },
     "cloud": {
       "backup_success": "당신의 지갑이 성공적으로 백업되었습니다!"
     },
@@ -400,19 +524,27 @@
     },
     "developer_settings": {
       "alert": "알림",
+      "analyze_env_variables": "환경 변수 분석",
+      "analyze_react_query": "React 쿼리 분석",
+      "analyze_user_assets_query": "사용자 자산 쿼리 분석",
       "applied": "적용됨",
-      "backups_deleted_successfully": "백업이 성공적으로 삭제되었습니다",
-      "clear_async_storage": "비동기 저장소 지우기",
+      "backups_deleted_successfully": "백업이 성공적으로 삭제됨",
+      "clear_async_storage": "AsyncStorage 지우기",
       "clear_pending_txs": "보류 중인 거래 청소",
       "clear_image_cache": "이미지 캐시 지우기",
       "clear_image_metadata_cache": "이미지 메타데이터 캐시 지우기",
       "clear_local_storage": "로컬 저장소 지우기",
-      "clear_mmkv_storage": "MMKV 저장소 지우기",
-      "connect_to_hardhat": "하드햇에 연결",
-      "crash_app_render_error": "애플리케이션 종료 (렌더링 오류)",
+      "clear_mmkv_storage": "MMKV 스토리지 지우기",
+      "clear_react_query_cache": "React 쿼리 캐시 지우기",
+      "connect_to_anvil": "Anvil에 연결",
+      "copy_fcm_token": "FCM 토큰 복사",
+      "copy_log_lines": "로그 라인 복사",
+      "copy_signing_wallet_address": "서명 지갑 주소 복사",
+      "disconnect_to_anvil": "Anvil 연결 해제",
+      "crash_app_render_error": "앱 충돌(렌더링 오류)",
       "enable_testnets": "테스트넷 활성화",
       "installing_update": "업데이트 설치 중",
-      "navigation_entry_point": "탐색 진입점",
+      "navigation_entry_point": "네비게이션 시작점",
       "no_update": "업데이트 없음",
       "not_applied": "적용되지 않음",
       "notifications_debug": "알림 디버그",
@@ -424,9 +556,9 @@
         "alert_body": "🚨🚨🚨 \n이렇게 하면 지갑의 모든 프라이빗 키와 데이터가 영구적으로 삭제됩니다. 진행하기 전에 모든 것이 백업되었는지 확인하십시오!! \n🚨🚨🚨"
       },
       "restart_app": "앱 재시작",
-      "reset_experimental_config": "실험적 구성 재설정",
+      "reset_experimental_config": "실험 설정 재설정",
       "status": "상태",
-      "sync_codepush": "코드푸시 동기화"
+      "sync_codepush": "CodePush 동기화"
     },
     "discover": {
       "pulse": {
@@ -435,7 +567,6 @@
         "trading_at_prefix": "거래 중"
       },
       "search": {
-        "profiles": "프로필들",
         "search_ethereum": "이더리움 전체 검색",
         "search_ethereum_short": "이더리움 검색",
         "search": "검색",
@@ -480,9 +611,14 @@
         "expires_in": "%{minutes}분 후에 만료됩니다",
         "from_divider": "from",
         "to_divider": "에게",
+        "token": "토큰",
         "view_on": "%{blockExplorerName}에서 보기",
-        "view_on_etherscan": "Etherscan에서 보기"
+        "view_on_etherscan": "Etherscan에서 보기",
+        "copy_contract_address": "계약 주소 복사"
       },
+      "all_networks": "모든 네트워크",
+      "filter_by_network": "네트워크별 필터링",
+      "my_tokens": "내 토큰들",
       "flip": "뒤집기",
       "max": "최대",
       "movers": {
@@ -501,9 +637,31 @@
         "nothing_here": "여기 아무것도 없음!",
         "nothing_to_send": "보낼 것이 없음"
       },
+      "quote_errors": {
+        "501": "견적이 없음",
+        "no_quote_available": "견적이 없음",
+        "502": "충분하지 않은 유동성",
+        "insufficient_liquidity": "충분하지 않은 유동성",
+        "503": "전송 수수료 토큰",
+        "fee_on_transfer": "전송 수수료 토큰",
+        "504": "경로를 찾을 수 없음",
+        "no_route_found": "경로를 찾을 수 없음"
+      },
       "price_impact": {
+        "long_wait": {
+          "title": "긴 대기 시간",
+          "description": "약 %{time}",
+          "description_prefix": "약."
+        },
+        "unknown_price": {
+          "title": "시장 가치 불명",
+          "description": "계속하기로 결정하시면, 인용된 금액을 받는 것에 만족하는지 확인하세요."
+        },
         "losing_prefix": "손실",
         "small_market": "소형 시장",
+        "small_market_try_smaller_amount": "수요가 작은 시장 — 더 작은 금액을 시도해 보세요",
+        "you_are_losing": "당신은 %{priceImpact}를 잃었습니다",
+        "you_are_losing_prefix": "손실 중",
         "label": "가능한 손실"
       },
       "source": {
@@ -518,7 +676,6 @@
       "high": "높은",
       "slippage_tolerance": "최대 슬리피지",
       "source_picker": "스왑 경로 via",
-      "use_flashbots": "플래시봇 사용",
       "swapping_for_prefix": "다음을 교환",
       "view_details": "상세 정보 보기",
       "token_sections": {
@@ -547,15 +704,85 @@
         "social": {
           "facebook": "페이스북",
           "homepage": "홈페이지",
+          "website": "웹사이트",
           "reddit": "레딧",
           "telegram": "텔레그램",
-          "twitter": "트위터"
+          "twitter": "트위터",
+          "warpcast": "워프캐스트",
+          "farcaster": "Farcaster",
+          "other": "기타",
+          "search_on_twitter": "트위터에서 검색"
         },
         "uniswap_liquidity": "유니스wap 유동성",
         "value": "가치",
-        "volume_24_hours": "24시간 거래량"
+        "volume_24_hours": "24시간 거래량",
+        "menu": {
+          "view_on": "%{blockExplorerName}에서 보기",
+          "share": "공유",
+          "copy_contract_address": "계약 주소 복사",
+          "pin": "핀",
+          "unpin": "고정 해제",
+          "hide": "숨기다",
+          "unhide": "숨김 해제"
+        },
+        "no_data_available": "데이터 없음"
+      },
+      "sections": {
+        "market_stats": {
+          "title": "시장 통계",
+          "circulating_supply": "유통 공급",
+          "max_supply": "최대 공급량",
+          "fully_diluted_valuation": "완전 희석된 평가",
+          "created_by": "제작자",
+          "market_cap": "시가 총액",
+          "created": "생성됨",
+          "volume_24_hours": "24시간 거래량",
+          "rank": "순위"
+        },
+        "buy": {
+          "title": "구매",
+          "pay_with": "구매 방식",
+          "available_balance": "사용 가능한 잔액",
+          "open_swaps": "열린 스왑",
+          "low_balance": "잔액 부족"
+        },
+        "claim": {
+          "claim_button": "에어드랍 청구",
+          "created_by": "%{creator}에 의해 생성됨",
+          "title": "청구"
+        },
+        "about": {
+          "title": "정보",
+          "what_is": "%{assetName}에 대해 알고 싶으세요?"
+        },
+        "history": {
+          "title": "기록",
+          "tabs": {
+            "all": "모두",
+            "buys": "구매",
+            "sells": "판매"
+          },
+          "more": "더 보기",
+          "less": "적게",
+          "bought": "구매함",
+          "sold": "판매한",
+          "received": "받음",
+          "sent": "보냄",
+          "unknown": "미지"
+        }
       },
       "chart": {
+        "candlestick": {
+          "candle_field_labels": {
+            "c": "닫기",
+            "h": "H",
+            "l": "L",
+            "o": "열기",
+            "t": "",
+            "v": "V"
+          },
+          "no_volume_label": "없음"
+        },
         "all_time": "모든 시간",
         "date": {
           "months": {
@@ -573,9 +800,10 @@
             "month_11": "12월"
           }
         },
-        "no_price_data": "가격 정보 없음",
+        "no_chart_data": "차트 데이터 없음",
+        "no_price_data": "가격 데이터 없음",
         "past_timespan": "과거 %{formattedTimespan}",
-        "today": "오늘",
+        "today": "지난날",
         "token_pool": "%{tokenName} 풀(Pool)"
       },
       "contact_profile": {
@@ -599,9 +827,9 @@
       "swap": {
         "swap": "교환",
         "bridge": "브릿지",
-        "flashbots_protect": "Flashbots 보호",
         "losing": "손실",
         "on": "켜기",
+        "off": "끄기",
         "price_impact": "가격 영향",
         "price_row_per_token": "당",
         "slippage_message": "이것은 작은 시장이므로 나쁜 가격을 얻고 있습니다. 더 작은 거래를 시도해보세요!",
@@ -638,6 +866,16 @@
         "number_of_steps": "%{number} 단계",
         "input_exchange_rate": "1 %{inputSymbol} 에 대해 %{executionRate} %{outputSymbol}",
         "output_exchange_rate": "1 %{outputSymbol} 에 대해 %{executionRate} %{inputSymbol}"
+      },
+      "swap_details_v2": {
+        "automatic": "자동",
+        "degen_mode": "Degen모드",
+        "degen_mode_description": "리뷰 단계를 건너뛰어 더 빠르게 교환",
+        "maximum_sold": "최대 판매",
+        "minimum_received": "최소 수령량",
+        "preferred_network": "선호 네트워크",
+        "rainbow_fee": "포함된 레인보우 비용",
+        "settings": "설정"
       },
       "token_index": {
         "get_token": "%{assetSymbol}얻기",
@@ -677,11 +915,14 @@
         "registrant": "등록자",
         "resolver": "해결자",
         "save_to_photos": "사진에 저장",
+        "sell_for_x": "%{price}에 판매하기",
         "set_primary_name": "내 ENS 이름으로 설정",
         "share_token_info": "공유 %{uniqueTokenName} 정보",
         "showcase": "쇼케이스",
         "toast_added_to_showcase": "쇼케이스에 추가됨",
         "toast_removed_from_showcase": "쇼케이스에서 제거됨",
+        "refreshing": "메타데이터 새로 고침 중...",
+        "reported": "스팸으로 신고됨",
         "twitter": "트위터",
         "view_all_with_property": "속성을 가진 모든 것 보기",
         "view_collection": "컬렉션 보기",
@@ -691,30 +932,41 @@
         "view_on_platform": "조회 %{platform}에서",
         "view_on_web": "웹에서 보기",
         "refresh": "메타데이터 새로 고침",
+        "report": "스팸으로 신고하기",
         "hide": "숨기다",
         "unhide": "숨김 해제"
       }
     },
+    "app_icon_unlock_sheet": {
+      "smol_description": "보물을 발견했습니다! Smolverse NFT를 보유하고 있어 맞춤 아이콘을 잠금 해제했습니다!",
+      "smol_title": "잠금 해제\nRainbow 􀆄 SMOL",
+      "optimism_description": "Optimism에서의 NFT를 기념하여, Rainbow와 Optimism이 협력하여 당신과 같은 Optimistic Explorers를 위한 한정판 앱 아이콘을 출시했습니다!",
+      "optimism_title": "잠금 해제\nRainbow 􀆄 Optimism",
+      "zora_description": "마법 같은 고민을 위한 특별판 Rainbow Zorb 아이콘입니다.",
+      "zora_title": "잠금 해제\nRainbow 􀆄 Zora",
+      "finiliar_description": "비가 오나 눈이 오나 가스비를 항상 최신으로 알려주는 한정판 Rainbow Fini 아이콘입니다.",
+      "finiliar_title": "잠금 해제\nRainbow Fini",
+      "golddoge_description": "Kabosu의 17번째 생일을 기념하여 출시된 한정판 금색 Rainbow 앱 아이콘입니다.",
+      "golddoge_title": "잠금 해제\nRainbow 􀆄 DOGE",
+      "raindoge_description": "Kabosu의 17번째 생일을 기념하여 출시된 한정판 Rainbow 앱 아이콘입니다.",
+      "raindoge_title": "잠금 해제\nRainbow 􀆄 The Doge NFT",
+      "pooly_description": "자유를 지지하는 사람들을 위한 특별판 Rainbow Pooly 아이콘입니다.",
+      "pooly_title": "잠금 해제\nRainbow Pooly",
+      "zorb_description": "100% 사랑하는 것을 더 빠르고 효율적으로 제공하는 특별판 Rainbow Zorb입니다.",
+      "zorb_title": "잠금 해제\nRainbow Zorb Energy!",
+      "poolboy_description": "온체인 여름을 위한 특별판 Rainbow x Poolsuite 아이콘입니다.",
+      "poolboy_title": "잠금 해제\nRainbow Poolboy!",
+      "adworld_description": "Rainbow World Citizen으로서 이제 특별판 AdWorld x Rainbow 앱 아이콘을 잠금 해제할 수 있습니다.",
+      "adworld_title": "Rainbow World에 오신 것을 환영합니다!",
+      "farcaster_description": "Warpcast의 밋밋한 미니멀리즘에서 영감을 받은 가장 지루한 앱 아이콘입니다.",
+      "farcaster_title": "잠금 해제\nRainbowcast",
+      "redacted_description": "진정한 Gdupi 애호가를 위한 stupi 전용 Rainbow 아이콘입니다.",
+      "redacted_title": "잠금 해제 완료\nRedacted Rainbow",
+      "baggy_description": "스트릿에서 체인으로, 이 작은 가방은 레인보우의 분위기를 휴대할 수 있도록 합니다. 색깔을 맛보고 차이를 느껴보세요.",
+      "baggy_title": "잠금 해제\n Rainbow Baggy",
+      "button": "아이콘 잡기"
+    },
     "explain": {
-      "icon_unlock": {
-        "smol_text": "보물을 찾았습니다! 당신은 Smolverse NFT를 보유하고 있기 때문에 사용자 정의 아이콘을 해제했습니다!",
-        "optimism_text": "Optimism에서 NFT를 축하하기 위해 Rainbow와 Optimism은 당신처럼 낙관적으로 탐험할 수 있는 제한된 판매량의 앱 아이콘을 떨어뜨렸습니다!",
-        "zora_text": "매법적인 묵상을 위해 만들어진 특별한 에디션 Rainbow Zorb 아이콘.",
-        "finiliar_text": "가스 가격에 관계없이 당신을 최신 상태로 유지하는 특별한 에디션 Rainbow Fini 아이콘.",
-        "finiliar_title": "당신은\n무지개 Fini를 해제했습니다",
-        "golddoge_text": "Kabosu의 17번째 생일을 축하하는 한정판 금색 Rainbow 앱 아이콘.",
-        "raindoge_text": "Kabosu의 17번째 생일을 축하하는 한정판 Rainbow 앱 아이콘.",
-        "pooly_text": "자유 지지자들을 위한 특별판 레인보우 Pooly 아이콘.",
-        "pooly_title": "\n레인보우 Pooly를 해제하였습니다",
-        "zorb_text": "사랑하는 모든 것의 100%를 더 빠르고 효율적으로 가진 특별판 레인보우 Zorb:\n",
-        "zorb_title": "\n레인보우 Zorb 에너지를 해제했습니다!",
-        "poolboy_text": "온체인 서머를 위한 특별판 레인보우 x Poolsuite 아이콘.",
-        "poolboy_title": "\n무지개 수영장 소년을 해제하셨습니다!",
-        "adworld_text": "레인보우 월드 시민으로서, 이제 특별 에디션\nAdWorld x Rainbow 앱 아이콘을 잠금 해제할 수 있습니다.",
-        "adworld_title": "레인보우 월드에 오신 것을 환영합니다!",
-        "title": "\n무지개 􀆄 %{partner}을 해제하셨습니다!",
-        "button": "아이콘 획득하기"
-      },
       "output_disabled": {
         "text": "Rainbow는 %{fromNetwork}에 대해 수신하려는 %{outputToken} 의 금액을 기반으로 스왑을 준비할 수 없습니다. \n\n 대신 스왑하려는 %{inputToken} 의 금액을 입력해 보세요.",
         "title": "대신 %{inputToken} 을 입력하세요",
@@ -728,9 +980,16 @@
         "title_plural": "%{length} 네트워크에서 이용 가능",
         "title_singular": "%{network} 네트워크에서 이용 가능"
       },
+      "default_network_explainer": {
+        "text": "%{chainName}은 Ethereum 위에서 실행되는 레이어 2 네트워크로, 더 저렴하고 빠른 거래를 가능하게 하면서 Ethereum의 기본 보안의 이점을 계속 제공받습니다.",
+        "title": "%{chainName}란 무엇인가요?"
+      },
       "arbitrum": {
         "text": "Arbitrum은 Ethereum 위에서 작동하는 계층 2 네트워크로, 더 저렴하고 빠른 거래를 가능하게 하면서도 Ethereum의 기본 보안에서 혜택을 받습니다.\n\n이는 많은 거래를 \"롤업\"에 묶어 Ethereum에 영구적으로 보내기 전에 함께 보냅니다.",
         "title": "Arbitrum이 무엇인가요?"
+      },
+      "add_to_backups": {
+        "title": "%{walletName} 백업 중"
       },
       "backup": {
         "title": "중요"
@@ -775,25 +1034,69 @@
         "text": "마이너 팁은 네트워크에서 귀하의 거래를 확인하는 마이너에게 직접 갑니다.\n\n더 높은 팁을 내면 거래가 더 빠르게 확정될 가능성이 높아집니다.",
         "title": "마이너 팁"
       },
-      "optimism": {
-        "text": "Optimism은 Ethereum 위에 실행되는 Layer 2 네트워크로, Ethereum의 기본 보안에서 여전히 혜택을 받으면서 저렴하고 빠른 거래를 가능하게 합니다.\n\n한 번에 많은 거래를 \"roll up\"하여 Ethereum에 영구적으로 보냅니다.",
-        "title": "Optimism이란 무엇인가요?"
+      "apechain": {
+        "text": "ApeChain은 Arbitrum Orbit와 Ethereum 위에서 운영되는 레이어 3 네트워크입니다.\n\n이것은 ApeCoin의 유용성을 크게 향상시키며, $APE에 의해 이끌어지는 강력하고 역동적인 경제를 촉진합니다.",
+        "title": "ApeChain이란 무엇인가요?"
+      },
+      "avalanche": {
+        "text": "Avalanche는 이더리움과 함께 실행되는 별도의 네트워크인 사이드체인입니다.\n\n더 저렴하고 빠른 거래를 가능하게 하지만, Layer 2 네트워크와 달리 Avalanche는 이더리움과 다른 자체 보안 및 합의 메커니즘을 가지고 있습니다.",
+        "title": "Avalanche란 무엇인가요?"
       },
       "base": {
         "text": "베이스는 이더리움 위에서 실행되는 레이어 2 네트워크로, 거래 비용을 낮추고 속도를 높이면서도 이더리움의 기본 보안에서 여전히 혜택을 받습니다.\n\n그것은 많은 거래를 한꺼번에 \"롤업\"에 묶어 이더리움에 영구적으로 보내서 보관합니다.",
-        "title": "베이스란 무엇인가?"
+        "title": "Base란 무엇인가요?"
       },
-      "zora": {
-        "text": "조라는 이더리움 위에서 실행되는 레이어 2 네트워크로, 거래 비용을 낮추고 속도를 높이면서도 이더리움의 기본 보안에서 여전히 혜택을 받습니다.\n\n그것은 많은 거래를 한꺼번에 \"롤업\"에 묶어 이더리움에 영구적으로 보내서 보관합니다.",
-        "title": "조라란 무엇인가?"
+      "blast": {
+        "text": "Blast는 이더리움 위에서 실행되는 Layer 2 네트워크로, 더 저렴하고 빠른 거래를 가능하게 하면서도 이더리움의 기본적인 보안 혜택을 누릴 수 있습니다.\n\n여러 거래를 \"롤업\"하여 영구적으로 이더리움에 저장하기 전에 묶습니다.",
+        "title": "Blast란 무엇인가요?"
+      },
+      "bsc": {
+        "text": "바이낸스 스마트 체인(BSC)은 거래 플랫폼인 바이낸스를 위한 블록체인입니다. \n\nBSC는 거래 비용을 줄이고 속도를 높여주지만, 레이어 2 네트워크와 달리 자체 보안 및 합의 메커니즘이 이더리움과 다릅니다.",
+        "title": "Binance 스마트 체인이 무엇인가요?"
+      },
+      "degen": {
+        "text": "디젠 체인은 Arbitrum Orbit와 Ethereum 위에서 운영되는 레이어 3 네트워크입니다.",
+        "title": "Degen Chain이란 무엇인가요?"
+      },
+      "gravity": {
+        "text": "Gravity는 Galxe가 구축한 고성능 레이어 1 블록체인으로, 초당 1기가가스 이상의 처리량과 초 이내의 확정성을 달성합니다.\n\n이는 파이프라인 처리된 AptosBFT 합의 엔진과 병렬 EVM 런타임을 활용하며, 리스테이킹 기술을 통해 PoS 보안을 유지합니다.",
+        "title": "Gravity란 무엇인가요?"
+      },
+      "gnosis": {
+        "text": "Gnosis 체인은 다양한 검증자가 전 세계적으로 운영하는 커뮤니티 소유의 Ethereum 사이드체인입니다.\n\n이는 복원력과 신뢰할 수 있는 중립성에 중점을 두고, 자체 보안 및 합의 메커니즘을 유지하면서 더 저렴하고 빠른 거래를 제공합니다.",
+        "title": "Gnosis란 무엇인가요?"
+      },
+      "ink": {
+        "text": "Ink는 OP 스택 위에 구축된 레이어 2 네트워크로, 초이내의 블록 시간과 낮은 거래 수수료를 제공함으로써 Ethereum의 확장성을 목표로 설계되었습니다.\n\nKraken에 의해 출시되었고 Superchain의 일부인 Ink는 DeFi 응용 프로그램의 성능과 접근성을 향상시키는 것을 목표로 합니다.",
+        "title": "Ink란 무엇인가요?"
+      },
+      "linea": {
+        "text": "Linea는 ConsenSys에서 개발한 안전하고 적은 비용의 Ethereum 등가 레이어 2 블록체인입니다.\n\n이는 보안과 탈중앙화를 손상시키지 않으면서 거래를 더 빠르고 저렴하게 하고, 다음 10억 명의 사용자를 web3로 끌어들이는 것을 목표로 합니다.",
+        "title": "Linea란 무엇인가요?"
+      },
+      "opmainnet": {
+        "text": "Optimism은 Ethereum 위에 실행되는 Layer 2 네트워크로, Ethereum의 기본 보안에서 여전히 혜택을 받으면서 저렴하고 빠른 거래를 가능하게 합니다.\n\n한 번에 많은 거래를 \"roll up\"하여 Ethereum에 영구적으로 보냅니다.",
+        "title": "Optimism이란 무엇인가요?"
       },
       "polygon": {
         "text": "폴리곤은 사이드체인으로, 이더리움과 병행하여 실행되는 독립된 네트워크입니다.\n\n이는 거래 비용을 줄이고 속도를 높여주지만, 레이어 2 네트워크와 달리 폴리곤은 이더리움과 다른 자체 보안 및 합의 메커니즘을 가지고 있습니다.",
         "title": "폴리곤이란 무엇인가?"
       },
-      "bsc": {
-        "text": "바이낸스 스마트 체인(BSC)은 거래 플랫폼인 바이낸스를 위한 블록체인입니다. \n\nBSC는 거래 비용을 줄이고 속도를 높여주지만, 레이어 2 네트워크와 달리 자체 보안 및 합의 메커니즘이 이더리움과 다릅니다.",
-        "title": "Binance 스마트 체인이 무엇인가요?"
+      "scroll": {
+        "text": "Scroll은 Ethereum 위에 구축된 레이어 2 솔루션으로, 확장성과 거래 효율성을 향상시키는 것을 목표로 하고 있습니다.\n\n이는 롤업 기술을 사용하여 거래를 번들화한 후 Ethereum에 제출되며, 이의 보안 인프라의 이점을 얻습니다.",
+        "title": "Scroll이란 무엇인가요?"
+      },
+      "sanko": {
+        "text": "Sanko는 Arbitrum과 Ethereum 위에서 동작하는 레이어 3 네트워크로, NFT 및 게임에 초점을 맞추고 있습니다.\n\n이는 상태 검증을 위해 AnyTrust 데이터 가용성과 사기 증명을 사용하여 Ethereum의 보안을 활용하면서 거래를 더 빠르고 저렴하게 할 수 있습니다. Sanko는 DMT라는 네이티브 토큰을 특징으로 하며, 상태 루트를 제안하고 도전하는 화이트리스트된 검증자를 고용합니다.",
+        "title": "Sanko란 무엇인가요?"
+      },
+      "zksync": {
+        "text": "ZKsync는 고급 영지식 암호학적 증명을 사용하여 Ethereum을 확장하도록 설계된 레이어 2 프로토콜입니다.\n\n이는 탈중앙화와 보안을 유지하면서 Ethereum의 처리량을 증가시키며, 더 빠르고 저렴한 거래를 가능하게 합니다.",
+        "title": "Zksync란 무엇인가요?"
+      },
+      "zora": {
+        "text": "조라는 이더리움 위에서 실행되는 레이어 2 네트워크로, 거래 비용을 낮추고 속도를 높이면서도 이더리움의 기본 보안에서 여전히 혜택을 받습니다.\n\n그것은 많은 거래를 한꺼번에 \"롤업\"에 묶어 이더리움에 영구적으로 보내서 보관합니다.",
+        "title": "조라란 무엇인가?"
       },
       "read_more": "더 읽기",
       "learn_more": "더 알아보기",
@@ -867,15 +1170,6 @@
           "fragment3": " 슬리피지에 대해 그리고 이것이 스왑에 어떻게 영향을 미치는지."
         }
       },
-      "flashbots": {
-        "text": "Flashbots는 프론트런닝 및 샌드위치 공격으로 인해 더 나쁜 가격을 받거나 거래가 실패할 수 있는 상황에서 거래를 보호합니다.",
-        "title": "Flashbots",
-        "still_curious": {
-          "fragment1": "아직 궁금한가요? ",
-          "fragment2": "더 읽기",
-          "fragment3": " Flashbots가 제공하는 보호에 대해."
-        }
-      },
       "swap_refuel": {
         "title": "No %{networkName} %{gasToken} 감지됨",
         "text": "%{networkName} 없이는 %{networkName} %{gasToken}사용할 수 없습니다. 우리는 이 브리지에 약 3달러의 ETH를 사용하여 이를 원활하게 묶을 수 있습니다.",
@@ -890,6 +1184,30 @@
         "title": "No %{networkName} %{gasToken} 감지됨",
         "text": "%{networkName} 를 %{networkName} 없이 사용할 수 없습니다 %{gasToken}. 이 거래를 진행하면 여러분의 %{networkName} 토큰을 스왑, 브리지, 또는 전송할 수 없게 되며, 지갑에 %{networkName} %{gasToken} 를 추가해야 합니다.",
         "button": "그럼에도 불구하고 진행"
+      },
+      "ens_primary_name": {
+        "title": "ENS 이름을 설정하는 것은 무엇을 의미합니까?",
+        "text": "사람들은 무언가를 보낼 때 전체 Ethereum 주소 대신 dApps에 귀하의 .eth 이름을 입력할 수 있으며, dApps는 귀하의 .eth 이름과 프로필을 사용하여 귀하에 대한 정보를 표시할 수 있습니다. 이는 '주요'로 ENS 이름을 설정하는 것으로도 알려져 있습니다."
+      },
+      "ens_on_chain_data_warning": {
+        "title": "주의!",
+        "text": "여기에 제공한 데이터는 모든 사람에게 보이는 Ethereum 블록체인에 저장됩니다. 공개하는 데 불편한 데이터는 공유하지 마십시오."
+      },
+      "ens_manager": {
+        "title": ".eth 관리자란 무엇입니까?",
+        "text": ".eth 이름의 관리자는 레코드를 설정 및 업데이트하고 해당 이름의 하위 도메인을 생성하거나 구성을 관리할 수 있습니다. 관리자는 .eth 이름의 소유자가 설정하며 ENS 이름의 컨트롤러로도 알려져 있습니다."
+      },
+      "ens_owner": {
+        "title": ".eth 이름의 소유자란 무엇입니까?",
+        "text": ".eth 이름의 소유자는 해당 이름에 대한 완전하고 궁극적인 통제권을 가지고 있습니다. 그들은 원한다면 이름의 소유권을 이전하고 누군가가 자신을 대신해 이름을 관리하도록 허용할 수 있습니다(기록 설정 등). 소유자는 ENS 이름의 등록자로도 알려져 있습니다."
+      },
+      "ens_resolver": {
+        "title": ".eth 해석자는 무엇인가요?",
+        "text": "해석자는 이름에서 자원(예: 암호화폐 주소, 콘텐츠 해시 등)으로 매핑하는 계약입니다. 해석자는 레지스트리에 있는 해석자 필드에 의해 지시됩니다."
+      },
+      "ens_configuration": {
+        "title": "이 옵션들은 어떤 의미인가요?",
+        "text": "ENS 이름을 다른 사람에게 보내고 새로운 ENS 이름 소유자로 만들 때, 그들을 위해 미리 설정하여 나중에 거래를 저장할 수 있습니다. Rainbow는 현재 이름에 설정된 프로필 정보를 지우고, 수령인의 주소를 가리키도록 ENS 이름을 구성하며 수령인 주소를 이름의 관리자로 만들 수 있게 해줍니다."
       }
     },
     "fedora": {
@@ -906,6 +1224,7 @@
       }
     },
     "gas": {
+      "gas_settings": "가스 설정",
       "card": {
         "falling": "하락",
         "rising": "상승",
@@ -919,14 +1238,17 @@
         "urgent": "긴급",
         "custom": "사용자 정의"
       },
-      "network_fee": "예상 네트워크 수수료",
+      "unable_to_determine_selected_gas": "선택된 가스를 확인할 수 없음",
+      "network_fee": "추정 네트워크 수수료",
       "current_base_fee": "현재 기본 수수료",
       "max_base_fee": "최대 기본료",
       "miner_tip": "마이너 팁",
+      "gas_price": "가스 가격",
       "max_transaction_fee": "최대 거래 수수료",
       "warning_separator": "·",
       "lower_than_suggested": "낮음 · 특이사항 가능성",
       "higher_than_suggested": "높음 · 과도한 지불",
+      "likely_to_fail": "낮음 · 실패 가능성 큼",
       "max_base_fee_too_low_error": "낮음 · 실패 가능성 큼",
       "tip_too_low_error": "낮음 · 실패 가능성 큼",
       "alert_message_higher_miner_tip_needed": "문제를 피하기 위해 더 높은 광부 팁 설정이 권장됩니다.",
@@ -1018,6 +1340,12 @@
         "check_out_this_wallet": "이 지갑의 수집품을 🌈 레인보우에서 확인하세요 %{showcaseUrl}"
       }
     },
+    "loading": {
+      "backing_up": "백업 중...",
+      "creating_wallet": "지갑 생성 중...",
+      "importing_wallet": "가져오는 중...",
+      "restoring": "복구 중..."
+    },
     "message": {
       "click_to_copy_to_clipboard": "클립보드에 복사하려면 클릭하세요",
       "coming_soon": "곧 출시됩니다...",
@@ -1091,7 +1419,7 @@
             "manual": "수동으로 백업"
           },
           "description": "지갑을 잃지 마세요! 암호화된 복사본을 %{cloudPlatformName}에 저장하세요",
-          "title": "당신의 지갑을 백업하십시오"
+          "title": "지갑을 어떻게 백업하시겠습니까?"
         },
         "existing": {
           "button": {
@@ -1175,10 +1503,20 @@
     "nfts": {
       "selling": "판매",
       "sort": {
+        "ABC": "가나다",
         "abc": "가나다",
+        "MOST_RECENT": "최근",
         "most_recent": "최신순",
-        "floor_price": "최저 가격"
-      }
+        "FLOOR_PRICE": "최저 가격",
+        "floor_price": "최저 가격",
+        "order": {
+          "asc": "오름차순",
+          "desc": "내림차순"
+        }
+      },
+      "empty": "수집품",
+      "collect_now": "지금 수집",
+      "will_appear_here": "여기에 수집품이 나타납니다"
     },
     "nft_offers": {
       "card": {
@@ -1214,6 +1552,7 @@
         "offer_expired": "제안 만료됨",
         "expired": "만료됨",
         "hold_to_sell": "판매하기 위해 보류",
+        "selling": "판매",
         "error": {
           "title": "NFT 판매 중 오류",
           "message": "도움이 필요하면 Rainbow 지원팀에 문의하십시오."
@@ -1245,13 +1584,16 @@
       },
       "claim": {
         "title": "포인트를 청구하세요",
+        "title_rewards_line_1": "환영합니다",
+        "title_rewards_line_2": "레인보우 리워드",
         "subtitle": "포인트가 도착했습니다. 얼마나 많은 포인트를 받았는지 확인하세요.",
+        "subtitle_rewards": "레인보우 사용으로 리워드를 받으세요. 온체인에서 활동하고, 포인트를 얻고, ETH를 벌 수 있습니다.",
         "get_started": "시작하기",
         "use_referral_code": "추천 코드 사용"
       },
       "referral": {
         "title": "추천 코드를 입력하세요",
-        "subtitle": "아래에 추천 코드를 입력하여 보너스 보상을 받으세요.",
+        "subtitle": "포인트 보너스를 받으려면 아래에 추천 코드를 입력하세요.",
         "back": "뒤로",
         "error": "문제가 발생했습니다. 앱을 다시 시작하고 다시 시도해 주세요.",
         "get_started": "시작하기",
@@ -1266,6 +1608,7 @@
         "share_link": "링크 공유하기",
         "next_drop": "다음 드롭",
         "your_rank": "당신의 순위",
+        "no_change": "변경 없음",
         "of_x": "%{totalUsers}의",
         "referrals": "추천인",
         "streak": "연속",
@@ -1283,12 +1626,40 @@
         "today": "오늘",
         "error": "이런!\n새로고침해 주세요.",
         "points": "포인트",
+        "points_capitalized": "포인트",
         "referral_code_copied": "추천 코드가 복사되었습니다",
         "earn_points_for_referring": "당신의 추천인이 Rainbow를 통해 $100를 교환할 때 포인트를 적립하고, 추천인이 적립한 포인트의 10%를 추가로 적립하세요",
         "already_claimed_points": "죄송합니다! 이미 포인트를 청구하셨습니다.",
         "now": "지금",
         "unranked": "순위 없음",
-        "points_to_rank": "등급까지 750포인트"
+        "points_to_rank": "등급까지 750포인트",
+        "ranking": "%{rank}위에 배치됨",
+        "available_to_claim": "클레임 가능",
+        "claim": "%{value} 클레임",
+        "choose_claim_network": "클레임 네트워크 선택",
+        "claim_on_network": "%{network}에서 클레임하기",
+        "claimed_on_network": "%{network}에서 클레임됨",
+        "claiming_on_network": "%{network}에서 클레임 중",
+        "error_claiming": "청구 실패",
+        "free_to_claim": "무료 클레임 가능",
+        "has_bridge_fee": "브릿지 수수료 있음",
+        "claim_rewards": "리워드 클레임",
+        "earned_last_week": "지난주 적립",
+        "top_10_earner": "상위 10위 적립자",
+        "zero_points": "0 포인트",
+        "no_weekly_rank": "주간 순위 없음",
+        "none": "없음",
+        "my_earnings": "나의 수익",
+        "claimed_earnings": "클레임된 수익",
+        "current_value": "현재 값",
+        "rainbow_users_have_earned": "레인보우 사용자가 벌어들인 수익",
+        "earn_eth_rewards": "ETH 리워드 적립",
+        "rewards_explainer": "매주 상위 주간 포인트 적립자는 레인보우의 온체인 수익의 일부를 받습니다. 레인보우에서 스왑하거나 거래를 하고, Dapp을 사용하거나 친구를 추천하여 포인트를 모으세요.",
+        "my_points": "나의 포인트",
+        "refer_friends": "친구 추천",
+        "try_again": "다시 시도하기",
+        "bridge_error": "부분 성공",
+        "bridge_error_explainer": "귀하의 보상은 Optimism에서 성공적으로 수령되었지만, %{network}으로의 전송이 실패했습니다. 원하시면 Swap 기능을 사용하여 보상을 수동으로 브리지할 수 있습니다."
       },
       "console": {
         "claim_bonus_paragraph": "Rainbow에서 최소 $100를 스왑하면 추가로 100점을 받게 됩니다",
@@ -1320,7 +1691,7 @@
         "invalid_referral_code_alert": "유효하지 않은 추천 코드입니다. 코드를 다시 확인하고 다시 시도해 주세요.",
         "no_balance_alert": "포인트에 등록하려면 지갑 잔액이 0이 아니어야 합니다.",
         "referral_link_is_ready": "당신의 추천 링크가 준비되었습니다",
-        "referral_link_bonus_text": "당신의 추천 링크를 트윗하여 추가적인 250 포인트를 얻으세요",
+        "referral_link_bonus_text": "추천 링크를 트윗하면 추천받은 분들이 얻는 포인트의 10%를 받을 수 있습니다",
         "referral_link_bonus_text_extended": "더하여 당신이 추천한 사람들이 얻은 포인트의 10%를 벌 수 있습니다",
         "complete_onboarding": "완료",
         "share_to_x": "X에 공유하기",
@@ -1330,6 +1701,7 @@
         "view_weekly_earnings_counted": "주간 수익 집계됨",
         "view_weekly_earnings_close_button": "닫기",
         "view_weekly_earnings_retroactive_points": "소급 포인트",
+        "view_weekly_earnings_bonus_points": "보너스 포인트",
         "view_weekly_earnings_activity": "당신의 활동",
         "view_weekly_earnings_referral_activity": "추천인 활동",
         "view_weekly_earnings_total_earnings": "총액",
@@ -1572,7 +1944,7 @@
         "description": "모든 NFT 마켓 플레이스에서 제공되는 상품을 확인하세요."
       },
       "info_row_2": {
-        "title": "Rainbow의 제안을 수락하세요",
+        "title": "DApp에서 요청한 네임스페이스에 문제가 있습니다. 다시 시도하거나 Rainbow 및 DApp 지원 팀에 문의하십시오.",
         "description": "1탭으로 제안을 수락하고 선택한 토큰으로 교환하세요."
       },
       "info_row_3": {
@@ -1661,10 +2033,20 @@
       }
     },
     "positions": {
+      "lp_range_status": {
+        "full_range": "전체 범위",
+        "out_of_range": "범위 초과",
+        "in_range": "범위 내"
+      },
       "open_dapp": "오픈 􀮶",
       "deposits": "입금",
       "borrows": "대출",
-      "rewards": "보상"
+      "stakes": "스테이킹 완료",
+      "rewards": "보상",
+      "pools": "풀"
+    },
+    "profile": {
+      "title": "활동"
     },
     "savings": {
       "deposit": "예금",
@@ -1700,16 +2082,77 @@
       "no_thanks": "아니요, 괜찮습니다"
     },
     "settings": {
-      "backup": "백업",
+      "backup": "지갑 및 백업",
+      "delete_backups": "모든 %{cloudPlatform} 백업 삭제",
+      "confirm_delete_backups": "확인하고 백업 삭제",
+      "manage_backups": "%{cloudPlatformOrEmail} 백업 관리",
+      "confirm_delete_backups_description": "귀하의 %{cloudPlatform} 지갑 백업을 삭제하시겠습니까?",
       "google_account_used": "백업에 사용된 Google 계정",
       "backup_switch_google_account": "Google 계정 전환",
       "backup_sign_out": "로그아웃",
       "backup_sign_in": "로그인",
       "backup_loading": "로딩 중...",
       "backup_google_account": "Google 계정",
-      "currency": "통화",
+      "currency": {
+        "title": "통화",
+        "ETH": {
+          "label": "이더리움",
+          "code": "ETH"
+        },
+        "USD": {
+          "label": "미국 달러",
+          "code": "USD"
+        },
+        "EUR": {
+          "label": "유로",
+          "code": "EUR"
+        },
+        "GBP": {
+          "label": "브리티시 파운드",
+          "code": "GBP"
+        },
+        "AUD": {
+          "label": "호주 달러",
+          "code": "AUD"
+        },
+        "CNY": {
+          "label": "중국 위안화",
+          "code": "CNY"
+        },
+        "KRW": {
+          "label": "대한민국 원",
+          "code": "KRW"
+        },
+        "JPY": {
+          "label": "일본 엔화",
+          "code": "JPY"
+        },
+        "RUB": {
+          "label": "러시아 루블",
+          "code": "RUB"
+        },
+        "INR": {
+          "label": "인도 루피",
+          "code": "INR"
+        },
+        "TRY": {
+          "label": "터키 리라",
+          "code": "TRY"
+        },
+        "CAD": {
+          "label": "캐나다 달러",
+          "code": "CAD"
+        },
+        "NZD": {
+          "label": "뉴질랜드 달러",
+          "code": "NZD"
+        },
+        "ZAR": {
+          "label": "남아프리카 공화국 랜드",
+          "code": "ZAR"
+        }
+      },
       "app_icon": "앱 아이콘",
-      "dev": "개발",
       "developer": "개발자 설정",
       "done": "완료",
       "feedback_and_reports": "피드백 및 버그 보고",
@@ -1784,6 +2227,45 @@
       "too_many_signup_request": "가입 요청이 너무 많습니다, 나중에 다시 시도해주세요"
     },
     "swap": {
+      "actions": {
+        "hold_to_swap": "스왑하기 위해 누르고 있기",
+        "hold_to_bridge": "브리지하기 위해 누르고 있기",
+        "save": "저장",
+        "enter_amount": "금액 입력",
+        "review": "리뷰",
+        "fetching_prices": "가져오는 중",
+        "swapping": "교환 중",
+        "select_token": "토큰 선택",
+        "insufficient_funds": "자금이 부족합니다",
+        "insufficient": "부족한",
+        "quote_error": "견적 오류"
+      },
+      "aggregators": {
+        "rainbow": "Rainbow"
+      },
+      "bridging": "브릿징 중",
+      "swapping": "교환 중",
+      "max": "최대",
+      "select": "선택",
+      "token_to_get": "받을 토큰",
+      "token_to_swap": "스왑할 토큰",
+      "no_balance": "잔액 없음",
+      "find_a_token_to_buy": "구매할 토큰 찾기",
+      "search_your_tokens": "토큰 검색",
+      "error_executing_swap": "스왑 실행 오류",
+      "tokens_input": {
+        "tokens": "토큰",
+        "sort": "정렬",
+        "available": "사용 가능",
+        "token_balance": "토큰 잔액",
+        "networks": "네트워크",
+        "filter_by_network": "네트워크별 필터링",
+        "switch_networks": "네트워크 전환",
+        "nothing_found": "아무것도 찾을 수 없음",
+        "nothing_found_description": "일부 토큰은 충분한 유동성이 없어 성공적인 %{action}수행이 불가합니다.",
+        "nothing_found_description_l2": "일부 토큰은 레이어 2 유동성이 충분하지 않아 성공적인 %{action}수행이 불가합니다.",
+        "output_quotes_disabled": "출력 견적 비활성화"
+      },
       "choose_token": "토큰 선택",
       "gas": {
         "custom": "사용자 정의",
@@ -1797,6 +2279,7 @@
       },
       "loading": "로딩 중...",
       "modal_types": {
+        "bridge": "브릿지",
         "confirm": "확인",
         "deposit": "예금",
         "receive": "받기",
@@ -1805,6 +2288,7 @@
         "withdraw": "인출",
         "withdraw_symbol": "%{symbol}출금"
       },
+      "unknown": "미지",
       "warning": {
         "cost": {
           "are_you_sure_title": "확실한가요?",
@@ -1825,6 +2309,17 @@
         }
       }
     },
+    "token_search": {
+      "section_header": {
+        "recent": "최근",
+        "popular": "레인보우에서 인기",
+        "favorites": "즐겨찾기",
+        "bridge": "브릿지",
+        "verified": "인증됨",
+        "unverified": "인증되지 않음",
+        "on_other_networks": "다른 네트워크에서"
+      }
+    },
     "transactions": {
       "actions": {
         "addToContacts": "연락처에 추가",
@@ -1837,35 +2332,144 @@
       "pending_title": "보류 중",
       "dropped_title": "드롭",
       "type": {
-        "approved": "승인된",
-        "approving": "승인",
-        "bridging": "브리징",
-        "bridged": "브리지됨",
-        "cancelled": "취소됨",
-        "cancelling": "취소 중",
-        "contract interaction": "계약 상호작용",
-        "deposited": "입금됨",
-        "depositing": "입금 중",
-        "dropped": "드롭",
-        "failed": "실패",
-        "purchased": "구매한",
-        "purchasing": "구매 중",
-        "minting": "민팅",
-        "minted": "생성한",
-        "received": "받음",
-        "receiving": "수신 중",
-        "self": "Self",
-        "sending": "전송 중",
-        "sent": "보냄",
-        "speeding up": "속도 향상",
-        "selling": "판매",
-        "sold": "판매한",
-        "swapped": "교환됨",
-        "swapping": "스왑 중",
-        "unknown": "미지",
-        "withdrawing": "인출 중",
-        "withdrew": "인출됨"
+        "savings": "저축",
+        "cancelled": "거래 취소됨",
+        "burn": {
+          "pending": "소각 중",
+          "confirmed": "소각됨",
+          "failed": "소각 실패"
+        },
+        "cancel": {
+          "pending": "취소 중",
+          "confirmed": "취소됨",
+          "failed": "취소 실패"
+        },
+        "speed_up": {
+          "pending": "가속 중",
+          "confirmed": "가속됨",
+          "failed": "가속 실패"
+        },
+        "send": {
+          "pending": "전송중",
+          "confirmed": "보냄",
+          "failed": "보내기 실패"
+        },
+        "receive": {
+          "pending": "수신 중",
+          "confirmed": "받음",
+          "failed": "수신 실패"
+        },
+        "withdraw": {
+          "pending": "인출 중",
+          "confirmed": "철회하였습니다",
+          "failed": "출금 실패"
+        },
+        "deposit": {
+          "pending": "입금 중",
+          "confirmed": "입금 완료",
+          "failed": "입금 실패"
+        },
+        "mint": {
+          "pending": "생성 중",
+          "confirmed": "생성한",
+          "failed": "생성 실패"
+        },
+        "approve": {
+          "pending": "승인 중",
+          "confirmed": "승인된",
+          "failed": "승인 실패"
+        },
+        "contract_interaction": {
+          "pending": "상호작용 대기 중",
+          "confirmed": "상호작용 완료",
+          "failed": "상호작용 실패"
+        },
+        "launch": {
+          "pending": "출시 중",
+          "confirmed": "출시됨",
+          "failed": "출시 실패"
+        },
+        "swap": {
+          "pending": "교환 중",
+          "confirmed": "교환됨",
+          "failed": "교환 실패"
+        },
+        "borrow": {
+          "pending": "대출 중",
+          "confirmed": "대출 완료",
+          "failed": "대출 실패"
+        },
+        "claim": {
+          "pending": "청구 중",
+          "confirmed": "청구 완료",
+          "failed": "청구 실패"
+        },
+        "deployment": {
+          "pending": "배포 중",
+          "confirmed": "배포 완료",
+          "failed": "배포 실패"
+        },
+        "repay": {
+          "pending": "상환 중",
+          "confirmed": "상환 완료",
+          "failed": "상환 실패"
+        },
+        "stake": {
+          "pending": "스테이킹 중",
+          "confirmed": "스테이킹 완료",
+          "failed": "스테이킹 실패"
+        },
+        "unstake": {
+          "pending": "언스테이킹 중",
+          "confirmed": "언스테이킹 완료",
+          "failed": "언스테이크 실패"
+        },
+        "purchase": {
+          "pending": "구매 중",
+          "confirmed": "구매한",
+          "failed": "구매 실패"
+        },
+        "revoke": {
+          "pending": "철회 중",
+          "confirmed": "철회 완료",
+          "failed": "철회 실패"
+        },
+        "sale": {
+          "pending": "판매",
+          "confirmed": "판매한",
+          "failed": "판매 실패"
+        },
+        "bridge": {
+          "pending": "브릿징 중",
+          "confirmed": "브리지됨",
+          "failed": "브릿징 실패"
+        },
+        "airdrop": {
+          "pending": "",
+          "confirmed": "에어드랍 완료",
+          "failed": ""
+        },
+        "wrap": {
+          "pending": "랩핑 중",
+          "confirmed": "랩핑 완료",
+          "failed": "랩핑 실패"
+        },
+        "unwrap": {
+          "pending": "언랩핑 중",
+          "confirmed": "언랩됨",
+          "failed": "언랩 실패"
+        },
+        "bid": {
+          "pending": "입찰 중",
+          "confirmed": "입찰",
+          "failed": "입찰 실패"
+        }
       },
+      "approvals": {
+        "no_allowance": "허용 없음",
+        "unlimited": "무제한"
+      },
+      "no_value": "가치 없음",
       "savings": "저축",
       "signed": "서명됨",
       "contract_interaction": "계약 상호작용",
@@ -1877,6 +2481,7 @@
       "to": "에게",
       "value": "가치",
       "hash": "Tx 해시",
+      "you": "당신",
       "network_fee": "네트워크 수수료",
       "hash_copied": "􀁣 거래 해시 복사됨",
       "address_copied": "􀁣 주소 복사됨",
@@ -1960,6 +2565,9 @@
       "copied": "\"%{copiedText}\" 복사됨",
       "invalid_paste": "여기에 붙여넣을 수 없습니다"
     },
+    "tokens_tab": {
+      "unknown_token": "알 수 없는 토큰"
+    },
     "hardware_wallets": {
       "pair_your_nano": "나노 X를 페어링하세요",
       "connect_your_ledger": "당신의 레저 나노 X를 블루투스를 통해 Rainbow에 연결하세요. 이것이 첫번째 시도라면, Rainbow은 블루투스 접근을 요청할 것입니다.",
@@ -2015,6 +2623,8 @@
         "delete_confirm": "이 지갑을 삭제하시겠습니까?",
         "edit": "지갑 편집",
         "hide": "숨기다",
+        "create_wallet_group": "지갑 그룹 만들기",
+        "create_wallet_group_placeholder": "지갑 그룹 %{numWalletGroups}",
         "import_wallet": "지갑 추가",
         "input": "거래 입력",
         "notifications": {
@@ -2112,18 +2722,52 @@
         "please_seed_phrase": "비공개 키를 보려면 인증해 주세요"
       },
       "back_ups": {
-        "and_1_more_wallet": "그리고 1개 더 있는 지갑",
+        "wallet_count": "%{numAccounts} 지갑",
+        "wallet_count_gt_one": "%{numAccounts} 지갑들",
         "and_more_wallets": "그리고 %{moreWalletCount} 개 더 있는 지갑",
+        "create_new_wallet": "새 지갑 만들기",
+        "create_new_wallet_description": "이 비밀 구문을 사용하여 새 지갑을 만드세요",
         "backed_up": "백업 완료",
         "backed_up_manually": "수동으로 백업 완료",
-        "imported": "가져옴"
+        "imported": "가져옴",
+        "cloud_backup_title": "클라우드 백업",
+        "not_backed_up": "백업되지 않음",
+        "not_backed_up_to_cloud_message": "이 %{backupType}은(는) 마지막 백업에 포함되지 않았습니다. 장치를 분실하거나 새 장치를 얻었을 때 복원할 수 있도록 지금 %{cloudPlatform}에 백업하세요.",
+        "not_backed_up_message": "이 %{backupType}은(는) 백업되지 않았습니다. 장치를 분실하거나 새 장치를 얻었을 때 복원할 수 있도록 지금 백업하세요.",
+        "backed_up_message": "귀하는 이 %{backupType}을(를) 직접 저장하기로 선택했습니다. 안전한 장소에 보관되어 있는지 확인하세요.",
+        "backed_up_to_cloud_message": "모든 지갑이 %{cloudPlatform}에 백업됩니다. 장치를 분실하거나 새 장치를 얻었을 때 아래에 표시된 지갑들을 복구할 수 있습니다.",
+        "cloud_backup_out_of_date_description": "일부 지갑이 마지막 백업에 포함되지 않았습니다. 장치를 분실하거나 새 장치를 얻었을 때 복원할 수 있도록 지금 %{cloudPlatform}에 백업하세요.",
+        "cloud_backup_description": "장치를 분실하거나 새 장치를 얻었을 때 이들을 복원할 수 있도록 지갑을 안전하게 %{cloudPlatform}에 백업하세요.",
+        "cloud_backup_link": "더 알아보기…",
+        "view_secret_phrase": "비밀 구문 보기",
+        "view_private_key": "개인 키 보기",
+        "copy_wallet_address": "지갑 주소 복사"
       },
       "balance_title": "균형",
       "buy": "구매",
       "change_wallet": {
+        "loading_balance": "잔액 로딩 중...",
         "balance_eth": "%{balanceEth} 이더리움",
         "watching": "시청 중",
-        "ledger": "렛저"
+        "ledger": "렛저",
+        "wallets": "지갑들",
+        "all_wallets": "모든 지갑",
+        "total_balance": "총 잔액",
+        "edit_hint_tooltip": {
+          "title": "지갑 사용자 정의",
+          "subtitle": {
+            "prefix": "탭하세요",
+            "action": "편집",
+            "suffix": "위의 버튼으로 설정"
+          }
+        },
+        "address_menu": {
+          "edit": "지갑 편집",
+          "copy": "주소 복사",
+          "settings": "지갑 설정",
+          "notifications": "알림 설정",
+          "remove": "지갑 제거"
+        }
       },
       "connected_apps": "연결된 앱",
       "copy": "복사",
@@ -2194,12 +2838,19 @@
       "my_account_address": "나의 계좌 주소:",
       "network_title": "네트워크",
       "new": {
+        "choose_wallet_group": {
+          "title": "지갑 그룹 선택",
+          "description": "새 지갑을 만들 그룹을 선택하거나 새로 만드십시오."
+        },
+        "new_wallet_group": {
+          "title": "새 지갑 그룹",
+          "description": "새 지갑 그룹 만들기"
+        },
         "add_wallet_sheet": {
           "options": {
             "cloud": {
-              "description_android": "이전에 Google 드라이브에 지갑을 백업했다면, 여기를 눌러 복원하세요.",
-              "description_ios_one_wallet": "백업된 1개의 지갑이 있습니다",
-              "description_ios_multiple_wallets": "백업된 %{walletCount} 개의 지갑이 있습니다",
+              "description_restore_sheet": "이전에 %{cloudPlatform}에 백업한 경우, 복원하려면 여기를 클릭하세요.",
+              "description_with_latest_backup_date": "최근 백업 %{fromNow} %{time}에",
               "title": "%{platform}에서 복원",
               "no_backups": "백업을 찾을 수 없습니다",
               "no_google_backups": "Google 드라이브에서 백업을 찾을 수 없습니다. 올바른 계정으로 로그인되어 있는지 확인하세요."
@@ -2213,12 +2864,12 @@
               "title": "하드웨어 지갑 연결"
             },
             "seed": {
-              "description": "Rainbow 또는 다른 암호화 지갑의 복구 구문 사용",
-              "title": "복구 구문이나 개인 키로 복구"
+              "description": "Rainbow, MetaMask 또는 다른 지갑에서 비밀 구문을 사용하세요",
+              "title": "비밀 구문 또는 개인 키 가져오기"
             },
             "watch": {
-              "description": "공개 주소나 ENS 이름을 보기",
-              "title": "이더리움 주소를 보기"
+              "description": "ENS 이름이나 공개 주소 관찰",
+              "title": "지갑 관찰"
             }
           },
           "first_wallet": {
@@ -2282,6 +2933,7 @@
         "find_a_code": "스캔할 코드를 찾아보세요",
         "qr_1_app_connected": "1개의 연결된 앱",
         "qr_multiple_apps_connected": "%{appsConnectedCount} 개의 연결된 앱들",
+        "scan_to_connect": "앱과 연결합니다",
         "scan_to_pay_or_connect": "결제하거나 연결하기 위해 스캔하세요",
         "simulator_mode": "시뮬레이터 모드",
         "sorry_could_not_be_recognized": "죄송합니다, 이 QR 코드를 인식할 수 없습니다.",
@@ -2331,7 +2983,7 @@
           "insufficient_funds": "오 아니! 가스 가격이 변하고 이 거래를 위한 충분한 자금이 더 이상 없습니다. 더 낮은 금액으로 다시 시도해 주세요.",
           "generic": "오 아니! 거래를 제출하는 데 문제가 있었습니다. 다시 시도해 주세요."
         },
-        "complete_checks": "체크 완료",
+        "complete_check": "체크 완료",
         "ens_configuration_options": "ENS 구성 옵션",
         "confirm": "거래 확인",
         "max": "최대",
@@ -2341,6 +2993,7 @@
         "sending_title": "전송중",
         "you_own_this_wallet": "이 지갑은 당신의 것입니다",
         "first_time_send": "처음 보내기",
+        "previous_send": "%{number} 전송 이력",
         "previous_sends": "%{number} 전송 이력"
       },
       "wallet_connect": {
@@ -2369,6 +3022,9 @@
       }
     },
     "walletconnect": {
+      "connecting": "연결 중",
+      "loading": "불러오는 중",
+      "requests": "요청",
       "wants_to_connect": "당신의 지갑에 연결하려 합니다",
       "wants_to_connect_to_network": "%{network} 네트워크에 연결하려 합니다",
       "available_networks": "사용 가능한 네트워크",
@@ -2414,6 +3070,7 @@
       },
       "menu_options": {
         "disconnect": "연결 해제",
+        "connect": "연결",
         "switch_wallet": "지갑 전환",
         "switch_network": "네트워크 전환",
         "available_networks": "사용 가능한 네트워크"
@@ -2426,9 +3083,9 @@
         "pairing_unsupported_methods": "Dapp이 Rainbow에서 지원하지 않는 지갑 RPC 방법을 요청했습니다.",
         "pairing_unsupported_networks": "해당 dapp은 Rainbow에서 지원하지 않는 네트워크를 요청했습니다.",
         "read_only_wallet_on_signing_method": "읽기 전용 지갑을 사용중인 것 같습니다. 이 요청에 대해서는 허용되지 않습니다.",
-        "namespaces_invalid": "DApp에서 요청한 네임스페이스에 문제가 있습니다. 다시 시도하거나 Rainbow 및 DApp 지원 팀에 문의하십시오.",
+        "namespaces_invalid": "보안 문제로 인해 Rainbow는 eth_sign을 지원하지 않습니다.  \n 질문이 있으면 Rainbow 및/또는 dapp 지원 팀에 문의하십시오.",
         "request_invalid": "요청에 잘못된 매개변수가 포함되어 있습니다. 다시 시도하거나 Rainbow 및/또는 dapp 지원 팀에 문의하십시오.",
-        "eth_sign": "보안 문제로 인해 Rainbow는 이전 버전의 eth_sign을 지원하지 않습니다.  \n 궁금한 점이 있으면 Rainbow 및/또는 dapp 지원 팀에 문의하십시오.",
+        "eth_sign": "보안 문제로 인해 Rainbow는 이전 버전의 eth_sign을 지원하지 않습니다.\n질문이 있으면 Rainbow 및/또는 dapp 지원 팀에 문의하십시오.",
         "request_unsupported_network": "이 요청에서 지정한 네트워크는 Rainbow에서 지원하지 않습니다.",
         "request_unsupported_methods": "이 요청에 명시된 RPC 방법은 Rainbow에서 지원하지 않습니다.",
         "no_accounts_found": "승인된 네임스페이스에서 계정을 찾을 수 없습니다."
@@ -2460,6 +3117,7 @@
             "unavailable_personal_sign": "개인 서명의 시뮬레이션은 아직 지원되지 않습니다.",
             "unavailable_zora_network": "Zora의 시뮬레이션은 아직 지원되지 않습니다.",
             "failed_to_simulate": "시뮬레이션에 실패하여 거래가 실패할 가능성이 높습니다. 이는 사용중인 앱의 문제일 수 있습니다.",
+            "tx_api_error": "거래가 성공할지 실패할지 여부를 결정할 수 없습니다. 주의해서 진행하세요.",
             "warning": "악의적인 행동은 감지되지 않았지만, 이 거래는 지갑에 위험을 줄 수 있는 특성을 가지고 있습니다.",
             "malicious": "이 거래에 서명하면 지갑의 모든 접근 권한을 잃을 수 있습니다."
           },
@@ -2499,10 +3157,15 @@
         "buttons": {
           "cancel": "취소",
           "confirm": "􀎽 거래 보내기",
+          "confirming": "확인 중",
           "get_native_token": "Get %{symbol}",
           "buy_native_token": "구매 %{symbol}"
         },
         "formatted_dates": {
+          "minute_ago": "1분 전",
+          "minutes_ago": "분 전",
+          "hour_ago": "1시간 전",
+          "hours_ago": "시간 전",
           "today": "오늘",
           "day_ago": "하루 전",
           "days_ago": "일 전",
@@ -2516,6 +3179,346 @@
     "warning": {
       "user_is_offline": "연결이 오프라인입니다, 인터넷 연결을 확인해 주세요",
       "user_is_online": "연결되었습니다! 다시 온라인 상태입니다"
+    },
+    "dapp_browser": {
+      "address_bar": {
+        "input_placeholder": "검색 또는 웹사이트 입력"
+      },
+      "control_panel": {
+        "connected": "연결됨",
+        "not_connected": "연결되지 않음",
+        "switch_wallet": "지갑 전환",
+        "switch_network": "네트워크 전환",
+        "disconnect": "연결 해제",
+        "favorite": "즐겨찾기",
+        "undo_favorite": "실행 취소",
+        "connect": "연결",
+        "swap": "교환",
+        "bridge": "브릿지",
+        "more": "더 보기"
+      },
+      "error": {
+        "title": "문제가 발생했습니다",
+        "default_msg": "페이지를 로드하는 중에 오류가 발생했습니다. 다시 시도하세요."
+      },
+      "no_wc_needed": {
+        "title": "어머나!",
+        "description": "WalletConnect를 통해 이 dapp에 연결하려고 하는 것 같습니다. Rainbow의 인앱 브라우저에서는 더 이상 필요하지 않습니다. 돌아가서 \"MetaMask\"를 선택하면 모든 것이 잘 작동할 것입니다.",
+        "cta": "알겠습니다"
+      },
+      "provider_error": {
+        "unsupported_chain": "지원되지 않는 체인",
+        "no_active_session": "체인을 전환하기 전에 dapp에 연결해야 합니다"
+      },
+      "homepage": {
+        "trending": "트렌딩",
+        "recents": "최근",
+        "favorites": "즐겨찾기"
+      },
+      "search": {
+        "find_apps_and_more": "앱 및 기타 항목 찾기",
+        "more_results": "더 많은 결과",
+        "search": "검색"
+      },
+      "menus": {
+        "favorite": "즐겨찾기",
+        "home": "홈",
+        "undo_favorite": "즐겨찾기 실행 취소",
+        "remove": "제거",
+        "forward": "앞으로",
+        "back": "뒤로",
+        "share": "공유",
+        "close_all_tabs": "모든 %{numberOfClosableTabs}개의 탭 닫기",
+        "close_both_tabs": "두 탭 닫기",
+        "close_this_tab": "이 탭 닫기",
+        "close_tab": "탭 닫기",
+        "new_tab": "새 탭"
+      }
+    },
+    "trending_tokens": {
+      "all": "모두",
+      "no_results": {
+        "title": "결과 없음",
+        "body": "더 큰 시간 프레임, 다른 네트워크 또는 카테고리를 탐색해 보세요."
+      },
+      "and": "그리고",
+      "and_others": {
+        "one": "그리고 %{count} 다름",
+        "other": "그리고 %{count} 다른"
+      },
+      "filters": {
+        "categories": {
+          "TRENDING": "트렌딩",
+          "RAINBOW": "Rainbow",
+          "NEW": "새로운",
+          "FARCASTER": "Farcaster"
+        },
+        "sort": {
+          "RECOMMENDED": {
+            "label": "정렬",
+            "menuOption": "기본"
+          },
+          "VOLUME": "거래량",
+          "MARKET_CAP": "시가 총액",
+          "TOP_GAINERS": "상승률 상위",
+          "TOP_LOSERS": "하락률 상위"
+        },
+        "time": {
+          "H12": "12 Hours",
+          "H12_ABBREVIATED": "12시간",
+          "H24": "24 Hours",
+          "H24_ABBREVIATED": "24시간",
+          "D7": "1 Week",
+          "D3": "3 Days"
+        }
+      }
+    },
+    "network_selector": {
+      "customize_networks_banner": {
+        "title": "네트워크 사용자 정의",
+        "tap_the": "탭하세요",
+        "button_to_set_up": "아래 버튼으로 설정"
+      },
+      "drop_here_to_unpin": "고정 해제를 위해 여기에 놓으세요",
+      "edit": "편집",
+      "network": "네트워크",
+      "networks": "네트워크",
+      "drag_to_rearrange": "드래그하여 재배치",
+      "show_less": "줄이기",
+      "more": "더 보기",
+      "show_more": "더 많은 네트워크",
+      "all_networks": "모든 네트워크",
+      "search": "검색"
+    },
+    "token_launcher": {
+      "airdrop": {
+        "address_or_ens": "주소 또는 ENS",
+        "suggested_users": "추천 사용자",
+        "airdrop_lists": "에어드랍 목록",
+        "max_recipients_reached": "최대 %{maxRecipientCount} 수신자 도달"
+      },
+      "image_upload_error": {
+        "title": "죄송합니다, 이미지 업로드 중 오류가 발생했습니다.",
+        "subtitle": "다시 시도하세요."
+      },
+      "allocation_breakdown": {
+        "my_share": "내 기부",
+        "airdropping": "에어드롭 중",
+        "start_price": "시작 가격",
+        "sections": {
+          "my_share": {
+            "title": "크리에이터 기부",
+            "description": "프로젝트에 대한 개인적 지분"
+          },
+          "airdropping": {
+            "title": "에어드롭 기부",
+            "description": "친구와 지지자에게 배포됨"
+          },
+          "liquidity_pool": {
+            "title": "유동성 풀 기부",
+            "description": "원활한 거래와 유동성 보장"
+          },
+          "rainbow_share": {
+            "title": "레인보우의 그 너머",
+            "description": "미래의 커뮤니티 배포"
+          }
+        }
+      },
+      "network_field": {
+        "balance": "잔액: %{balance}",
+        "not_enough_funds": "토큰 시작에 충분한 자금이 없습니다"
+      },
+      "prebuy": {
+        "balance_after_gas_fee": "가스 수수료 후 이용 가능한 잔액: %{balance}",
+        "title": "추가 토큰 선구매"
+      },
+      "review": {
+        "token_allocation": "토큰 배분",
+        "your_share": "당신의 지분",
+        "airdropping": "에어드롭 중",
+        "about": "정보",
+        "total_cost": "총 비용",
+        "initial_price": "초기 가격",
+        "market_cap": "시가총액",
+        "total_supply": "총 공급",
+        "network": "네트워크"
+      },
+      "creating": {
+        "deploying": "%{symbol} 배포 중..."
+      },
+      "success": {
+        "title": "%{symbol}이 라이브입니다!",
+        "congrats": "축하합니다, %{name}을 세계에 출시했습니다! 그것을 공유하여 분위기를 퍼뜨리세요."
+      },
+      "input_errors": {
+        "too_long": "너무 깁니다, 친구.",
+        "invalid_input": "잘못된 입력",
+        "symbol_required": "티커가 필요합니다",
+        "name_required": "이름이 필요합니다",
+        "too_big": "너무 큽니다.",
+        "must_be_greater_than_0": "0보다 커야 합니다.",
+        "amount_is_greater_than_balance": "금액이 잔액보다 큽니다",
+        "amount_is_greater_than_max_prebuy_amount": "최대 선구매 금액 %{maxPrebuyAmount} %{chainNativeAssetSymbol} 초과",
+        "amount_is_less_than_min_prebuy_amount": "최소 선구매 금액 %{minPrebuyAmount} %{chainNativeAssetSymbol} 초과해야 합니다",
+        "amount_too_small": "금액이 너무 적습니다! 조금 더 시도하세요!"
+      },
+      "titles": {
+        "total_supply": "총 공급",
+        "ticker": "티커",
+        "name": "이름",
+        "network": "네트워크",
+        "description": "설명",
+        "airdrop": "친구에게 에어드랍",
+        "required_info": "필수 정보",
+        "about": "정보",
+        "token_allocation": "토큰 할당",
+        "token_allocation_breakdown": "토큰 할당 분해",
+        "mcap": "시가 총액"
+      },
+      "placeholders": {
+        "ticker": "$NAME",
+        "enter_coin_name": "코인 이름 입력",
+        "describe_your_coin": "코인 설명"
+      },
+      "buttons": {
+        "hold_to_create": "생성을 위해 유지",
+        "creating": "생성 중...",
+        "share_link": "링크 공유하기",
+        "token_allocation_info": "더 많은 정보",
+        "got_it": "알겠습니다",
+        "cancel": "취소"
+      },
+      "header": {
+        "new_coin": "새 코인",
+        "review": "리뷰",
+        "creating": "생성 중"
+      },
+      "links": {
+        "x": {
+          "name": "X/트위터",
+          "placeholder": "사용자 이름"
+        },
+        "telegram": {
+          "name": "텔레그램",
+          "placeholder": "채널"
+        },
+        "farcaster": {
+          "name": "Farcaster",
+          "placeholder": "사용자 이름"
+        },
+        "website": {
+          "name": "웹사이트",
+          "placeholder": "https://homepage.com"
+        },
+        "other": {
+          "name": "기타",
+          "placeholder": "https://other.com"
+        },
+        "add_more": "더 추가"
+      },
+      "discard_and_exit": "삭제 및 종료",
+      "airdrops_sheet": {
+        "claim_button_text": "청구",
+        "empty_state_title": "아직 에어드랍 없음",
+        "title": "레인보우 코인 청구"
+      },
+      "cards": {
+        "airdrops": {
+          "subtitle_loading": "로딩 중",
+          "subtitle_has_airdrops": "청구 가능",
+          "subtitle_no_airdrops": "아직 에어드랍 없음",
+          "title": "에어드랍",
+          "title_singular": "에어드랍"
+        },
+        "launch": {
+          "line_one": "런칭\n",
+          "line_two": "당신의 코인"
+        }
+      },
+      "claim_airdrop_sheet": {
+        "by": "로",
+        "claiming": "청구 중",
+        "created_by": "%{name}에 의해 생성됨",
+        "gifted_to": "선물한 사람",
+        "hold_to_claim": "청구하려면 유지",
+        "hold_to_retry": "다시 시도하려면 유지",
+        "successfully_claimed": "성공적으로 청구됨",
+        "title": "$%{symbol} 청구",
+        "to_claim_on": "%{network}에서 청구하기",
+        "view_coin": "코인 보기",
+        "you": "당신"
+      },
+      "errors": {
+        "header": "토큰 실행 오류",
+        "api_request_failed": "API 요청 실패",
+        "api_response_invalid": "API 응답이 유효하지 않음",
+        "contract_interaction_failed": "계약 상호작용 실패",
+        "gas_estimation_failed": "가스 예측 실패",
+        "insufficient_funds": "자금이 부족합니다",
+        "submission_details_missing": "제출 세부 정보 누락",
+        "transaction_rejected": "거래 거부됨",
+        "transaction_failed": "거래 실패",
+        "transaction_simulation_failed": "거래 시뮬레이션 실패",
+        "unknown_error": "알 수 없는 오류",
+        "wallet_connection_error": "지갑 연결 오류",
+        "invalid_params": "잘못된 매개변수",
+        "missing_required_param": "필수 매개변수가 누락되었습니다"
+      }
+    },
+    "done": "완료",
+    "copy": "복사",
+    "paste": "붙여넣기",
+    "market_data": {
+      "vol": "VOL",
+      "price": "PRICE",
+      "mcap": "시가 총액"
+    },
+    "king_of_hill": {
+      "title": "런칭패드",
+      "launch": "런칭",
+      "current_king": "현재 왕",
+      "last_winner": "마지막 우승자",
+      "no_previous_winner": "이전 우승자 없음",
+      "round_ends_in": "라운드 종료까지 남은 시간",
+      "how_it_works": "작동 방식",
+      "starting_next_round": "다음 라운드 시작 중",
+      "left": "남음",
+      "king_of_the_hill": "그 산의 왕",
+      "name": "이름",
+      "explain_sheet": {
+        "next": "다음",
+        "got_it": "알겠습니다",
+        "steps": {
+          "step_1": {
+            "title": "경주가 시작되었습니다",
+            "subtitle_parts": [
+              "가장 많은",
+              " 구매량 ",
+              "높은 토큰이 현재 왕입니다."
+            ]
+          },
+          "step_2": {
+            "title": "하루 한 왕관",
+            "subtitle_parts": [
+              "자정(UTC 12:00에), ",
+              " 자정 (오전 12:00 UTC), ",
+              "선두 토큰이 일일 우승자로 선정됩니다."
+            ]
+          },
+          "step_3": {
+            "title": "보상 획득",
+            "subtitle_parts": [
+              "현재 왕의 구매자는",
+              " 2배 포인트를 받습니다."
+            ],
+            "subtitle_two_parts": [
+              "창작자",
+              "는 포인트를 획득합니다 ",
+              "왕관을 받을 때."
+            ]
+          }
+        }
+      }
     }
   }
 }

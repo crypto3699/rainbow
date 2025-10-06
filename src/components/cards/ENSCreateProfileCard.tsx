@@ -1,18 +1,19 @@
-import React, { useEffect } from 'react';
+import { analytics } from '@/analytics';
+import { enableActionsOnReadOnlyWallet } from '@/config';
+import { Bleed, Box, ColorModeProvider, Column, Columns, Stack, Text } from '@/design-system';
+import { prefetchENSAvatar, prefetchENSRecords, useAccountENSDomains, useDimensions } from '@/hooks';
+import * as i18n from '@/languages';
+import Routes from '@/navigation/routesNames';
+import { watchingAlert } from '@/utils';
+import { useRoute } from '@react-navigation/native';
+import React, { useCallback } from 'react';
 import ENSAvatarGrid from '../../assets/ensAvatarGrid.png';
 import ENSIcon from '../../assets/ensIcon.png';
 import { useNavigation } from '../../navigation/Navigation';
+import { getIsReadOnlyWallet } from '@/state/wallets/walletsStore';
 import ImgixImage from '../images/ImgixImage';
-import { enableActionsOnReadOnlyWallet } from '@/config';
-import { Bleed, Box, ColorModeProvider, Column, Columns, Stack, Text } from '@/design-system';
-import { prefetchENSAvatar, prefetchENSRecords, useAccountENSDomains, useDimensions, useWallets } from '@/hooks';
-import Routes from '@/navigation/routesNames';
-import { watchingAlert } from '@/utils';
 import { GenericCard, Gradient } from './GenericCard';
 import { ORB_SIZE } from './reusables/IconOrb';
-import * as i18n from '@/languages';
-import { analyticsV2 } from '@/analytics';
-import { useRoute } from '@react-navigation/native';
 
 const ASPECT_RATIO = 112 / 350;
 const ARBITRARILY_LARGE_NUMBER = 1000;
@@ -25,7 +26,6 @@ const GRADIENT: Gradient = {
 
 export const ENSCreateProfileCard = () => {
   const { navigate } = useNavigation();
-  const { isReadOnlyWallet } = useWallets();
   const { width: deviceWidth } = useDimensions();
   const { name: routeName } = useRoute();
   const cardType = 'stretch';
@@ -33,29 +33,25 @@ export const ENSCreateProfileCard = () => {
   // 40 represents the horizontal padding outside the card
   const imageWidth = deviceWidth - 40;
 
-  const handlePress = () => {
-    if (!isReadOnlyWallet || enableActionsOnReadOnlyWallet) {
-      analyticsV2.track(analyticsV2.event.cardPressed, {
+  const { uniqueDomain } = useAccountENSDomains();
+
+  const handlePress = useCallback(() => {
+    if (!getIsReadOnlyWallet() || enableActionsOnReadOnlyWallet) {
+      if (uniqueDomain?.name) {
+        prefetchENSAvatar(uniqueDomain.name);
+        prefetchENSRecords(uniqueDomain.name);
+      }
+
+      analytics.track(analytics.event.cardPressed, {
         cardName: 'ENSCreateProfileCard',
         routeName,
         cardType,
       });
-      navigate(Routes.REGISTER_ENS_NAVIGATOR, {
-        fromDiscover: true,
-      });
+      navigate(Routes.REGISTER_ENS_NAVIGATOR);
     } else {
       watchingAlert();
     }
-  };
-
-  const { uniqueDomain } = useAccountENSDomains();
-
-  useEffect(() => {
-    if (uniqueDomain?.name) {
-      prefetchENSAvatar(uniqueDomain.name);
-      prefetchENSRecords(uniqueDomain.name);
-    }
-  }, [uniqueDomain]);
+  }, [navigate, routeName, uniqueDomain?.name]);
 
   return (
     <ColorModeProvider value="lightTinted">
@@ -74,7 +70,6 @@ export const ENSCreateProfileCard = () => {
             </Column>
             <Column width="content">
               <Box alignItems="center" width={{ custom: ORB_SIZE }} height={{ custom: ORB_SIZE }}>
-                {/* @ts-expect-error JavaScript component */}
                 <Box
                   as={ImgixImage}
                   marginTop="-12px"
@@ -94,7 +89,6 @@ export const ENSCreateProfileCard = () => {
               alignItems="center"
               justifyContent="center"
             >
-              {/* @ts-expect-error JavaScript component */}
               <Box
                 as={ImgixImage}
                 alignItems="center"

@@ -1,21 +1,21 @@
-import React, { Dispatch, SetStateAction, createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { noop } from 'lodash';
+import { OnboardPointsMutation, PointsErrorType, PointsOnboardingCategory } from '@/graphql/__generated__/metadataPOST';
+import { WrappedAlert as Alert } from '@/helpers/alert';
+import * as i18n from '@/languages';
 import Routes from '@/navigation/routesNames';
 import { pointsQueryKey } from '@/resources/points';
-import * as i18n from '@/languages';
+import { noop } from 'lodash';
+import React, { Dispatch, SetStateAction, createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { RainbowPointsFlowSteps, buildTwitterIntentMessage } from '../constants';
-import { OnboardPointsMutation, PointsOnboardingCategory, PointsErrorType } from '@/graphql/__generated__/metadataPOST';
-import { WrappedAlert as Alert } from '@/helpers/alert';
 
+import { analytics } from '@/analytics';
 import { metadataPOSTClient } from '@/graphql';
-import { useAccountProfile, useWallets } from '@/hooks';
-import { loadWallet, signPersonalMessage } from '@/model/wallet';
+import { getProvider } from '@/handlers/web3';
 import { RainbowError, logger } from '@/logger';
-import { queryClient } from '@/react-query';
+import { loadWallet, signPersonalMessage } from '@/model/wallet';
 import { useNavigation } from '@/navigation';
-import { getProviderForNetwork } from '@/handlers/web3';
-import { Network } from '@/networks/types';
-import { analyticsV2 } from '@/analytics';
+import { queryClient } from '@/react-query';
+import { ChainId } from '@/state/backendNetworks/types';
+import { useAccountAddress, useIsHardwareWallet } from '@/state/wallets/walletsStore';
 import { delay } from '@/utils/delay';
 
 type PointsProfileContext = {
@@ -28,7 +28,6 @@ type PointsProfileContext = {
   deeplinked: boolean;
   setDeeplinked: Dispatch<SetStateAction<boolean>>;
   intent: string | undefined;
-  setIntent: Dispatch<SetStateAction<string | undefined>>;
   animationKey: number;
   setAnimationKey: Dispatch<SetStateAction<number>>;
 
@@ -63,7 +62,6 @@ const PointsProfileContext = createContext<PointsProfileContext>({
   deeplinked: false,
   setDeeplinked: noop,
   intent: undefined,
-  setIntent: noop,
   animationKey: 0,
   setAnimationKey: noop,
 
@@ -82,15 +80,14 @@ const PointsProfileContext = createContext<PointsProfileContext>({
 export const usePointsProfileContext = () => useContext(PointsProfileContext);
 
 export const PointsProfileProvider = ({ children }: { children: React.ReactNode }) => {
-  const { accountAddress } = useAccountProfile();
-  const { isHardwareWallet } = useWallets();
+  const accountAddress = useAccountAddress();
+  const isHardwareWallet = useIsHardwareWallet();
   const { navigate, goBack } = useNavigation();
 
   const [step, setStep] = useState<RainbowPointsFlowSteps>(RainbowPointsFlowSteps.Initialize);
   const [profile, setProfile] = useState<OnboardPointsMutation | undefined>();
   const [referralCode, setReferralCode] = useState<string>();
   const [deeplinked, setDeeplinked] = useState<boolean>(false);
-  const [intent, setIntent] = useState<string>();
   const [animationKey, setAnimationKey] = useState(0);
 
   const rainbowSwaps = profile?.onboardPoints?.user?.onboarding?.categories?.find(
@@ -118,7 +115,7 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
     historicBalance?.earnings?.total;
 
   const signIn = useCallback(async () => {
-    analyticsV2.track(analyticsV2.event.pointsOnboardingScreenPressedSignInButton, {
+    analytics.track(analytics.event.pointsOnboardingScreenPressedSignInButton, {
       deeplinked,
       referralCode: !!referralCode,
       hardwareWallet: isHardwareWallet,
@@ -134,13 +131,13 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
         Alert.alert(i18n.t(i18n.l.points.console.generic_alert));
         throw new RainbowError('Points: Error getting onboard challenge');
       }
-      const provider = await getProviderForNetwork(Network.mainnet);
-      const wallet = await loadWallet(accountAddress, true, provider);
+      const provider = getProvider({ chainId: ChainId.mainnet });
+      const wallet = await loadWallet({ address: accountAddress, provider });
       if (!wallet) {
         Alert.alert(i18n.t(i18n.l.points.console.generic_alert));
         throw new RainbowError('Points: Error loading wallet');
       }
-      const signatureResponse = await signPersonalMessage(challenge, wallet, provider);
+      const signatureResponse = await signPersonalMessage(challenge, provider, wallet);
       if (signatureResponse && isHardwareWallet) {
         goBack();
       }
@@ -176,8 +173,8 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
             Alert.alert(i18n.t(i18n.l.points.console.generic_alert));
             break;
         }
-        logger.info('Points: Failed to onboard user', { errorType });
-        analyticsV2.track(analyticsV2.event.pointsOnboardingScreenFailedToSignIn, {
+        logger.error(new RainbowError('[PointsProfileContext]: Failed to onboard user'), { errorType });
+        analytics.track(analytics.event.pointsOnboardingScreenFailedToSignIn, {
           deeplinked,
           referralCode: !!referralCode,
           hardwareWallet: isHardwareWallet,
@@ -185,7 +182,7 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
         });
         return;
       }
-      analyticsV2.track(analyticsV2.event.pointsOnboardingScreenSuccessfullySignedIn, {
+      analytics.track(analytics.event.pointsOnboardingScreenSuccessfullySignedIn, {
         deeplinked,
         referralCode: !!referralCode,
         hardwareWallet: isHardwareWallet,
@@ -195,13 +192,13 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
       queryClient.setQueryData(queryKey, points);
       delay(5000).then(() => queryClient.refetchQueries(queryKey));
     } catch (error) {
-      analyticsV2.track(analyticsV2.event.pointsOnboardingScreenFailedToSignIn, {
+      analytics.track(analytics.event.pointsOnboardingScreenFailedToSignIn, {
         deeplinked,
         referralCode: !!referralCode,
         hardwareWallet: isHardwareWallet,
         errorType: undefined,
       });
-      logger.error(new RainbowError('Points: signIn error'), { error });
+      logger.error(new RainbowError('[PointsProfileContext]: signIn error'), { error });
     }
   }, [accountAddress, deeplinked, goBack, isHardwareWallet, referralCode]);
 
@@ -213,9 +210,8 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
     }
   }, [isHardwareWallet, navigate, signIn]);
 
-  useEffect(() => {
-    const msg = buildTwitterIntentMessage(profile, metamaskSwaps);
-    setIntent(msg);
+  const intent = useMemo(() => {
+    return buildTwitterIntentMessage(profile, metamaskSwaps);
   }, [profile, metamaskSwaps]);
 
   return (
@@ -231,7 +227,6 @@ export const PointsProfileProvider = ({ children }: { children: React.ReactNode 
         deeplinked,
         setDeeplinked,
         intent,
-        setIntent,
         animationKey,
         setAnimationKey,
 

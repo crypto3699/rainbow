@@ -2,9 +2,9 @@ import React from 'react';
 import { Row } from '../layout';
 import { Text } from '../text';
 import { bigNumberFormat } from '@/helpers/bigNumberFormat';
-import { useAccountSettings } from '@/hooks';
 import styled from '@/styled-thing';
 import { padding } from '@/styles';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
 
 const PoolValueWrapper = styled(Row)(({ simple }) => ({
   borderRadius: simple ? 0 : 15,
@@ -26,10 +26,10 @@ export const PoolValue = ({ type, value, simple, ...props }) => {
   let formattedValue = value;
   const { colors } = useTheme();
   let color = type === 'oneDayVolumeUSD' ? colors.swapPurple : colors.appleBlue;
-  const { nativeCurrency } = useAccountSettings();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
 
   if (type === 'annualized_fees') {
-    let percent = parseFloat(value);
+    const percent = parseFloat(value);
     if (!percent || percent === 0) {
       formattedValue = '0%';
     }
@@ -42,7 +42,7 @@ export const PoolValue = ({ type, value, simple, ...props }) => {
       formattedValue = '< 0.0001%';
     }
 
-    let fixedPercent = percent.toFixed(2);
+    const fixedPercent = percent.toFixed(2);
     if (fixedPercent === '0.00') {
       formattedValue = '0%';
     }

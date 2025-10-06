@@ -1,25 +1,9 @@
 import { ParsedAssetsDict, ParsedAssetsDictByChain, ParsedUserAsset, UniqueId } from '@/__swaps__/types/assets';
-import { ChainId } from '@/__swaps__/types/chains';
-import { deriveAddressAndChainWithUniqueId } from '@/__swaps__/utils/address';
-import { add } from '@/__swaps__/utils/numbers';
+import { ChainId } from '@/state/backendNetworks/types';
+import { getAddressAndChainIdFromUniqueId } from '@/utils/ethereumUtils';
+import { add } from '@/helpers/utilities';
 
 // selectors
-export function selectorFilterByUserChains<T>({
-  data,
-  chainId,
-  selector,
-}: {
-  data: ParsedAssetsDictByChain;
-  chainId: ChainId;
-  selector: (data: ParsedAssetsDictByChain, chainId: ChainId) => T;
-}): T {
-  const filteredAssetsDictByChain = Object.keys(data).reduce((acc, key) => {
-    const chainKey = Number(key);
-    acc[chainKey] = data[chainKey];
-    return acc;
-  }, {} as ParsedAssetsDictByChain);
-  return selector(filteredAssetsDictByChain, chainId);
-}
 
 export function selectUserAssetsList(assets: ParsedAssetsDictByChain) {
   return Object.values(assets)
@@ -34,14 +18,6 @@ export function selectUserAssetsFilteringSmallBalancesList(assets: ParsedAssetsD
 
 export function selectUserAssetsDictByChain(assets: ParsedAssetsDictByChain) {
   return assets;
-}
-
-export function selectUserAssetsListByChainId(assets: ParsedAssetsDictByChain, chainId: ChainId) {
-  const assetsForNetwork = assets?.[chainId];
-
-  return Object.values(assetsForNetwork).sort(
-    (a: ParsedUserAsset, b: ParsedUserAsset) => parseFloat(b?.native?.balance?.amount) - parseFloat(a?.native?.balance?.amount)
-  );
 }
 
 export function selectUserAssetAddressMapByChainId(assets: ParsedAssetsDictByChain) {
@@ -61,8 +37,8 @@ export function selectUserAssetAddressMapByChainId(assets: ParsedAssetsDictByCha
 // selector generators
 export function selectUserAssetWithUniqueId(uniqueId: UniqueId) {
   return (assets: ParsedAssetsDictByChain) => {
-    const { chain } = deriveAddressAndChainWithUniqueId(uniqueId);
-    return assets?.[chain]?.[uniqueId];
+    const { chainId } = getAddressAndChainIdFromUniqueId(uniqueId);
+    return assets?.[chainId]?.[uniqueId];
   };
 }
 

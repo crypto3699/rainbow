@@ -1,8 +1,7 @@
-import React, { Children, ReactElement, ReactNode, useMemo } from 'react';
-import flattenChildren from 'react-flatten-children';
+import React, { Children, Fragment, ReactElement, ReactNode } from 'react';
 import { AlignHorizontal, alignHorizontalToFlexAlign, AlignVertical, alignVerticalToFlexAlign } from '../../layout/alignment';
-import { negateSpace, Space } from '../../layout/space';
-import { Box } from '../Box/Box';
+import { Space, space as spaceTokens } from '../../layout/space';
+import { Box, resolveToken } from '../Box/Box';
 
 export type InlineProps = {
   children: ReactNode;
@@ -11,6 +10,7 @@ export type InlineProps = {
   space?: Space;
   horizontalSpace?: Space;
   verticalSpace?: Space;
+  testID?: string;
 } & (
   | {
       separator?: undefined;
@@ -35,11 +35,10 @@ export function Inline({
   verticalSpace: verticalSpaceProp,
   separator,
   wrap = true,
+  testID,
 }: InlineProps) {
   const verticalSpace = verticalSpaceProp ?? space;
   const horizontalSpace = horizontalSpaceProp ?? space;
-
-  const flattenedChildren = useMemo(() => flattenChildren(children), [children]);
 
   return (
     <Box
@@ -47,26 +46,23 @@ export function Inline({
       flexDirection="row"
       flexWrap={wrap ? 'wrap' : undefined}
       justifyContent={alignHorizontal ? alignHorizontalToFlexAlign[alignHorizontal] : undefined}
-      marginRight={wrap && horizontalSpace ? negateSpace(horizontalSpace) : undefined}
-      marginTop={wrap && verticalSpace ? negateSpace(verticalSpace) : undefined}
+      style={{
+        columnGap: horizontalSpace ? resolveToken(spaceTokens, horizontalSpace) : undefined,
+        rowGap: verticalSpace ? resolveToken(spaceTokens, verticalSpace) : undefined,
+      }}
+      testID={testID}
     >
-      {Children.map(flattenedChildren, (child, index) => {
-        if (wrap) {
-          return (
-            <Box paddingRight={horizontalSpace} paddingTop={verticalSpace}>
-              {child}
-            </Box>
-          );
-        }
-
-        const isLastChild = index === flattenedChildren.length - 1;
-        return (
-          <>
-            {horizontalSpace && !isLastChild ? <Box paddingRight={horizontalSpace}>{child}</Box> : child}
-            {separator && !isLastChild ? <Box paddingRight={horizontalSpace}>{separator}</Box> : null}
-          </>
-        );
-      })}
+      {wrap || !separator
+        ? children
+        : Children.toArray(children).map((child, index) => {
+            if (!child) return null;
+            return (
+              <Fragment key={index}>
+                {index > 0 && separator}
+                {child}
+              </Fragment>
+            );
+          })}
     </Box>
   );
 }

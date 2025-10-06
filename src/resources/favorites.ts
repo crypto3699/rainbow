@@ -1,146 +1,184 @@
-import { EthereumAddress, NativeCurrencyKeys, RainbowToken } from '@/entities';
-import { Network } from '@/networks/types';
+import { useQuery } from '@tanstack/react-query';
+import { omit } from 'lodash';
+import isEqual from 'react-fast-compare';
+import { analytics } from '@/analytics';
+import { NativeCurrencyKeys, RainbowToken } from '@/entities';
+import { RainbowError, logger } from '@/logger';
 import { createQueryKey, queryClient } from '@/react-query';
 import { DAI_ADDRESS, ETH_ADDRESS, SOCKS_ADDRESS, WBTC_ADDRESS, WETH_ADDRESS } from '@/references';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { ChainId, Network } from '@/state/backendNetworks/types';
+import { createRainbowStore } from '@/state/internal/createRainbowStore';
+import { AddressOrEth, UniqueId } from '@/__swaps__/types/assets';
+import { promiseUtils, time } from '@/utils';
 import { getUniqueId } from '@/utils/ethereumUtils';
-import { useQuery } from '@tanstack/react-query';
-import { without } from 'lodash';
 import { externalTokenQueryKey, fetchExternalToken } from './assets/externalAssetsQuery';
+import { IS_TEST } from '@/env';
 
-export const favoritesQueryKey = createQueryKey('favorites', {}, { persisterVersion: 1 });
+export const favoritesQueryKey = createQueryKey('favorites', {}, { persisterVersion: 4 });
 
-const DEFAULT: Record<EthereumAddress, RainbowToken> = {
-  [DAI_ADDRESS]: {
-    address: DAI_ADDRESS,
-    color: '#F0B340',
-    decimals: 18,
-    favorite: true,
-    highLiquidity: true,
-    isRainbowCurated: true,
-    isVerified: true,
-    name: 'Dai',
-    symbol: 'DAI',
-    network: Network.mainnet,
-    uniqueId: DAI_ADDRESS,
-  },
-  [ETH_ADDRESS]: {
-    address: ETH_ADDRESS,
-    color: '#25292E',
-    decimals: 18,
-    favorite: true,
-    highLiquidity: true,
-    isVerified: true,
-    name: 'Ethereum',
-    symbol: 'ETH',
-    network: Network.mainnet,
-    uniqueId: ETH_ADDRESS,
-  },
-  [SOCKS_ADDRESS]: {
-    address: SOCKS_ADDRESS,
-    color: '#E15EE5',
-    decimals: 18,
-    favorite: true,
-    highLiquidity: true,
-    isRainbowCurated: true,
-    isVerified: true,
-    name: 'Unisocks',
-    symbol: 'SOCKS',
-    network: Network.mainnet,
-    uniqueId: SOCKS_ADDRESS,
-  },
-  [WBTC_ADDRESS]: {
-    address: WBTC_ADDRESS,
-    color: '#FF9900',
-    decimals: 8,
-    favorite: true,
-    highLiquidity: true,
-    isRainbowCurated: true,
-    isVerified: true,
-    name: 'Wrapped Bitcoin',
-    symbol: 'WBTC',
-    network: Network.mainnet,
-    uniqueId: WBTC_ADDRESS,
-  },
-};
+const base_favorites = [DAI_ADDRESS, ETH_ADDRESS, SOCKS_ADDRESS, WBTC_ADDRESS];
+// This makes WETH easier to find in e2e tests
+const DEFAULT_FAVORITES = IS_TEST ? [...base_favorites, WETH_ADDRESS] : base_favorites;
+
+interface FavoritesState {
+  favorites: Record<UniqueId, RainbowToken> | undefined;
+}
+
+const useFavoritesStore = createRainbowStore<FavoritesState>(
+  () => ({
+    favorites: initializeFavorites(),
+  }),
+  { storageKey: 'favoritedTokens' }
+);
+
+function initializeFavorites() {
+  return queryClient.getQueryData<Record<UniqueId, RainbowToken>>(favoritesQueryKey);
+}
 
 /**
  * Returns a map of the given `addresses` to their corresponding `RainbowToken` metadata.
  */
-async function fetchMetadata(addresses: string[], network = Network.mainnet) {
-  const favoritesMetadata: Record<EthereumAddress, RainbowToken> = {};
-  const newFavoritesMeta: Record<EthereumAddress, RainbowToken> = {};
+async function fetchMetadata(addresses: string[], chainId = ChainId.mainnet) {
+  const favoritesMetadata: Record<UniqueId, RainbowToken> = {};
+  const newFavoritesMeta: Record<UniqueId, RainbowToken> = {};
+  const network = useBackendNetworksStore.getState().getChainsName()[chainId];
 
   // Map addresses to an array of promises returned by fetchExternalToken
-  const fetchPromises = addresses.map(async address => {
-    const externalAsset = await fetchExternalToken({ address, network, currency: NativeCurrencyKeys.USD });
-    await queryClient.fetchQuery(
-      externalTokenQueryKey({ address, network, currency: NativeCurrencyKeys.USD }),
-      async () => fetchExternalToken({ address, network, currency: NativeCurrencyKeys.USD }),
+  const fetchPromises: Promise<void>[] = addresses.map(async address => {
+    const externalAsset = await queryClient.fetchQuery(
+      externalTokenQueryKey({ address, chainId, currency: NativeCurrencyKeys.USD }),
+      async () => fetchExternalToken({ address, chainId, currency: NativeCurrencyKeys.USD }),
       {
         staleTime: Infinity,
       }
     );
 
-    // we only support mainnet favorites atm
     if (externalAsset) {
-      newFavoritesMeta[address] = {
+      const uniqueId = getUniqueId(externalAsset?.networks[chainId]?.address, chainId);
+      newFavoritesMeta[uniqueId] = {
         ...externalAsset,
+        chainId,
         network,
-        address: externalAsset?.networks['1'].address,
-        uniqueId: getUniqueId(externalAsset?.networks['1'].address, Network.mainnet),
+        address,
+        networks: externalAsset.networks,
+        mainnet_address: externalAsset?.networks[ChainId.mainnet]?.address,
+        uniqueId,
         isVerified: true,
       };
     }
   });
 
   // Wait for all promises to resolve
-  await Promise.all(fetchPromises);
+  await promiseUtils.PromiseAllWithFails(fetchPromises);
 
   const ethIsFavorited = addresses.includes(ETH_ADDRESS);
   const wethIsFavorited = addresses.includes(WETH_ADDRESS);
   if (newFavoritesMeta) {
-    if (newFavoritesMeta[WETH_ADDRESS] && ethIsFavorited) {
-      const favorite = newFavoritesMeta[WETH_ADDRESS];
-      newFavoritesMeta[ETH_ADDRESS] = {
+    const WETH_uniqueId = getUniqueId(WETH_ADDRESS, ChainId.mainnet);
+    if (newFavoritesMeta[WETH_uniqueId] && ethIsFavorited) {
+      const favorite = newFavoritesMeta[WETH_uniqueId];
+      const uniqueId = getUniqueId(ETH_ADDRESS, ChainId.mainnet);
+      newFavoritesMeta[uniqueId] = {
         ...favorite,
         address: ETH_ADDRESS,
         name: 'Ethereum',
         symbol: 'ETH',
-        uniqueId: getUniqueId(ETH_ADDRESS, Network.mainnet),
+        uniqueId,
+        mainnet_address: ETH_ADDRESS,
+        isNativeAsset: true,
+        icon_url: 'https://rainbowme-res.cloudinary.com/image/upload/v1668565116/assets/ethereum/eth.png',
+        networks: {
+          [ChainId.mainnet]: {
+            address: ETH_ADDRESS,
+            decimals: 18,
+          },
+        },
       };
     }
-    Object.entries(newFavoritesMeta).forEach(([address, favorite]) => {
-      if (address !== WETH_ADDRESS || wethIsFavorited) {
-        favoritesMetadata[address] = { ...favorite, favorite: true };
+    Object.entries(newFavoritesMeta).forEach(([uniqueId, favorite]) => {
+      if (favorite.address !== WETH_ADDRESS || wethIsFavorited) {
+        favoritesMetadata[uniqueId] = { ...favorite, favorite: true };
       }
     });
   }
+
   return favoritesMetadata;
 }
 
 /**
- * Refreshes the metadata associated with all favorites.
+ * Gets persisted favorites data and refreshes metadata, initializing with defaults if none exist.
  */
-export async function refreshFavorites() {
-  const favorites = Object.keys(queryClient.getQueryData(favoritesQueryKey) ?? DEFAULT);
-  const updatedMetadata = await fetchMetadata(favorites);
-  return updatedMetadata;
+export async function getFavorites() {
+  let favorites = useFavoritesStore.getState().favorites || queryClient.getQueryData<Record<UniqueId, RainbowToken>>(favoritesQueryKey);
+
+  const wethUniqueId = getUniqueId(WETH_ADDRESS, ChainId.mainnet);
+  // If we're in test mode and the stored favorites don't include WETH, we should re-initialize.
+  if (IS_TEST && favorites && !favorites[wethUniqueId]) {
+    favorites = undefined;
+  }
+
+  // If favorites haven't ever been set, initialize with defaults
+  if (!favorites) {
+    const defaultFavorites = await fetchMetadata(DEFAULT_FAVORITES, ChainId.mainnet);
+    useFavoritesStore.setState({ favorites: defaultFavorites });
+    return defaultFavorites;
+  }
+
+  // Otherwise, refresh existing favorites
+  const favoritesByNetwork = Object.values(favorites).reduce(
+    (favoritesByChain, token) => {
+      favoritesByChain[token.network as Network] ??= [];
+      favoritesByChain[token.network as Network].push(token.address);
+      return favoritesByChain;
+    },
+    {} as Record<Network, string[]>
+  );
+
+  const chainsIdByName = useBackendNetworksStore.getState().getChainsIdByName();
+
+  try {
+    const updatedMetadataByNetwork = await Promise.all(
+      Object.entries(favoritesByNetwork).map(async ([network, networkFavorites]) =>
+        fetchMetadata(networkFavorites, chainsIdByName[network as Network])
+      )
+    );
+
+    // Merge with existing favorites data
+    const newFavorites: Record<UniqueId, RainbowToken> = Object.assign({}, favorites, ...updatedMetadataByNetwork);
+    useFavoritesStore.setState({ favorites: newFavorites });
+
+    return newFavorites;
+  } catch (error) {
+    logger.error(new RainbowError('Failed to refresh favorites:', error));
+    return favorites;
+  }
 }
 
-export async function toggleFavorite(address: string) {
-  const favorites = Object.keys(queryClient.getQueryData(favoritesQueryKey) ?? []);
-  const lowercasedAddress = address.toLowerCase();
-  let updatedFavorites;
-  if (favorites.includes(lowercasedAddress)) {
-    updatedFavorites = without(favorites, lowercasedAddress);
+/**
+ * Toggles the favorite status of the given address. Performs a fetch to refresh the metadata of the
+ * given address if it is not already favorited. If the address is already favorited, the favorite status
+ * is removed from the query data.
+ * @param address - The address to toggle the favorite status of.
+ * @param chainId - The chain id of the network to toggle the favorite status of @default ChainId.mainnet
+ */
+export async function toggleFavorite(address: string, chainId = ChainId.mainnet) {
+  const favorites =
+    useFavoritesStore.getState().favorites || queryClient.getQueryData<Record<UniqueId, RainbowToken>>(favoritesQueryKey) || {};
+  const lowercasedAddress = address.toLowerCase() as AddressOrEth;
+  const uniqueId = getUniqueId(lowercasedAddress, chainId);
+  if (Object.keys(favorites).includes(uniqueId)) {
+    useFavoritesStore.setState({ favorites: omit(favorites, uniqueId) });
   } else {
-    updatedFavorites = [...favorites, lowercasedAddress];
+    const metadata = await fetchMetadata([lowercasedAddress], chainId);
+    analytics.track(analytics.event.addFavoriteToken, {
+      address: lowercasedAddress,
+      chainId,
+      name: metadata[uniqueId].name,
+      symbol: metadata[uniqueId].symbol,
+    });
+    useFavoritesStore.setState({ favorites: { ...favorites, ...metadata } });
   }
-  const metadata = await fetchMetadata(updatedFavorites);
-
-  console.log(metadata);
-
-  queryClient.setQueryData(favoritesQueryKey, metadata);
 }
 
 /**
@@ -148,17 +186,18 @@ export async function toggleFavorite(address: string) {
  * addresses to their corresponding `RainbowToken`. These values are cached in AsyncStorage and is only
  * modified/updated when `toggleFavorite` or `refreshFavorites` is called.
  */
-export function useFavorites(): {
-  favorites: string[];
-  favoritesMetadata: Record<EthereumAddress, RainbowToken>;
-} {
-  const query = useQuery<Record<EthereumAddress, RainbowToken>>(favoritesQueryKey, refreshFavorites, {
-    staleTime: Infinity,
+export function useFavorites() {
+  useQuery({
+    queryFn: getFavorites,
     cacheTime: Infinity,
+    keepPreviousData: true,
+    notifyOnChangeProps: [],
+    queryKey: favoritesQueryKey,
+    refetchOnWindowFocus: false,
+    staleTime: time.days(1),
   });
 
-  const favoritesMetadata = query.data ?? {};
-  const favorites = Object.keys(favoritesMetadata);
+  const [favorites, favoritesMetadata] = useFavoritesStore(state => [Object.keys(state.favorites ?? {}), state.favorites ?? {}], isEqual);
 
   return {
     favorites,

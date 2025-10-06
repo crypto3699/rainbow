@@ -1,14 +1,7 @@
-import * as lang from '@/languages';
-import React, { useCallback, useMemo } from 'react';
-import { Linking, Share } from 'react-native';
-import { ContextMenuButton, MenuActionConfig } from 'react-native-ios-context-menu';
-import { AppVersionStamp } from '@/components/AppVersionStamp';
-import Menu from './Menu';
-import MenuContainer from './MenuContainer';
-import MenuItem from './MenuItem';
+import BackupWarningIcon from '@/assets/BackupWarning.png';
+import CloudBackupWarningIcon from '@/assets/CloudBackupWarning.png';
 import AppIconIcon from '@/assets/settingsAppIcon.png';
 import AppIconIconDark from '@/assets/settingsAppIconDark.png';
-import WalletsAndBackupIcon from '@/assets/WalletsAndBackup.png';
 import CurrencyIcon from '@/assets/settingsCurrency.png';
 import CurrencyIconDark from '@/assets/settingsCurrencyDark.png';
 import DarkModeIcon from '@/assets/settingsDarkMode.png';
@@ -19,18 +12,29 @@ import NotificationsIcon from '@/assets/settingsNotifications.png';
 import NotificationsIconDark from '@/assets/settingsNotificationsDark.png';
 import PrivacyIcon from '@/assets/settingsPrivacy.png';
 import PrivacyIconDark from '@/assets/settingsPrivacyDark.png';
-import BackupWarningIcon from '@/assets/BackupWarning.png';
-import CloudBackupWarningIcon from '@/assets/CloudBackupWarning.png';
+import WalletsAndBackupIcon from '@/assets/WalletsAndBackup.png';
+import { AppVersionStamp } from '@/components/AppVersionStamp';
 import useExperimentalFlag, { LANGUAGE_SETTINGS, NOTIFICATIONS } from '@/config/experimentalHooks';
-import { useAccountSettings, useSendFeedback, useWallets } from '@/hooks';
+import { Box } from '@/design-system';
+import walletBackupTypes from '@/helpers/walletBackupTypes';
+import { useAccountSettings, useSendFeedback } from '@/hooks';
+import * as i18n from '@/languages';
+import { backupsStore } from '@/state/backups/backups';
+import { useIsReadOnlyWallet } from '@/state/wallets/walletsStore';
+import { ReviewPromptAction } from '@/storage/schema';
 import { Themes, useTheme } from '@/theme';
 import { showActionSheetWithOptions } from '@/utils';
+import { openInBrowser } from '@/utils/openInBrowser';
 import { handleReviewPromptAction } from '@/utils/reviewAlert';
-import { ReviewPromptAction } from '@/storage/schema';
+import React, { useCallback, useMemo } from 'react';
+import { Share } from 'react-native';
+import { ContextMenuButton, MenuActionConfig } from 'react-native-ios-context-menu';
 import { SettingsExternalURLs } from '../constants';
-import { capitalizeFirstLetter, checkWalletsForBackupStatus } from '../utils';
-import walletBackupTypes from '@/helpers/walletBackupTypes';
-import { Box } from '@/design-system';
+import { checkLocalWalletsForBackupStatus } from '../utils';
+import Menu from './Menu';
+import MenuContainer from './MenuContainer';
+import MenuItem from './MenuItem';
+import { XIcon } from '@/components/icons/svg/XIcon';
 
 interface SettingsSectionProps {
   onCloseModal: () => void;
@@ -54,15 +58,17 @@ const SettingsSection = ({
   onPressPrivacy,
   onPressNotifications,
 }: SettingsSectionProps) => {
-  const { wallets, isReadOnlyWallet } = useWallets();
+  const isReadOnlyWallet = useIsReadOnlyWallet();
   const { language, nativeCurrency } = useAccountSettings();
   const isLanguageSelectionEnabled = useExperimentalFlag(LANGUAGE_SETTINGS);
   const isNotificationsEnabled = useExperimentalFlag(NOTIFICATIONS);
 
+  const backupProvider = backupsStore(state => state.backupProvider);
+  const backups = backupsStore(state => state.backups);
+
   const { isDarkMode, setTheme, colorScheme } = useTheme();
 
   const onSendFeedback = useSendFeedback();
-  const { backupProvider } = useMemo(() => checkWalletsForBackupStatus(wallets), [wallets]);
 
   const onPressReview = useCallback(async () => {
     if (ios) {
@@ -73,26 +79,24 @@ const SettingsSection = ({
 
   const onPressShare = useCallback(() => {
     Share.share({
-      message: `${lang.t('settings.hey_friend_message')} ${SettingsExternalURLs.rainbowHomepage}`,
+      message: `${i18n.t(i18n.l.settings.hey_friend_message)} ${SettingsExternalURLs.rainbowHomepage}`,
     });
   }, []);
 
-  const onPressTwitter = useCallback(async () => {
-    Linking.canOpenURL(SettingsExternalURLs.twitterDeepLink).then(supported =>
-      supported ? Linking.openURL(SettingsExternalURLs.twitterDeepLink) : Linking.openURL(SettingsExternalURLs.twitterWebUrl)
-    );
+  const onPressTwitter = useCallback(() => {
+    openInBrowser(SettingsExternalURLs.twitterWebUrl, false);
   }, []);
 
-  const onPressLearn = useCallback(() => Linking.openURL(SettingsExternalURLs.rainbowLearn), []);
+  const onPressLearn = useCallback(() => openInBrowser(SettingsExternalURLs.rainbowLearn), []);
 
-  const { allBackedUp, canBeBackedUp } = useMemo(() => checkWalletsForBackupStatus(wallets), [wallets]);
+  const { allBackedUp } = useMemo(() => checkLocalWalletsForBackupStatus(backups), [backups]);
 
   const themeMenuConfig = useMemo(() => {
     return {
       menuItems: [
         {
           actionKey: Themes.SYSTEM,
-          actionTitle: lang.t('settings.theme_section.system'),
+          actionTitle: i18n.t(i18n.l.settings.theme_section.system),
           icon: {
             iconType: 'SYSTEM',
             iconValue: 'gear',
@@ -101,7 +105,7 @@ const SettingsSection = ({
         },
         {
           actionKey: Themes.LIGHT,
-          actionTitle: lang.t('settings.theme_section.light'),
+          actionTitle: i18n.t(i18n.l.settings.theme_section.light),
           icon: {
             iconType: 'SYSTEM',
             iconValue: 'sun.max',
@@ -110,7 +114,7 @@ const SettingsSection = ({
         },
         {
           actionKey: Themes.DARK,
-          actionTitle: lang.t('settings.theme_section.dark'),
+          actionTitle: i18n.t(i18n.l.settings.theme_section.dark),
           icon: {
             iconType: 'SYSTEM',
             iconValue: 'moon',
@@ -120,22 +124,22 @@ const SettingsSection = ({
       ] as MenuActionConfig[],
       menuTitle: '',
     };
-  }, [colorScheme]);
+  }, [colorScheme, language]);
 
+  const androidActions = useMemo(() => {
+    return [
+      i18n.t(i18n.l.settings.theme_section.system),
+      i18n.t(i18n.l.settings.theme_section.light),
+      i18n.t(i18n.l.settings.theme_section.dark),
+    ];
+  }, [language]);
   const onPressThemeAndroidActions = useCallback(() => {
-    const androidActions = [
-      lang.t('settings.theme_section.system'),
-      lang.t('settings.theme_section.light'),
-      lang.t('settings.theme_section.dark'),
-    ] as const;
-
     showActionSheetWithOptions(
       {
         options: androidActions,
-        showSeparators: true,
         title: '',
       },
-      (idx: number) => {
+      idx => {
         if (idx === 0) {
           setTheme(Themes.SYSTEM);
         } else if (idx === 1) {
@@ -145,7 +149,7 @@ const SettingsSection = ({
         }
       }
     );
-  }, [setTheme]);
+  }, [setTheme, androidActions]);
 
   const handleSelectTheme = useCallback(
     // @ts-expect-error ContextMenu is an untyped JS component and can't type its onPress handler properly
@@ -170,60 +174,41 @@ const SettingsSection = ({
   return (
     <MenuContainer testID="settings-menu-container" Footer={<AppVersionStamp />}>
       <Menu>
-        {canBeBackedUp && (
-          <MenuItem
-            hasRightArrow
-            leftComponent={<MenuItem.ImageIcon source={WalletsAndBackupIcon} />}
-            onPress={onPressBackup}
-            rightComponent={
-              <Box paddingBottom="2px" paddingRight="8px">
-                <MenuItem.ImageIcon size={44} source={getWalletsAndBackupAlertIcon()} />
-              </Box>
-            }
-            size={60}
-            testID="backup-section"
-            titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.backup)} />}
-          />
-        )}
+        <MenuItem
+          hasRightArrow
+          leftComponent={<MenuItem.ImageIcon source={WalletsAndBackupIcon} />}
+          onPress={onPressBackup}
+          rightComponent={
+            <Box paddingBottom="2px" paddingRight="8px">
+              <MenuItem.ImageIcon size={44} source={getWalletsAndBackupAlertIcon()} />
+            </Box>
+          }
+          size={60}
+          testID={'backup-section'}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.backup)} />}
+        />
         {isNotificationsEnabled && (
           <MenuItem
             hasRightArrow
             leftComponent={<MenuItem.ImageIcon source={isDarkMode ? NotificationsIconDark : NotificationsIcon} />}
             onPress={onPressNotifications}
             size={60}
-            titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.notifications)} />}
+            titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.notifications)} />}
           />
         )}
         <MenuItem
           hasRightArrow
           leftComponent={<MenuItem.ImageIcon source={isDarkMode ? CurrencyIconDark : CurrencyIcon} />}
           onPress={onPressCurrency}
-          rightComponent={<MenuItem.Selection>{nativeCurrency || ''}</MenuItem.Selection>}
+          rightComponent={
+            <MenuItem.Selection>
+              {i18n.t(i18n.l.settings.currency[nativeCurrency as Exclude<keyof typeof i18n.l.settings.currency, 'title'>].code)}
+            </MenuItem.Selection>
+          }
           size={60}
           testID="currency-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.currency.title)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.currency.title)} />}
         />
-        {/* {(testnetsEnabled || IS_DEV) && (
-          <MenuItem
-            hasRightArrow
-            leftComponent={
-              <MenuItem.ImageIcon
-                source={isDarkMode ? NetworkIconDark : NetworkIcon}
-              />
-            }
-            onPress={onPressNetwork}
-            rightComponent={
-              <MenuItem.Selection>
-                {getNetworkObj(network).name}
-              </MenuItem.Selection>
-            }
-            size={60}
-            testID="network-section"
-            titleComponent={
-              <MenuItem.Title text={lang.t('settings.network')} />
-            }
-          />
-        )} */}
         <ContextMenuButton
           menuConfig={themeMenuConfig}
           {...(android ? { onPress: onPressThemeAndroidActions } : {})}
@@ -232,14 +217,17 @@ const SettingsSection = ({
           menuAlignmentOverride="right"
           onPressMenuItem={handleSelectTheme}
           useActionSheetFallback={false}
+          testID={`choose-theme-section-${isDarkMode ? 'dark' : 'light'}`}
+          key={`theme-menu-${language}`}
         >
           <MenuItem
             hasChevron
             leftComponent={<MenuItem.ImageIcon source={isDarkMode ? DarkModeIconDark : DarkModeIcon} />}
-            rightComponent={<MenuItem.Selection>{colorScheme ? capitalizeFirstLetter(colorScheme) : ''}</MenuItem.Selection>}
+            rightComponent={
+              <MenuItem.Selection>{colorScheme ? i18n.t(i18n.l.settings.theme_section[colorScheme]) : ''}</MenuItem.Selection>
+            }
             size={60}
-            testID={`theme-section-${isDarkMode ? 'dark' : 'light'}`}
-            titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.theme)} />}
+            titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.theme)} />}
           />
         </ContextMenuButton>
 
@@ -250,7 +238,7 @@ const SettingsSection = ({
             onPress={onPressPrivacy}
             size={60}
             testID="privacy"
-            titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.privacy)} />}
+            titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.privacy)} />}
           />
         )}
         {isLanguageSelectionEnabled && (
@@ -258,9 +246,9 @@ const SettingsSection = ({
             hasRightArrow
             leftComponent={<MenuItem.ImageIcon source={isDarkMode ? LanguageIconDark : LanguageIcon} />}
             onPress={onPressLanguage}
-            rightComponent={<MenuItem.Selection>{(lang.supportedLanguages as any)[language].label || ''}</MenuItem.Selection>}
+            rightComponent={<MenuItem.Selection>{(i18n.supportedLanguages as any)[language].label || ''}</MenuItem.Selection>}
             size={60}
-            titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.language)} />}
+            titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.language)} />}
           />
         )}
         <MenuItem
@@ -269,7 +257,7 @@ const SettingsSection = ({
           onPress={onPressAppIcon}
           size={60}
           testID="app-icon-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.app_icon)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.app_icon)} />}
         />
       </Menu>
       <Menu>
@@ -278,21 +266,25 @@ const SettingsSection = ({
           onPress={onPressShare}
           size={52}
           testID="share-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.share_rainbow)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.share_rainbow)} />}
         />
         <MenuItem
           leftComponent={<MenuItem.TextIcon icon="🧠" isEmoji />}
           onPress={onPressLearn}
           size={52}
           testID="learn-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.learn)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.learn)} />}
         />
         <MenuItem
-          leftComponent={<MenuItem.TextIcon icon="🐦" isEmoji />}
+          leftComponent={
+            <Box alignItems="center" width={{ custom: 36 }}>
+              {<XIcon color={isDarkMode ? '#FFFFFF' : '#000000'} />}
+            </Box>
+          }
           onPress={onPressTwitter}
           size={52}
           testID="twitter-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.follow_us_on_twitter)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.follow_us_on_twitter)} />}
         />
         <MenuItem
           leftComponent={<MenuItem.TextIcon icon="💬" isEmoji />}
@@ -300,7 +292,7 @@ const SettingsSection = ({
           size={52}
           testID="feedback-section"
           titleComponent={
-            <MenuItem.Title text={ios ? lang.t(lang.l.settings.feedback_and_support) : lang.t(lang.l.settings.feedback_and_support)} />
+            <MenuItem.Title text={ios ? i18n.t(i18n.l.settings.feedback_and_support) : i18n.t(i18n.l.settings.feedback_and_support)} />
           }
         />
         <MenuItem
@@ -308,14 +300,14 @@ const SettingsSection = ({
           onPress={onPressReview}
           size={52}
           testID="review-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.review)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.review)} />}
         />
         <MenuItem
           leftComponent={<MenuItem.TextIcon icon={ios ? '🚧' : '🐞'} isEmoji />}
           onPress={onPressDev}
           size={52}
           testID="developer-section"
-          titleComponent={<MenuItem.Title text={lang.t(lang.l.settings.developer)} />}
+          titleComponent={<MenuItem.Title text={i18n.t(i18n.l.settings.developer)} />}
         />
       </Menu>
     </MenuContainer>

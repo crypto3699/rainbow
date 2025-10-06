@@ -1,6 +1,5 @@
-import { Network } from '@/helpers/networkTypes';
 import { Asset, AssetContract, AssetType } from '@/entities';
-import { UniqueTokenType } from '@/utils/uniqueTokens';
+import { Network } from '@/state/backendNetworks/types';
 
 export enum NFTMarketplaceId {
   OpenSea = 'opensea',
@@ -65,6 +64,6 @@ export type NFT = {
   traits: NFTTrait[];
   type: AssetType.nft;
   uniqueId: string;
-  uniqueTokenType: UniqueTokenType;
+  uniqueTokenType: AssetType;
   video_url: string | undefined;
 };

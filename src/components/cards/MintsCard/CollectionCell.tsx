@@ -6,8 +6,8 @@ import { ButtonPressAnimation } from '@/components/animations';
 import { useTheme } from '@/theme';
 import { View } from 'react-native';
 import { MintableCollection } from '@/graphql/__generated__/arc';
-import ethereumUtils, { getNetworkFromChainId, useNativeAssetForNetwork } from '@/utils/ethereumUtils';
-import { analyticsV2 } from '@/analytics';
+import { useNativeAsset } from '@/utils/ethereumUtils';
+import { analytics } from '@/analytics';
 import * as i18n from '@/languages';
 import { IS_IOS } from '@/env';
 import { ImgixImage } from '@/components/images';
@@ -41,7 +41,7 @@ export function CollectionCell({ collection }: { collection: MintableCollection 
 
   const [mediaRendered, setMediaRendered] = useState(false);
 
-  const currency = useNativeAssetForNetwork(getNetworkFromChainId(collection.chainId));
+  const currency = useNativeAsset({ chainId: collection.chainId });
 
   const amount = convertRawAmountToRoundedDecimal(collection.mintStatus.price, 18, 6);
 
@@ -52,15 +52,14 @@ export function CollectionCell({ collection }: { collection: MintableCollection 
   useEffect(() => setMediaRendered(false), [imageUrl]);
 
   const handlePress = useCallback(() => {
-    analyticsV2.track(analyticsV2.event.mintsPressedCollectionCell, {
+    analytics.track(analytics.event.mintsPressedCollectionCell, {
       contractAddress: collection.contractAddress,
       chainId: collection.chainId,
       priceInEth: amount,
     });
 
-    const network = ethereumUtils.getNetworkFromChainId(collection.chainId);
-    navigateToMintCollection(collection.contract, network);
-  }, [amount, collection.chainId, collection.contract, collection.contractAddress]);
+    navigateToMintCollection(collection.contract, collection.mintStatus.price, collection.chainId);
+  }, [amount, collection.chainId, collection.contract, collection.contractAddress, collection.mintStatus.price]);
 
   return (
     <ButtonPressAnimation onPress={handlePress} style={{ width: NFT_IMAGE_SIZE }}>
@@ -131,11 +130,10 @@ export function CollectionCell({ collection }: { collection: MintableCollection 
             <RainbowCoinIcon
               icon={currency?.icon_url || ''}
               size={12}
-              network={getNetworkFromChainId(collection.chainId)}
+              chainId={collection.chainId}
               symbol={currency?.symbol || ''}
-              theme={theme}
-              colors={currency?.colors}
-              ignoreBadge
+              color={currency?.colors?.primary || currency?.colors?.fallback || undefined}
+              showBadge={false}
             />
           </View>
         )}

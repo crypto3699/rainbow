@@ -13,10 +13,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import useReactiveSharedValue from '../../../react-native-animated-charts/src/helpers/useReactiveSharedValue';
-import { StatusBarHelper } from '@/helpers';
 import { useDimensions } from '@/hooks';
 import styled from '@/styled-thing';
 import { position } from '@/styles';
+import { SystemBars } from 'react-native-edge-to-edge';
 
 const adjustConfig = {
   duration: 300,
@@ -122,12 +122,12 @@ export const ZoomableWrapper = ({
   const isZoomedValue = useSharedValue(false);
 
   useEffect(() => {
-    StatusBarHelper.setLightContent();
+    SystemBars.setStyle('light');
     if (isZoomed) {
-      StatusBarHelper.setHidden(true);
+      SystemBars.setHidden({ statusBar: true });
       onZoomIn?.();
     } else {
-      StatusBarHelper.setHidden(false);
+      SystemBars.setHidden({ statusBar: false });
       onZoomOut?.();
     }
   }, [isZoomed, onZoomIn, onZoomOut]);
@@ -186,8 +186,8 @@ export const ZoomableWrapper = ({
     let targetScale = Math.min(scale.value, MAX_IMAGE_SCALE);
 
     // determine whether to snap to screen edges
-    let breakingScaleX = deviceWidth / fullSizeWidth;
-    let breakingScaleY = deviceHeight / fullSizeHeight;
+    const breakingScaleX = deviceWidth / fullSizeWidth;
+    const breakingScaleY = deviceHeight / fullSizeHeight;
 
     const maxDisplacementX = (deviceWidth * (Math.max(1, targetScale / breakingScaleX) - 1)) / 2 / zooming;
     const maxDisplacementY = (deviceHeight * (Math.max(1, targetScale / breakingScaleY) - 1)) / 2 / zooming;
@@ -433,10 +433,10 @@ export const ZoomableWrapper = ({
     };
   });
 
-  const pan = useRef();
-  const pinch = useRef();
-  const doubleTap = useRef();
-  const singleTap = useRef();
+  const pan = useRef(undefined);
+  const pinch = useRef(undefined);
+  const doubleTap = useRef(undefined);
+  const singleTap = useRef(undefined);
 
   return (
     <View style={{ alignItems: 'center' }}>

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTheme } from '../../theme/ThemeContext';
-import { ExchangeInput } from '../exchange';
+import ExchangeInput from '@/components/ExchangeInput';
 import { Column, Row } from '../layout';
 import { Text } from '../text';
 import { useDimensions } from '@/hooks';
 import styled from '@/styled-thing';
+
 const BubbleInput = styled(ExchangeInput).attrs(({ isSmallPhone, isTinyPhone, theme: { isDarkMode } }) => ({
   disableTabularNums: true,
   keyboardAppearance: isDarkMode ? 'dark' : 'light',
@@ -47,7 +48,7 @@ const BubbleField = (
   const [value, setValue] = useState(valueProp);
   const [wasButtonPressed, setWasButtonPressed] = useState(false);
 
-  const ref = useRef();
+  const ref = useRef(undefined);
   useImperativeHandle(forwardedRef, () => ref.current);
 
   const formattedValue = useMemo(() => format(String(value || '')), [format, value]);

@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { Source } from 'react-native-fast-image';
-import { KeyboardArea } from 'react-native-keyboard-area';
 
-import * as lang from '@/languages';
+import * as i18n from '@/languages';
 import { sharedCoolModalTopOffset } from '@/navigation/config';
 import { cloudPlatform } from '@/utils/platform';
 import { PasswordField } from '@/components/fields';
@@ -11,12 +10,11 @@ import { Text } from '@/components/text';
 import WalletAndBackup from '@/assets/WalletsAndBackup.png';
 import { analytics } from '@/analytics';
 import { cloudBackupPasswordMinLength, isCloudBackupPasswordValid } from '@/handlers/cloudBackup';
-import { useDimensions, useMagicAutofocus, useWallets } from '@/hooks';
+import { useDimensions, useMagicAutofocus } from '@/hooks';
 import styled from '@/styled-thing';
 import { padding } from '@/styles';
 import { Box, Inset, Stack } from '@/design-system';
 import { ImgixImage } from '../images';
-import { IS_ANDROID } from '@/env';
 import { RainbowButton } from '../buttons';
 import RainbowButtonTypes from '../buttons/rainbow-button/RainbowButtonTypes';
 import { usePasswordValidation } from './usePasswordValidation';
@@ -24,17 +22,7 @@ import { TextInput } from 'react-native';
 import { useTheme } from '@/theme';
 import { useNavigation } from '@/navigation';
 import Routes from '@/navigation/routesNames';
-import { SETTINGS_BACKUP_ROUTES } from '@/screens/SettingsSheet/components/Backups/routes';
-import walletTypes from '@/helpers/walletTypes';
-
-type BackupCloudStepParams = {
-  BackupCloudStep: {
-    isFromWalletReadyPrompt?: boolean;
-    walletId?: string;
-    onSuccess: (password: string) => Promise<void>;
-    onCancel: () => Promise<void>;
-  };
-};
+import { RootStackParamList } from '@/navigation/types';
 
 type NativeEvent = {
   nativeEvent: {
@@ -46,7 +34,7 @@ export function BackupCloudStep() {
   const { isDarkMode } = useTheme();
   const { goBack } = useNavigation();
   const { width: deviceWidth, height: deviceHeight } = useDimensions();
-  const { params } = useRoute<RouteProp<BackupCloudStepParams, 'BackupCloudStep'>>();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.BACKUP_SHEET>>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -62,10 +50,7 @@ export function BackupCloudStep() {
     setTimeout(() => {
       passwordRef.current?.focus();
     }, 1);
-    analytics.track('Choose Password Step', {
-      category: 'backup',
-      label: cloudPlatform,
-    });
+    analytics.track(analytics.event.backupChoosePassword, { category: 'backup', label: cloudPlatform });
   }, []);
 
   const { handleFocus } = useMagicAutofocus(passwordRef);
@@ -98,7 +83,7 @@ export function BackupCloudStep() {
         goBack();
       }
 
-      onSuccess(password);
+      onSuccess?.(password);
     },
     [goBack, isFromWalletReadyPrompt, onSuccess]
   );
@@ -106,7 +91,7 @@ export function BackupCloudStep() {
   useEffect(() => {
     return () => {
       if (!password) {
-        onCancel();
+        onCancel?.();
       }
     };
   }, []);
@@ -129,13 +114,13 @@ export function BackupCloudStep() {
               size={72}
             />
             <Stack space="12px">
-              <Title>{lang.t(lang.l.back_up.cloud.password.choose_a_password)}</Title>
+              <Title>{i18n.t(i18n.l.back_up.cloud.password.choose_a_password)}</Title>
               <DescriptionText>
-                {lang.t(lang.l.back_up.cloud.password.a_password_youll_remember_part_one)}
+                {i18n.t(i18n.l.back_up.cloud.password.a_password_youll_remember_part_one)}
                 &nbsp;
-                <ImportantText>{lang.t(lang.l.back_up.cloud.password.not)}</ImportantText>
+                <ImportantText>{i18n.t(i18n.l.back_up.cloud.password.not)}</ImportantText>
                 &nbsp;
-                {lang.t(lang.l.back_up.cloud.password.a_password_youll_remember_part_two)}
+                {i18n.t(i18n.l.back_up.cloud.password.a_password_youll_remember_part_two)}
               </DescriptionText>
             </Stack>
           </Masthead>
@@ -148,10 +133,11 @@ export function BackupCloudStep() {
               onFocus={(target: any) => onTextInputFocus(target)}
               onSubmitEditing={onPasswordSubmit}
               password={password}
-              placeholder={lang.t(lang.l.back_up.cloud.password.backup_password)}
+              placeholder={i18n.t(i18n.l.back_up.cloud.password.backup_password)}
               ref={passwordRef}
               returnKeyType="next"
               textContentType="newPassword"
+              testID="password-input"
             />
             {isCloudBackupPasswordValid(password) && (
               <PasswordField
@@ -165,8 +151,9 @@ export function BackupCloudStep() {
                 onFocus={(target: any) => onTextInputFocus(target, true)}
                 onSubmitEditing={() => onSuccessAndNavigateBack(password)}
                 password={confirmPassword}
-                placeholder={lang.t(lang.l.back_up.cloud.password.confirm_placeholder)}
+                placeholder={i18n.t(i18n.l.back_up.cloud.password.confirm_placeholder)}
                 ref={confirmPasswordRef}
+                testID="confirm-password-input"
               />
             )}
 
@@ -181,10 +168,11 @@ export function BackupCloudStep() {
               width={deviceWidth - 48}
               disabled={!validPassword}
               type={RainbowButtonTypes.backup}
-              label={`􀎽 ${lang.t(lang.l.back_up.cloud.back_up_to_platform, {
+              label={`􀎽 ${i18n.t(i18n.l.back_up.cloud.back_up_to_platform, {
                 cloudPlatformName: cloudPlatform,
               })}`}
               onPress={() => onSuccessAndNavigateBack(password)}
+              testID="backup-button"
             />
           )}
 
@@ -198,14 +186,12 @@ export function BackupCloudStep() {
               width="full"
             >
               <ButtonText>
-                {`􀎽 ${lang.t(lang.l.back_up.cloud.back_up_to_platform, {
+                {`􀎽 ${i18n.t(i18n.l.back_up.cloud.back_up_to_platform, {
                   cloudPlatformName: cloudPlatform,
                 })}`}
               </ButtonText>
             </Box>
           )}
-
-          {IS_ANDROID ? <KeyboardSizeView /> : null}
         </Box>
       </Inset>
     </Box>
@@ -221,10 +207,6 @@ const DescriptionText = styled(Text).attrs(({ theme: { colors }, color }: any) =
   size: 'lmedium',
   weight: 'medium',
 }))({});
-
-const KeyboardSizeView = styled(KeyboardArea)({
-  backgroundColor: ({ theme: { colors } }: any) => colors.transparent,
-});
 
 const ImportantText = styled(DescriptionText).attrs(({ theme: { colors } }: any) => ({
   color: colors.red,

@@ -1,21 +1,30 @@
 /* eslint-disable react/jsx-props-no-spreading */
 import React from 'react';
-
-import { AnimatedText, Box, Inline, globalColors, useColorMode, useForegroundColor } from '@/design-system';
-import Animated, { DerivedValue, useAnimatedStyle, useDerivedValue, withSpring, withTiming } from 'react-native-reanimated';
-import { fadeConfig, springConfig } from '../constants';
+import { AnimatedText, Bleed, Box, Inline, globalColors, useColorMode, useForegroundColor } from '@/design-system';
+import Animated, { SharedValue, useAnimatedStyle, useDerivedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { opacityWorklet } from '@/__swaps__/utils/swaps';
-import { GestureHandlerButtonProps, GestureHandlerV1Button } from './GestureHandlerV1Button';
+import { GestureHandlerButtonProps, GestureHandlerButton } from './GestureHandlerButton';
 import { StyleSheet } from 'react-native';
+import { SPRING_CONFIGS, TIMING_CONFIGS } from '@/components/animations/animationConfigs';
 
 type AnimatedSwitchProps = {
   onToggle: () => void;
-  value: DerivedValue<boolean>;
+  value: SharedValue<boolean>;
   activeLabel?: string;
   inactiveLabel?: string;
+  disabled?: boolean;
+  size?: 'small' | 'large';
 } & Omit<GestureHandlerButtonProps, 'children'>;
 
-export function AnimatedSwitch({ value, onToggle, activeLabel, inactiveLabel, ...props }: AnimatedSwitchProps) {
+export function AnimatedSwitch({
+  value,
+  onToggle,
+  activeLabel,
+  inactiveLabel,
+  disabled = false,
+  size = 'small',
+  ...props
+}: AnimatedSwitchProps) {
   const { isDarkMode } = useColorMode();
 
   const inactiveBg = useForegroundColor('fillSecondary');
@@ -25,9 +34,10 @@ export function AnimatedSwitch({ value, onToggle, activeLabel, inactiveLabel, ..
   const containerStyles = useAnimatedStyle(() => {
     return {
       backgroundColor: !value.value
-        ? withTiming(opacityWorklet(inactiveBg, 0.12), fadeConfig)
-        : withTiming(opacityWorklet(activeBg, 0.64), fadeConfig),
+        ? withTiming(opacityWorklet(inactiveBg, 0.12), TIMING_CONFIGS.fadeConfig)
+        : withTiming(opacityWorklet(activeBg, 0.72), TIMING_CONFIGS.fadeConfig),
       borderColor: opacityWorklet(border, 0.06),
+      opacity: disabled ? 0.4 : 1,
     };
   });
 
@@ -35,13 +45,15 @@ export function AnimatedSwitch({ value, onToggle, activeLabel, inactiveLabel, ..
     return {
       transform: [
         {
-          translateX: withSpring(value.value ? 11 : 1, springConfig),
+          translateX: withSpring(value.value ? 11 : 1, SPRING_CONFIGS.springConfig),
         },
       ],
     };
   });
 
   const labelItem = useDerivedValue(() => {
+    if (disabled) return;
+
     if (!activeLabel && !inactiveLabel) {
       return;
     }
@@ -55,20 +67,31 @@ export function AnimatedSwitch({ value, onToggle, activeLabel, inactiveLabel, ..
 
   if (labelItem.value) {
     return (
-      <Inline alignVertical="center" horizontalSpace="6px">
-        <AnimatedText align="right" color={isDarkMode ? 'labelSecondary' : 'label'} size="15pt" weight="heavy" text={labelItem} />
-        {/* TODO: Small switch, so let's move this out to be the whole row */}
-        <GestureHandlerV1Button onPressWorklet={onToggle} style={[styles.containerStyles, containerStyles]} {...props}>
-          <Box style={[styles.circleStyles, circleStyles]} as={Animated.View} />
-        </GestureHandlerV1Button>
-      </Inline>
+      <Bleed horizontal="12px" vertical="8px">
+        <GestureHandlerButton onPressWorklet={onToggle} {...props}>
+          <Box paddingHorizontal="12px" paddingVertical="8px">
+            <Inline alignVertical="center" horizontalSpace="8px" wrap={false}>
+              <AnimatedText align="right" color={isDarkMode ? 'labelSecondary' : 'label'} size="15pt" weight="bold">
+                {labelItem}
+              </AnimatedText>
+              <Box as={Animated.View} style={[styles.containerStyles, size === 'large' && styles.containerStylesLarge, containerStyles]}>
+                <Box style={[styles.circleStyles, size === 'large' && styles.circleStylesLarge, circleStyles]} as={Animated.View} />
+              </Box>
+            </Inline>
+          </Box>
+        </GestureHandlerButton>
+      </Bleed>
     );
   }
 
   return (
-    <GestureHandlerV1Button onPressWorklet={onToggle} style={[styles.containerStyles, containerStyles]} {...props}>
-      <Box style={[styles.circleStyles, circleStyles]} as={Animated.View} />
-    </GestureHandlerV1Button>
+    <GestureHandlerButton
+      onPressWorklet={onToggle}
+      style={[styles.containerStyles, size === 'large' && styles.containerStylesLarge, containerStyles]}
+      {...props}
+    >
+      <Box style={[styles.circleStyles, size === 'large' && styles.circleStylesLarge, circleStyles]} as={Animated.View} />
+    </GestureHandlerButton>
   );
 }
 
@@ -80,11 +103,19 @@ const styles = StyleSheet.create({
     width: 26,
     height: 16,
   },
+  containerStylesLarge: {
+    width: 30,
+    height: 20,
+  },
   circleStyles: {
     top: 1,
     backgroundColor: globalColors.white100,
     borderRadius: 100,
     width: 12,
     height: 12,
+  },
+  circleStylesLarge: {
+    height: 16,
+    width: 16,
   },
 });

@@ -10,15 +10,13 @@
 
 💻 [Browser extension available on](https://rainbow.me/download?utm_campaign=gh&utm_source=referral&utm_medium=gh), [Chrome](https://chrome.google.com/webstore/detail/rainbow/opfgelmcmbiajamepnmloijbpoleiama?utm_campaign=gh&utm_source=referral&utm_medium=gh), [Brave](https://chrome.google.com/webstore/detail/rainbow/opfgelmcmbiajamepnmloijbpoleiama?utm_campaign=gh&utm_source=referral&utm_medium=gh), [Edge](https://chrome.google.com/webstore/detail/rainbow/opfgelmcmbiajamepnmloijbpoleiama?utm_campaign=gh&utm_source=referral&utm_medium=gh), [FireFox](https://addons.mozilla.org/en-US/firefox/addon/rainbow-extension/?utm_campaign=gh&utm_source=referral&utm_medium=gh), and [Arc](https://chrome.google.com/webstore/detail/rainbow/opfgelmcmbiajamepnmloijbpoleiama?utm_campaign=gh&utm_source=referral&utm_medium=gh).
 
-🐦️ [Follow us on Twitter](https://twitter.com/rainbowdotme)
+𝕏 [Follow us on X](https://x.com/rainbowdotme)
 
 ## Setup
 
 ### General
 
-- Install NVM or Node.js 16: https://github.com/creationix/nvm
-- Clone https://github.com/rainbow-me/rainbow-scripts into the root of this project
-- You'll need a [github ssh key setup](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) if you don't have already
+- Install NVM or Node.js 18: https://github.com/creationix/nvm
 - Install all project dependencies with `yarn setup`
 
 ### MacOS
@@ -66,7 +64,7 @@ https://reactnative.dev/docs/getting-started
 
 ### Preflight
 
-1. Run `nvm use` to force Node.js v16.
+1. Run `nvm use` to force Node.js v18.
 
 2. Set up your .env file, use our env.example as a guide.
 

@@ -1,43 +1,18 @@
-import { BlurView } from '@react-native-community/blur';
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Linking, StatusBar, View } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
-import useWallets from '../../hooks/useWallets';
-import { GasSpeedButton } from '@/components/gas';
-import { Execute, getClient } from '@reservoir0x/reservoir-sdk';
-import { privateKeyToAccount } from 'viem/accounts';
-import { createWalletClient, http } from 'viem';
-import { HoldToAuthorizeButton } from '@/components/buttons';
-import Routes from '@/navigation/routesNames';
-import ImgixImage from '../../components/images/ImgixImage';
-import { SlackSheet } from '../../components/sheet';
-import { CardSize } from '../../components/unique-token/CardSize';
-import { WrappedAlert as Alert } from '@/helpers/alert';
-import { Box, ColorModeProvider, Column, Columns, Inline, Inset, Separator, Stack, Text } from '@/design-system';
-import { useAccountProfile, useAccountSettings, useDimensions, useENSAvatar, useGas, usePersistentAspectRatio } from '@/hooks';
-import { useNavigation } from '@/navigation';
-import styled from '@/styled-thing';
-import { position } from '@/styles';
-import { useTheme } from '@/theme';
-import { abbreviations, ethereumUtils, watchingAlert } from '@/utils';
-import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
-import { maybeSignUri } from '@/handlers/imgix';
+import { analytics } from '@/analytics';
 import { ButtonPressAnimation } from '@/components/animations';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
-import { ReservoirCollection } from '@/graphql/__generated__/arcDev';
-import { format } from 'date-fns';
-import { NewTransaction } from '@/entities';
-import * as i18n from '@/languages';
-import { analyticsV2 } from '@/analytics';
-import { event } from '@/analytics/event';
-import { ETH_ADDRESS, ETH_SYMBOL } from '@/references';
-import { RainbowNetworks, getNetworkObj } from '@/networks';
-import { Network } from '@/networks/types';
-import { fetchReverseRecord } from '@/handlers/ens';
+import { HoldToAuthorizeButton } from '@/components/buttons';
+import { ChainImage } from '@/components/coin-icon/ChainImage';
 import { ContactAvatar } from '@/components/contacts';
-import { addressHashedColorIndex } from '@/utils/profileUtils';
-import { loadPrivateKey } from '@/model/wallet';
-import { ChainBadge } from '@/components/coin-icon';
+import { GasSpeedButton } from '@/components/gas';
+import { Bleed, Box, ColorModeProvider, Column, Columns, Inline, Inset, Separator, Stack, Text } from '@/design-system';
+import { NewTransaction, TransactionStatus } from '@/entities';
+import { IS_ANDROID, IS_IOS } from '@/env';
+import { metadataPOSTClient } from '@/graphql';
+import { ReservoirCollection } from '@/graphql/__generated__/arcDev';
+import { Transaction } from '@/graphql/__generated__/metadataPOST';
+import { fetchReverseRecord } from '@/handlers/ens';
+import { maybeSignUri } from '@/handlers/imgix';
+import { WrappedAlert as Alert } from '@/helpers/alert';
 import {
   add,
   convertAmountToBalanceDisplay,
@@ -47,24 +22,51 @@ import {
   isZero,
   multiply,
 } from '@/helpers/utilities';
+import { useDimensions, useENSAvatar, useGas, usePersistentAspectRatio } from '@/hooks';
+import { usePersistentDominantColorFromImage } from '@/hooks/usePersistentDominantColorFromImage';
+import * as i18n from '@/languages';
 import { RainbowError, logger } from '@/logger';
-import { QuantityButton } from './components/QuantityButton';
+import { loadPrivateKey } from '@/model/wallet';
+import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
+import { RootStackParamList } from '@/navigation/types';
+import { ETH_ADDRESS, ETH_SYMBOL } from '@/references';
 import { getRainbowFeeAddress } from '@/resources/reservoir/utils';
-import { IS_ANDROID, IS_IOS } from '@/env';
-import { EthCoinIcon } from '@/components/coin-icon/EthCoinIcon';
-import { addNewTransaction } from '@/state/pendingTransactions';
-import { getUniqueId } from '@/utils/ethereumUtils';
+import { useBackendNetworksStore } from '@/state/backendNetworks/backendNetworks';
+import { ChainId } from '@/state/backendNetworks/types';
 import { getNextNonce } from '@/state/nonces';
-import { metadataPOSTClient } from '@/graphql';
-import { Transaction } from '@/graphql/__generated__/metadataPOST';
+import { addNewTransaction } from '@/state/pendingTransactions';
+import { useAccountAddress, useIsReadOnlyWallet, useIsHardwareWallet } from '@/state/wallets/walletsStore';
+import styled from '@/styled-thing';
+import { position } from '@/styles';
+import { useTheme } from '@/theme';
+import { abbreviations, ethereumUtils, watchingAlert } from '@/utils';
+import { getUniqueId } from '@/utils/ethereumUtils';
+import { openInBrowser } from '@/utils/openInBrowser';
+import { addressHashedColorIndex } from '@/utils/profileUtils';
+import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
+import { Execute, getClient } from '@reservoir0x/reservoir-sdk';
+import { format } from 'date-fns';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { BlurView } from 'react-native-blur-view';
+import { useSharedValue } from 'react-native-reanimated';
+import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import ImgixImage from '../../components/images/ImgixImage';
+import { SlackSheet } from '../../components/sheet';
+import { CardSize } from '../../components/unique-token/CardSize';
+import { QuantityButton } from './components/QuantityButton';
+import { userAssetsStoreManager } from '@/state/assets/userAssetsStoreManager';
+import { useRainbowToastEnabled } from '@/components/rainbow-toast/useRainbowToastEnabled';
 
 const NFT_IMAGE_HEIGHT = 250;
 // inset * 2 -> 28 *2
 const INSET_OFFSET = 56;
 
 const BackgroundBlur = styled(BlurView).attrs({
-  blurAmount: 100,
-  blurType: 'light',
+  blurIntensity: 100,
+  blurStyle: 'light',
 })({
   ...position.coverAsObject,
 });
@@ -93,6 +95,7 @@ const BlurWrapper = styled(View).attrs({
 
 interface MintSheetProps {
   collection: ReservoirCollection;
+  pricePerMint: string;
   chainId: number;
 }
 
@@ -124,21 +127,23 @@ const getFormattedDate = (date: string) => {
 };
 
 const MintSheet = () => {
-  const params = useRoute();
-  const { collection: mintCollection } = params.params as MintSheetProps;
-  const { accountAddress } = useAccountProfile();
-  const { nativeCurrency } = useAccountSettings();
+  const { params } = useRoute<RouteProp<RootStackParamList, typeof Routes.MINT_SHEET>>();
+  const { collection: mintCollection, pricePerMint } = params;
+  const chainId = mintCollection.chainId;
+  const rainbowToastsEnabled = useRainbowToastEnabled();
+  const accountAddress = useAccountAddress();
+  const nativeCurrency = userAssetsStoreManager(state => state.currency);
   const { height: deviceHeight, width: deviceWidth } = useDimensions();
-  const { navigate } = useNavigation();
+  const { navigate, goBack } = useNavigation();
   const { colors, isDarkMode } = useTheme();
-  const { isReadOnlyWallet, isHardwareWallet } = useWallets();
+  const isReadOnlyWallet = useIsReadOnlyWallet();
+  const isHardwareWallet = useIsHardwareWallet();
   const [insufficientEth, setInsufficientEth] = useState(false);
   const [showNativePrice, setShowNativePrice] = useState(false);
   const [gasError, setGasError] = useState(false);
-  const currentNetwork = RainbowNetworks.find(({ id }) => id === mintCollection.chainId)?.value || Network.mainnet;
   const [ensName, setENSName] = useState<string>('');
   const [mintStatus, setMintStatus] = useState<'none' | 'minting' | 'minted' | 'error'>('none');
-  const txRef = useRef<string>();
+  const txRef = useRef<string>(undefined);
   const [isGasReady, setIsGasReady] = useState<boolean>(false);
 
   const { data: ensAvatar } = useENSAvatar(ensName, {
@@ -158,23 +163,34 @@ const MintSheet = () => {
   // if there is no max mint info, we fallback to 1 to be safe
   const maxMintsPerWallet = Number(mintCollection.publicMintInfo?.maxMintsPerWallet);
 
-  const price = convertRawAmountToBalance(mintCollection.publicMintInfo?.price?.amount?.raw || '0', {
-    decimals: mintCollection.publicMintInfo?.price?.currency?.decimals || 18,
+  const decimals =
+    typeof mintCollection.publicMintInfo?.price?.currency?.decimals === 'number'
+      ? mintCollection.publicMintInfo?.price?.currency?.decimals
+      : 18;
+
+  const rawAmountInput = mintCollection.publicMintInfo?.price?.amount?.raw ?? pricePerMint ?? '0';
+  const stringAmountInput =
+    typeof rawAmountInput === 'object' && rawAmountInput !== null && 'toString' in rawAmountInput
+      ? rawAmountInput.toString() // Handle BigNumber object from ethers
+      : String(rawAmountInput); // Convert other types (string, number) to string
+
+  const price = convertRawAmountToBalance(stringAmountInput, {
+    decimals,
     symbol: mintCollection.publicMintInfo?.price?.currency?.symbol || 'ETH',
   });
 
   // case where mint isnt eth? prob not with our current entrypoints
   const mintPriceAmount = multiply(price.amount, quantity);
   const mintPriceDisplay = convertAmountToBalanceDisplay(multiply(price.amount, quantity), {
-    decimals: mintCollection.publicMintInfo?.price?.currency?.decimals || 18,
+    decimals,
     symbol: mintCollection.publicMintInfo?.price?.currency?.symbol || 'ETH',
   });
 
-  const priceOfEth = ethereumUtils.getEthPriceUnit() as number;
+  const priceOfEth = ethereumUtils.getPriceOfNativeAssetForNetwork({ chainId: ChainId.mainnet });
 
   const nativeMintPriceDisplay = convertAmountToNativeDisplay(parseFloat(multiply(price.amount, quantity)) * priceOfEth, nativeCurrency);
 
-  const { updateTxFee, startPollingGasFees, stopPollingGasFees, getTotalGasPrice } = useGas();
+  const { updateTxFee, startPollingGasFees, stopPollingGasFees, getTotalGasPrice } = useGas({ enableTracking: true });
 
   const imageUrl = maybeSignUri(mintCollection.image || '');
   const { result: aspectRatio } = usePersistentAspectRatio(imageUrl || '');
@@ -183,12 +199,12 @@ const MintSheet = () => {
 
   const imageColor = usePersistentDominantColorFromImage(imageUrl) ?? colors.paleBlue;
 
-  const sheetRef = useRef();
+  const sheetRef = useRef(undefined);
   const yPosition = useSharedValue(0);
 
   useFocusEffect(() => {
     if (mintCollection.name && mintCollection.id) {
-      analyticsV2.track(event.mintsOpenedSheet, {
+      analytics.track(analytics.event.mintsOpenedSheet, {
         collectionName: mintCollection?.name,
         contract: mintCollection.id,
         chainId: mintCollection.chainId,
@@ -199,7 +215,7 @@ const MintSheet = () => {
   // check address balance
   useEffect(() => {
     const checkInsufficientEth = async () => {
-      const nativeBalance = (await ethereumUtils.getNativeAssetForNetwork(currentNetwork, accountAddress))?.balance?.amount ?? 0;
+      const nativeBalance = (await ethereumUtils.getNativeAssetForNetwork({ chainId, address: accountAddress }))?.balance?.amount ?? 0;
 
       const totalMintPrice = multiply(price.amount, quantity);
       if (greaterThanOrEqualTo(totalMintPrice, nativeBalance)) {
@@ -214,10 +230,10 @@ const MintSheet = () => {
     checkInsufficientEth();
   }, [
     accountAddress,
-    currentNetwork,
+    chainId,
     getTotalGasPrice,
-    mintCollection.publicMintInfo?.price?.currency?.decimals,
-    mintCollection.publicMintInfo?.price?.currency?.symbol,
+    mintCollection?.publicMintInfo?.price?.currency?.decimals,
+    mintCollection?.publicMintInfo?.price?.currency?.symbol,
     price,
     quantity,
   ]);
@@ -236,33 +252,33 @@ const MintSheet = () => {
 
   // start poll gas price
   useEffect(() => {
-    startPollingGasFees(currentNetwork);
+    startPollingGasFees(chainId);
 
     return () => {
       stopPollingGasFees();
     };
-  }, [currentNetwork, startPollingGasFees, stopPollingGasFees]);
+  }, [chainId, startPollingGasFees, stopPollingGasFees]);
 
   // estimate gas limit
   useEffect(() => {
     const estimateMintGas = async () => {
-      const networkObj = getNetworkObj(currentNetwork);
+      const defaultChains = useBackendNetworksStore.getState().getDefaultChains();
       const signer = createWalletClient({
         account: accountAddress,
-        chain: networkObj,
-        transport: http(networkObj.rpc),
+        chain: defaultChains[chainId],
+        transport: http(useBackendNetworksStore.getState().getChainDefaultRpc(chainId)),
       });
       try {
         await getClient()?.actions.mintToken({
           items: [{ collection: mintCollection.id!, quantity }],
           wallet: signer!,
-          chainId: networkObj.id,
+          chainId,
           precheck: true,
           onProgress: async (steps: Execute['steps']) => {
             const txs: Transaction[] = [];
             steps.forEach(step => {
               if (step.error) {
-                logger.error(new RainbowError(`NFT Mints: Gas Step Error: ${step.error}`));
+                logger.error(new RainbowError(`[MintSheet]: Gas Step Error: ${step.error}`));
                 return;
               }
               step.items?.forEach(item => {
@@ -279,7 +295,7 @@ const MintSheet = () => {
             const txSimEstimate = parseInt(
               (
                 await metadataPOSTClient.simulateTransactions({
-                  chainId: networkObj.id,
+                  chainId,
                   transactions: txs,
                 })
               )?.simulateTransactions?.[0]?.gas?.estimate ?? '0x0',
@@ -294,31 +310,31 @@ const MintSheet = () => {
         });
       } catch (e) {
         setGasError(true);
-        logger.error(new RainbowError(`NFT Mints: Gas Step Error: ${(e as Error).message}`));
+        logger.error(new RainbowError(`[MintSheet]: Gas Step Error: ${(e as Error).message}`));
       }
     };
     estimateMintGas();
-  }, [accountAddress, currentNetwork, mintCollection.id, quantity, updateTxFee]);
+  }, [accountAddress, chainId, mintCollection.id, quantity, updateTxFee]);
 
   const deployerDisplay = abbreviations.address(mintCollection.creator || '', 4, 6);
 
   const contractAddressDisplay = `${abbreviations.address(mintCollection.id || '', 4, 6)} 􀄯`;
 
-  const buildMintDotFunUrl = (contract: string, network: Network) => {
-    const MintDotFunNetworks = [Network.mainnet, Network.optimism, Network.base, Network.zora];
-    if (!MintDotFunNetworks.includes(network)) {
+  const buildMintDotFunUrl = (contract: string, chainId: ChainId) => {
+    const MintDotFunNetworks = [ChainId.mainnet, ChainId.optimism, ChainId.base, ChainId.zora];
+    if (!MintDotFunNetworks.includes(chainId)) {
       Alert.alert(i18n.t(i18n.l.minting.mintdotfun_unsupported_network));
     }
 
     let chainSlug = 'ethereum';
-    switch (network) {
-      case Network.optimism:
+    switch (chainId) {
+      case ChainId.optimism:
         chainSlug = 'op';
         break;
-      case Network.base:
+      case ChainId.base:
         chainSlug = 'base';
         break;
-      case Network.zora:
+      case ChainId.zora:
         chainSlug = 'zora';
         break;
     }
@@ -333,17 +349,17 @@ const MintSheet = () => {
 
     // link to mint.fun if reservoir not supporting
     if (!isMintingAvailable) {
-      analyticsV2.track(event.mintsOpeningMintDotFun, {
+      analytics.track(analytics.event.mintsOpeningMintDotFun, {
         collectionName: mintCollection.name || '',
         contract: mintCollection.id || '',
         chainId: mintCollection.chainId,
       });
-      Linking.openURL(buildMintDotFunUrl(mintCollection.id!, currentNetwork));
+      openInBrowser(buildMintDotFunUrl(mintCollection.id!, chainId));
       return;
     }
 
-    logger.info('Minting NFT', { name: mintCollection.name });
-    analyticsV2.track(event.mintsMintingNFT, {
+    logger.debug('[MintSheet]: Minting NFT', { name: mintCollection.name });
+    analytics.track(analytics.event.mintsMintingNFT, {
       collectionName: mintCollection.name || '',
       contract: mintCollection.id || '',
       chainId: mintCollection.chainId,
@@ -355,15 +371,15 @@ const MintSheet = () => {
     const privateKey = await loadPrivateKey(accountAddress, false);
     // @ts-ignore
     const account = privateKeyToAccount(privateKey);
-    const networkObj = getNetworkObj(currentNetwork);
+    const chain = useBackendNetworksStore.getState().getDefaultChains()[chainId];
     const signer = createWalletClient({
       account,
-      chain: networkObj,
-      transport: http(networkObj.rpc),
+      chain,
+      transport: http(useBackendNetworksStore.getState().getChainDefaultRpc(chainId)),
     });
 
-    const feeAddress = getRainbowFeeAddress(currentNetwork);
-    const nonce = await getNextNonce({ address: accountAddress, network: currentNetwork });
+    const feeAddress = getRainbowFeeAddress(chainId);
+    const nonce = await getNextNonce({ address: accountAddress, chainId });
     try {
       await getClient()?.actions.mintToken({
         items: [
@@ -374,21 +390,23 @@ const MintSheet = () => {
           },
         ],
         wallet: signer!,
-        chainId: networkObj.id,
+        chainId,
         onProgress: (steps: Execute['steps']) => {
+          const chainsName = useBackendNetworksStore.getState().getChainsName();
           steps.forEach(step => {
             if (step.error) {
-              logger.error(new RainbowError(`Error minting NFT: ${step.error}`));
+              logger.error(new RainbowError(`[MintSheet]: Error minting NFT: ${step.error}`));
               setMintStatus('error');
               return;
             }
             step.items?.forEach(item => {
               if (item.txHashes?.[0]?.txHash && txRef.current !== item.txHashes[0].txHash && item.status === 'incomplete') {
                 const asset = {
+                  chainId,
                   type: 'nft',
                   icon_url: imageUrl,
                   address: mintCollection.id || '',
-                  network: currentNetwork,
+                  network: chainsName[chainId],
                   name: mintCollection.name || '',
                   decimals: 18,
                   symbol: 'NFT',
@@ -398,19 +416,20 @@ const MintSheet = () => {
                 const paymentAsset = {
                   type: 'nft',
                   address: ETH_ADDRESS,
-                  network: currentNetwork,
+                  network: chainsName[chainId],
                   name: mintCollection.publicMintInfo?.price?.currency?.name || 'Ethereum',
                   decimals: mintCollection.publicMintInfo?.price?.currency?.decimals || 18,
                   symbol: ETH_SYMBOL,
-                  uniqueId: getUniqueId(ETH_ADDRESS, currentNetwork),
+                  uniqueId: getUniqueId(ETH_ADDRESS, chainId),
                 };
 
                 const tx: NewTransaction = {
-                  status: 'pending',
+                  chainId,
+                  status: TransactionStatus.pending,
                   to: item.data?.to,
                   from: item.data?.from,
                   hash: item.txHashes[0].txHash,
-                  network: currentNetwork,
+                  network: chainsName[chainId],
                   nonce,
                   changes: [
                     {
@@ -433,16 +452,20 @@ const MintSheet = () => {
                 addNewTransaction({
                   transaction: tx,
                   address: accountAddress,
-                  network: currentNetwork,
+                  chainId,
                 });
-                analyticsV2.track(event.mintsMintedNFT, {
+                analytics.track(analytics.event.mintsMintedNFT, {
                   collectionName: mintCollection.name || '',
                   contract: mintCollection.id || '',
                   chainId: mintCollection.chainId,
                   quantity,
                   priceInEth: mintPriceAmount,
                 });
-                navigate(Routes.PROFILE_SCREEN);
+                if (rainbowToastsEnabled) {
+                  goBack();
+                } else {
+                  navigate(Routes.PROFILE_SCREEN);
+                }
                 setMintStatus('minted');
               }
             });
@@ -451,18 +474,18 @@ const MintSheet = () => {
       });
     } catch (e) {
       setMintStatus('error');
-      analyticsV2.track(event.mintsErrorMintingNFT, {
+      analytics.track(analytics.event.mintsErrorMintingNFT, {
         collectionName: mintCollection.name || '',
         contract: mintCollection.id || '',
         chainId: mintCollection.chainId,
         quantity,
         priceInEth: mintPriceAmount,
       });
-      logger.error(new RainbowError(`Error minting NFT: ${(e as Error).message}`));
+      logger.error(new RainbowError(`[MintSheet]: Error minting NFT: ${(e as Error).message}`));
     }
   }, [
     accountAddress,
-    currentNetwork,
+    chainId,
     imageUrl,
     isMintingAvailable,
     isReadOnlyWallet,
@@ -474,6 +497,8 @@ const MintSheet = () => {
     mintPriceAmount,
     navigate,
     quantity,
+    rainbowToastsEnabled,
+    goBack,
   ]);
 
   const buttonLabel = useMemo(() => {
@@ -515,7 +540,7 @@ const MintSheet = () => {
         {...(IS_IOS ? { height: '100%' } : {})}
         ref={sheetRef}
         scrollEnabled
-        additionalTopPadding={IS_ANDROID ? StatusBar.currentHeight : false}
+        additionalTopPadding
         testID="nft-mint-sheet"
         yPosition={yPosition}
       >
@@ -624,12 +649,11 @@ const MintSheet = () => {
                   />
 
                   <Box width={{ custom: deviceWidth - INSET_OFFSET }}>
-                    {/* @ts-ignore */}
                     <GasSpeedButton
                       fallbackColor={imageColor}
                       marginTop={0}
                       horizontalPadding={0}
-                      currentNetwork={currentNetwork}
+                      chainId={chainId}
                       theme={'dark'}
                       loading={!isGasReady}
                       marginBottom={0}
@@ -679,7 +703,9 @@ const MintSheet = () => {
                     symbol="􀉆"
                     label={i18n.t(i18n.l.minting.contract)}
                     value={
-                      <ButtonPressAnimation onPress={() => ethereumUtils.openAddressInBlockExplorer(mintCollection.id!, currentNetwork)}>
+                      <ButtonPressAnimation
+                        onPress={() => ethereumUtils.openAddressInBlockExplorer({ address: mintCollection.id!, chainId })}
+                      >
                         <Text color={{ custom: imageColor }} align="right" size="17pt" weight="medium">
                           {contractAddressDisplay}
                         </Text>
@@ -692,18 +718,15 @@ const MintSheet = () => {
                   symbol="􀤆"
                   label={i18n.t(i18n.l.minting.network)}
                   value={
-                    <Inset vertical={{ custom: -4 }}>
-                      <Inline space="4px" alignVertical="center" alignHorizontal="right">
-                        {currentNetwork === Network.mainnet ? (
-                          <EthCoinIcon size={16} />
-                        ) : (
-                          <ChainBadge network={currentNetwork} position="relative" size="small" forceDark={true} />
-                        )}
+                    <Bleed vertical="4px">
+                      <Inline alignHorizontal="right" alignVertical="center" space="6px">
+                        <ChainImage chainId={chainId} position="relative" size={16} />
+
                         <Text color="labelSecondary" align="right" size="17pt" weight="medium">
-                          {`${getNetworkObj(currentNetwork).name}`}
+                          {`${useBackendNetworksStore.getState().getDefaultChains()[chainId].name}`}
                         </Text>
                       </Inline>
-                    </Inset>
+                    </Bleed>
                   }
                 />
               </Stack>

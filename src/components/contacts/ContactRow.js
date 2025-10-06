@@ -7,16 +7,15 @@ import { Column, RowWithMargins } from '../layout';
 import { TruncatedAddress, TruncatedENS, TruncatedText } from '../text';
 import ContactAvatar from './ContactAvatar';
 import ImageAvatar from './ImageAvatar';
-import useExperimentalFlag, { PROFILES } from '@/config/experimentalHooks';
 import { fetchReverseRecord } from '@/handlers/ens';
 import { ENS_DOMAIN } from '@/helpers/ens';
 import { isENSAddressFormat, isValidDomainFormat } from '@/helpers/validators';
-import { useAccountSettings, useContacts, useDimensions, useENSAvatar } from '@/hooks';
+import { useContacts, useDimensions, useENSAvatar } from '@/hooks';
 import styled from '@/styled-thing';
 import { margin } from '@/styles';
 import { addressHashedColorIndex, addressHashedEmoji } from '@/utils/profileUtils';
 import * as i18n from '@/languages';
-import { convertAmountToNativeDisplay } from '@/helpers/utilities';
+import { StyleSheet } from 'react-native';
 
 const ContactAddress = styled(TruncatedAddress).attrs(({ theme: { colors }, lite }) => ({
   align: 'left',
@@ -45,7 +44,7 @@ const ContactName = styled(TruncatedText).attrs(({ lite }) => ({
   size: 'lmedium',
   weight: lite ? 'regular' : 'medium',
 }))({
-  height: 22,
+  height: ios ? 22 : 26,
   width: ({ deviceWidth }) => deviceWidth - 90,
 });
 
@@ -54,21 +53,19 @@ const css = {
   symmetrical: margin.object(9.5, 19),
 };
 
+const sx = StyleSheet.create({
+  bottomRowText: {
+    marginTop: ios ? 0 : -4.5,
+  },
+});
+
 const ContactRow = ({ address, color, nickname, symmetricalMargins, ...props }, ref) => {
-  const profilesEnabled = useExperimentalFlag(PROFILES);
   const { width: deviceWidth } = useDimensions();
   const { onAddOrUpdateContacts } = useContacts();
-  const { nativeCurrency } = useAccountSettings();
   const { colors } = useTheme();
-  const { accountType, balance, ens, image, label, network, onPress, showcaseItem, testID } = props;
+  const { accountType, balances, ens, image, label, onPress, showcaseItem, testID } = props;
 
-  const cleanedUpBalance = useMemo(() => {
-    if (balance) {
-      return convertAmountToNativeDisplay(balance, nativeCurrency);
-    } else {
-      return i18n.t(i18n.l.wallet.change_wallet.no_balance);
-    }
-  }, [balance, nativeCurrency]);
+  const balanceText = balances ? balances.totalBalanceDisplay : i18n.t(i18n.l.wallet.change_wallet.loading_balance);
 
   // show avatar for contact rows that are accounts, not contacts
   const avatar = accountType !== 'contacts' ? returnStringFirstEmoji(label) || profileUtils.addressHashedEmoji(address) : null;
@@ -79,21 +76,21 @@ const ContactRow = ({ address, color, nickname, symmetricalMargins, ...props }, 
   const [ensName, setENSName] = useState(initialENSName);
 
   const { data: ensAvatar } = useENSAvatar(ensName, {
-    enabled: profilesEnabled && Boolean(ensName),
+    enabled: Boolean(ensName),
   });
 
   useEffect(() => {
-    if (profilesEnabled && accountType === 'contacts') {
+    if (accountType === 'contacts') {
       const fetchENSName = async () => {
         const name = await fetchReverseRecord(address);
         if (name !== ensName) {
           setENSName(name);
-          onAddOrUpdateContacts(address, name && isENSAddressFormat(nickname) ? name : nickname, color, network, name);
+          onAddOrUpdateContacts(address, name && isENSAddressFormat(nickname) ? name : nickname, color, name);
         }
       };
       fetchENSName();
     }
-  }, [accountType, onAddOrUpdateContacts, address, color, ensName, network, nickname, profilesEnabled, setENSName]);
+  }, [accountType, onAddOrUpdateContacts, address, color, ensName, nickname, setENSName]);
 
   let cleanedUpLabel = null;
   if (label) {
@@ -104,12 +101,12 @@ const ContactRow = ({ address, color, nickname, symmetricalMargins, ...props }, 
     if (showcaseItem) {
       onPress(showcaseItem, nickname);
     } else {
-      const recipient = accountType === 'suggestions' && isENSAddressFormat(nickname) ? nickname : ensName || address;
+      const recipient = accountType === 'suggestions' && isENSAddressFormat(nickname) ? nickname : address;
       onPress(recipient, nickname ?? recipient);
     }
-  }, [accountType, address, ensName, nickname, onPress, showcaseItem]);
+  }, [accountType, address, nickname, onPress, showcaseItem]);
 
-  const imageAvatar = profilesEnabled ? ensAvatar?.imageUrl : image;
+  const imageAvatar = ensAvatar?.imageUrl ?? image;
 
   const emoji = useMemo(() => (address ? addressHashedEmoji(address) : ''), [address]);
   const emojiAvatar = avatar || emoji || nickname || label;
@@ -140,8 +137,13 @@ const ContactRow = ({ address, color, nickname, symmetricalMargins, ...props }, 
                   {isValidDomainFormat(address) ? address : abbreviations.address(address, 4, 6)}
                 </ContactName>
               )}
-              <BottomRowText color={colors.alpha(colors.blueGreyDark, 0.5)} letterSpacing="roundedMedium" weight="medium">
-                {cleanedUpBalance}
+              <BottomRowText
+                style={sx.bottomRowText}
+                color={colors.alpha(colors.blueGreyDark, 0.5)}
+                letterSpacing="roundedMedium"
+                weight="medium"
+              >
+                {balanceText}
               </BottomRowText>
             </Fragment>
           ) : (

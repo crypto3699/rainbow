@@ -1,8 +1,8 @@
-import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { LayoutChangeEvent } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SlackSheet } from '@/components/sheet';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { RainbowTransaction } from '@/entities';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import { IS_ANDROID } from '@/env';
 import { BackgroundProvider, Box } from '@/design-system';
 import { TransactionDetailsValueAndFeeSection } from '@/screens/transaction-details/components/TransactionDetailsValueAndFeeSection';
@@ -12,38 +12,42 @@ import { Toast, ToastPositionContainer } from '@/components/toasts';
 import * as i18n from '@/languages';
 import { TransactionDetailsStatusActionsAndTimestampSection } from '@/screens/transaction-details/components/TransactionDetailsStatusActionsAndTimestampSection';
 import { useTransactionDetailsToasts } from '@/screens/transaction-details/hooks/useTransactionDetailsToasts';
-import { LayoutChangeEvent } from 'react-native';
 import { useDimensions } from '@/hooks';
-
-type RouteParams = {
-  TransactionDetails: {
-    transaction: RainbowTransaction;
-    longFormHeight: number;
-  };
-};
+import { RootStackParamList } from '@/navigation/types';
+import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
+import { useRainbowToastsStore } from '@/components/rainbow-toast/useRainbowToastsStore';
 
 export const TransactionDetails = () => {
-  const navigation = useNavigation();
-  const route = useRoute<RouteProp<RouteParams, 'TransactionDetails'>>();
-  const { setParams } = navigation;
-  const { transaction: tx } = route.params;
+  const {
+    params: { transaction },
+  } = useRoute<RouteProp<RootStackParamList, typeof Routes.TRANSACTION_DETAILS>>();
+  const { setParams } = useNavigation<typeof Routes.TRANSACTION_DETAILS>();
 
-  const transaction = tx;
   const [sheetHeight, setSheetHeight] = useState(0);
   const [statusIconHidden, setStatusIconHidden] = useState(false);
   const { presentedToast, presentToastFor } = useTransactionDetailsToasts();
   const { height: deviceHeight } = useDimensions();
+  const { bottom } = useSafeAreaInsets();
+
+  useEffect(() => {
+    useRainbowToastsStore.getState().setIsShowingTransactionDetails(true);
+    return () => {
+      useRainbowToastsStore.getState().setIsShowingTransactionDetails(false);
+    };
+  }, []);
 
   // Dynamic sheet height based on content height
   useEffect(() => setParams({ longFormHeight: sheetHeight }), [setParams, sheetHeight]);
 
-  const onSheetContentLayout = (event: LayoutChangeEvent) => {
-    const contentHeight = event.nativeEvent.layout.height;
-    if (contentHeight > deviceHeight) {
-      setStatusIconHidden(true);
-    }
-    setSheetHeight(contentHeight);
-  };
+  const onSheetContentLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const contentHeight = event.nativeEvent.layout.height;
+      if (contentHeight > deviceHeight) setStatusIconHidden(true);
+      setSheetHeight(contentHeight + (IS_ANDROID ? bottom : 0));
+    },
+    [bottom, deviceHeight]
+  );
 
   const presentAddressToast = useCallback(() => {
     presentToastFor('address');

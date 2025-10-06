@@ -1,66 +1,49 @@
-import { Box, Column, Columns, Inline, Stack, Text } from '@/design-system';
-import React, { useCallback, useMemo } from 'react';
+import { Box, Column, Columns, Inline, Stack, Text, globalColors } from '@/design-system';
+import React, { memo, useCallback, useMemo } from 'react';
 import { useTheme } from '@/theme';
 
 import { GenericCard } from '../cards/GenericCard';
 import startCase from 'lodash/startCase';
 import { RequestVendorLogoIcon } from '../coin-icon';
-import { EthereumAddress } from '@/entities';
 import { useNavigation } from '@/navigation';
 import Routes from '@/navigation/routesNames';
-import { analyticsV2 } from '@/analytics';
-import { event } from '@/analytics/event';
+import { analytics } from '@/analytics';
 import { IS_ANDROID } from '@/env';
 import { capitalize, uniqBy } from 'lodash';
-import { RainbowDeposit, RainbowPosition } from '@/resources/defi/types';
-import { Network } from '@/networks/types';
+import { PositionAsset, RainbowBorrow, RainbowClaimable, RainbowDeposit, RainbowPosition, RainbowStake } from '@/resources/defi/types';
 import RainbowCoinIcon from '../coin-icon/RainbowCoinIcon';
-import { useAccountSettings } from '@/hooks';
-import { useExternalToken } from '@/resources/assets/externalAssetsQuery';
 
 type PositionCardProps = {
   position: RainbowPosition;
 };
 
-type CoinStackToken = {
-  address: EthereumAddress;
-  network: Network;
-  symbol: string;
-};
-
-function CoinIconForStack({ token }: { token: CoinStackToken }) {
-  const theme = useTheme();
-  const { nativeCurrency } = useAccountSettings();
-  const { data: externalAsset } = useExternalToken({ address: token.address, network: token.network, currency: nativeCurrency });
-
+const CoinIconForStack = memo(function CoinIconForStack({ token }: { token: PositionAsset }) {
   return (
     <RainbowCoinIcon
       size={16}
-      icon={externalAsset?.icon_url}
-      network={token?.network as Network}
+      icon={token.icon_url}
+      chainId={token.chain_id}
       symbol={token.symbol}
-      theme={theme}
-      colors={externalAsset?.colors}
-      ignoreBadge
+      color={token.colors?.primary ?? token.colors?.fallback ?? undefined}
+      showBadge={false}
     />
   );
-}
-function CoinIconStack({ tokens }: { tokens: CoinStackToken[] }) {
-  const { colors } = useTheme();
+});
 
+const CoinIconStack = memo(function CoinIconStack({ tokens }: { tokens: PositionAsset[] }) {
   return (
     <Box flexDirection="row" alignItems="center">
       {tokens.map((token, index) => {
         return (
           <Box
-            key={`availableNetwork-${token.address}`}
+            key={`availableNetwork-${token.asset_code}`}
             marginTop={{ custom: -2 }}
             marginLeft={{ custom: index > 0 ? -8 : 0 }}
             style={{
               position: 'relative',
               zIndex: tokens.length + index,
               borderRadius: 30,
-              borderColor: colors.transparent,
+              borderColor: 'transparent',
               borderWidth: 2,
             }}
           >
@@ -70,62 +53,48 @@ function CoinIconStack({ tokens }: { tokens: CoinStackToken[] }) {
       })}
     </Box>
   );
-}
+});
 
 export const PositionCard = ({ position }: PositionCardProps) => {
   const { colors, isDarkMode } = useTheme();
-  const totalPositions = (position.borrows?.length || 0) + (position.deposits?.length || 0) + (position.claimables?.length || 0);
+  const totalPositions =
+    (position.borrows.length || 0) + (position.deposits.length || 0) + (position.claimables.length || 0) + (position.stakes.length || 0);
+
   const { navigate } = useNavigation();
 
   const onPressHandler = useCallback(() => {
-    analyticsV2.track(event.positionsOpenedSheet, { dapp: position.type });
+    analytics.track(analytics.event.positionsOpenedSheet, { dapp: position.type });
     navigate(Routes.POSITION_SHEET, { position });
   }, [navigate, position]);
 
-  const depositTokens: CoinStackToken[] = useMemo(() => {
-    const tokens: CoinStackToken[] = [];
+  const depositTokens: PositionAsset[] = useMemo(() => {
+    const tokens: PositionAsset[] = [];
     position.deposits.forEach((deposit: RainbowDeposit) => {
       deposit.underlying.forEach(({ asset }) => {
-        tokens.push({
-          address: asset.asset_code,
-          network: asset.network,
-          symbol: asset.symbol,
-        });
+        tokens.push(asset);
       });
     });
-    position.borrows.forEach((deposit: RainbowDeposit) => {
-      deposit.underlying.forEach(({ asset }) => {
-        tokens.push({
-          address: asset.asset_code,
-          network: asset.network,
-          symbol: asset.symbol,
-        });
+    position.stakes.forEach((stake: RainbowStake) => {
+      stake.underlying.forEach(({ asset }) => {
+        tokens.push(asset);
       });
     });
-    position.borrows.forEach((deposit: RainbowDeposit) => {
-      deposit.underlying.forEach(({ asset }) => {
-        tokens.push({
-          address: asset.asset_code,
-          network: asset.network,
-          symbol: asset.symbol,
-        });
-      });
+    position.claimables.forEach((claimable: RainbowClaimable) => {
+      tokens.push(claimable.asset);
     });
-    position.borrows.forEach((deposit: RainbowDeposit) => {
-      deposit.underlying.forEach(({ asset }) => {
-        tokens.push({
-          address: asset.asset_code,
-          network: asset.network,
-          symbol: asset.symbol,
-        });
+    position.borrows.forEach((borrow: RainbowBorrow) => {
+      borrow.underlying.forEach(({ asset }) => {
+        tokens.push(asset);
       });
     });
 
+    // TODO: if more than 5 unique tokens but duplicates of a token across networks, use different asset
     const dedupedTokens = uniqBy(tokens, 'symbol');
     return dedupedTokens?.slice(0, 5);
   }, [position]);
 
-  const positionColor = position.dapp.colors.primary || position.dapp.colors.fallback;
+  const positionColor =
+    position.dapp.colors.primary || position.dapp.colors.fallback || (isDarkMode ? globalColors.white100 : globalColors.white10);
 
   return (
     <Box width="full" height={{ custom: 117 }}>

@@ -5,6 +5,7 @@ import { isKeyboardOpen } from '../../../helpers';
 import { CONTAINER_HEIGHT, DEFAULT_BACKDROP_COLOR, DEFAULT_BACKDROP_OPACITY, DEFAULT_HEIGHT } from '../constants';
 import { BottomSheetNavigatorContext } from '../contexts/internal';
 import type { BottomSheetDescriptor } from '../types';
+import { IS_ANDROID } from '@/env';
 
 interface Props {
   routeKey: string;
@@ -14,30 +15,24 @@ interface Props {
 }
 
 const BottomSheetRoute = ({ routeKey, descriptor: { options, render, navigation }, onDismiss, removing = false }: Props) => {
-  // #region extract options
   const {
     enableContentPanningGesture,
     enableHandlePanningGesture,
+    enablePanDownToClose = true,
     index = 0,
     snapPoints = ['100%'],
     backdropColor = DEFAULT_BACKDROP_COLOR,
     backdropOpacity = DEFAULT_BACKDROP_OPACITY,
     backdropPressBehavior = 'close',
     height = DEFAULT_HEIGHT,
-    offsetY = android ? 20 : 3,
+    offsetY = IS_ANDROID ? 20 : 3,
   } = options || {};
-  // #endregion
 
-  // #region refs
   const ref = useRef<BottomSheet>(null);
 
   const removingRef = useRef(false);
   removingRef.current = removing;
 
-  // const
-  // #endregion
-
-  // #region styles
   // @ts-ignore type mismatch
   const screenContainerStyle: ViewStyle = useMemo(
     () => ({
@@ -55,9 +50,7 @@ const BottomSheetRoute = ({ routeKey, descriptor: { options, render, navigation 
     }),
     [backdropColor]
   );
-  // #endregion
 
-  // #region context methods
   const handleSettingSnapPoints = useCallback(
     (_snapPoints: (string | number)[]) => {
       navigation.setOptions({ snapPoints: _snapPoints });
@@ -69,6 +62,14 @@ const BottomSheetRoute = ({ routeKey, descriptor: { options, render, navigation 
   const handleSettingEnableContentPanningGesture = useCallback(
     (value: boolean) => {
       navigation.setOptions({ enableContentPanningGesture: value });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const handleSettingEnablePanDownToClose = useCallback(
+    (value: boolean) => {
+      navigation.setOptions({ enablePanDownToClose: value });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -86,24 +87,26 @@ const BottomSheetRoute = ({ routeKey, descriptor: { options, render, navigation 
     () => ({
       setEnableContentPanningGesture: handleSettingEnableContentPanningGesture,
       setEnableHandlePanningGesture: handleSettingEnableHandlePanningGesture,
+      setEnablePanDownToClose: handleSettingEnablePanDownToClose,
       setSnapPoints: handleSettingSnapPoints,
     }),
-    [handleSettingEnableContentPanningGesture, handleSettingEnableHandlePanningGesture, handleSettingSnapPoints]
+    [
+      handleSettingEnableContentPanningGesture,
+      handleSettingEnableHandlePanningGesture,
+      handleSettingEnablePanDownToClose,
+      handleSettingSnapPoints,
+    ]
   );
-  // #endregion
 
-  // #region callbacks
   const handleOnClose = useCallback(() => {
     onDismiss(routeKey, removingRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // #endregion
 
-  // #region effects
   useEffect(() => {
     if (removing === true && ref.current) {
       // close keyboard before closing the modal
-      if (isKeyboardOpen() && android) {
+      if (isKeyboardOpen() && IS_ANDROID) {
         Keyboard.dismiss();
 
         ref.current.close();
@@ -112,9 +115,7 @@ const BottomSheetRoute = ({ routeKey, descriptor: { options, render, navigation 
       }
     }
   }, [removing]);
-  // #endregion
 
-  // #region renders
   const renderBackdropComponent = useCallback(
     (props: BottomSheetBackdropProps) => (
       <BottomSheetBackdrop
@@ -139,14 +140,12 @@ const BottomSheetRoute = ({ routeKey, descriptor: { options, render, navigation 
         containerHeight={CONTAINER_HEIGHT}
         enableContentPanningGesture={enableContentPanningGesture}
         enableHandlePanningGesture={enableHandlePanningGesture}
-        enablePanDownToClose
+        enablePanDownToClose={enablePanDownToClose}
         handleComponent={null}
         index={index}
         onClose={handleOnClose}
         ref={ref}
-        simultaneousHandlers={[]}
         snapPoints={snapPoints}
-        waitFor={[]}
       >
         <View style={screenContainerStyle}>{render()}</View>
       </BottomSheet>

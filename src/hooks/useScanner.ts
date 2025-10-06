@@ -1,5 +1,5 @@
 import { isValidAddress } from 'ethereumjs-util';
-import lang from 'i18n-js';
+import * as i18n from '@/languages';
 import qs from 'qs';
 import { useCallback, useEffect, useRef } from 'react';
 import { InteractionManager } from 'react-native';
@@ -8,7 +8,6 @@ import { parseUri } from '@walletconnect/utils';
 import { Alert } from '../components/alerts';
 import useExperimentalFlag, { PROFILES } from '../config/experimentalHooks';
 import { useNavigation } from '../navigation/Navigation';
-import useWalletConnectConnections from './useWalletConnectConnections';
 import { fetchReverseRecordWithRetry } from '@/utils/profileUtils';
 import { analytics } from '@/analytics';
 import { checkIsValidAddressOrDomain, isENSAddressFormat } from '@/helpers/validators';
@@ -16,24 +15,23 @@ import { Navigation } from '@/navigation';
 import { POAP_BASE_URL, RAINBOW_PROFILES_BASE_URL } from '@/references';
 import Routes from '@/navigation/routesNames';
 import { addressUtils, ethereumUtils, haptics } from '@/utils';
-import logger from '@/utils/logger';
+import { logger, RainbowError } from '@/logger';
 import { checkPushNotificationPermissions } from '@/notifications/permissions';
 import { pair as pairWalletConnect } from '@/walletConnect';
 import { getPoapAndOpenSheetWithQRHash, getPoapAndOpenSheetWithSecretWord } from '@/utils/poaps';
 
 export default function useScanner(enabled: boolean, onSuccess: () => unknown) {
   const { navigate, goBack } = useNavigation();
-  const { walletConnectOnSessionRequest } = useWalletConnectConnections();
   const profilesEnabled = useExperimentalFlag(PROFILES);
-  const enabledVar = useRef<boolean>();
+  const enabledVar = useRef<boolean>(undefined);
 
   const enableScanning = useCallback(() => {
-    logger.log('📠✅ Enabling QR Code Scanner');
+    logger.debug('[useScanner]: 📠✅  Enabling QR Code Scanner');
     enabledVar.current = true;
   }, [enabledVar]);
 
   const disableScanning = useCallback(() => {
-    logger.log('📠🚫 Disabling QR Code Scanner');
+    logger.debug('[useScanner]: 📠🚫  Disabling QR Code Scanner');
     enabledVar.current = false;
   }, [enabledVar]);
 
@@ -54,7 +52,7 @@ export default function useScanner(enabled: boolean, onSuccess: () => unknown) {
   const handleScanAddress = useCallback(
     async (address: string) => {
       haptics.notificationSuccess();
-      analytics.track('Scanned address QR code');
+      analytics.track(analytics.event.qrCodeScannedAddress);
       const ensName = isENSAddressFormat(address) ? address : await fetchReverseRecordWithRetry(address);
       // First navigate to wallet screen
       navigate(Routes.WALLET_SCREEN);
@@ -75,7 +73,7 @@ export default function useScanner(enabled: boolean, onSuccess: () => unknown) {
   const handleScanRainbowProfile = useCallback(
     async (url: string) => {
       haptics.notificationSuccess();
-      analytics.track('Scanned Rainbow profile url');
+      analytics.track(analytics.event.qrCodeScannedProfile);
 
       const urlObj = new URL(url);
       const addressOrENS = urlObj.pathname?.split('/profile/')?.[1] || '';
@@ -88,7 +86,7 @@ export default function useScanner(enabled: boolean, onSuccess: () => unknown) {
         // And then navigate to Profile sheet
         InteractionManager.runAfterInteractions(() => {
           Navigation.handleAction(profilesEnabled ? Routes.PROFILE_SHEET : Routes.SHOWCASE_SHEET, {
-            address: ensName,
+            address: ensName ?? '',
             fromRoute: 'QR Code',
           });
 
@@ -102,33 +100,31 @@ export default function useScanner(enabled: boolean, onSuccess: () => unknown) {
   const handleScanWalletConnect = useCallback(
     async (uri: string, connector?: string) => {
       haptics.notificationSuccess();
-      analytics.track('Scanned WalletConnect QR code');
+      analytics.track(analytics.event.qrCodeScannedWalletConnect);
       await checkPushNotificationPermissions();
       goBack();
       onSuccess();
       try {
         const { version } = parseUri(uri);
-        if (version === 1) {
-          await walletConnectOnSessionRequest(uri, connector, () => {});
-        } else if (version === 2) {
+        if (version === 2) {
           await pairWalletConnect({ uri, connector });
         }
-      } catch (e) {
-        logger.log('walletConnectOnSessionRequest exception', e);
+      } catch (error) {
+        logger.error(new RainbowError(`[useScanner]: Error handling WalletConnect QR code: ${error}`));
       }
     },
-    [goBack, onSuccess, walletConnectOnSessionRequest]
+    [goBack, onSuccess]
   );
 
   const handleScanInvalid = useCallback(
     (qrCodeData: string) => {
       haptics.notificationError();
-      analytics.track('Scanned broken or unsupported QR code', { qrCodeData });
+      analytics.track(analytics.event.qrCodeScannedInvalid, { qrCodeData });
 
       Alert({
-        buttons: [{ onPress: enableScanning, text: lang.t('button.okay') }],
-        message: lang.t('wallet.qr.sorry_could_not_be_recognized'),
-        title: lang.t('wallet.qr.unrecognized_qr_code_title'),
+        buttons: [{ onPress: enableScanning, text: i18n.t(i18n.l.button.okay) }],
+        message: i18n.t(i18n.l.wallet.qr.sorry_could_not_be_recognized),
+        title: i18n.t(i18n.l.wallet.qr.unrecognized_qr_code_title),
       });
     },
     [enableScanning]
@@ -190,14 +186,14 @@ export default function useScanner(enabled: boolean, onSuccess: () => unknown) {
 
       if (lowerCaseData.startsWith(`${RAINBOW_PROFILES_BASE_URL}/poap`)) {
         const secretWordOrQrHash = lowerCaseData.split(`${RAINBOW_PROFILES_BASE_URL}/poap/`)?.[1];
-        logger.log('onScan: handling poap scan', { secretWordOrQrHash });
+        logger.debug('[useScanner]: handling poap scan', { secretWordOrQrHash });
         await getPoapAndOpenSheetWithSecretWord(secretWordOrQrHash, true);
         return getPoapAndOpenSheetWithQRHash(secretWordOrQrHash, true);
       }
 
       if (lowerCaseData.startsWith(`rainbow://poap`)) {
         const secretWordOrQrHash = lowerCaseData.split(`rainbow://poap/`)?.[1];
-        logger.log('onScan: handling poap scan', { secretWordOrQrHash });
+        logger.debug('[useScanner]: handling poap scan', { secretWordOrQrHash });
         await getPoapAndOpenSheetWithSecretWord(secretWordOrQrHash, true);
         return getPoapAndOpenSheetWithQRHash(secretWordOrQrHash, true);
       }

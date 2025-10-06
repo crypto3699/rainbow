@@ -1,4 +1,3 @@
-/* eslint-disable no-nested-ternary */
 import React from 'react';
 import { DerivedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { AnimatedText, Bleed, Box, useColorMode } from '@/design-system';
@@ -10,8 +9,9 @@ export const BalanceBadge = ({ color, label, weight }: { color?: TextColor; labe
   const { isDarkMode } = useColorMode();
 
   const labelTextStyle = useAnimatedStyle(() => {
+    const isPlaceholderLabel = label.value === 'No Balance' || label.value === 'Token to Swap' || label.value === 'Token to Get';
     return {
-      opacity: label.value === 'No Balance' ? (isDarkMode ? 0.6 : 0.75) : undefined,
+      opacity: isPlaceholderLabel ? (isDarkMode ? 0.6 : 0.75) : 1,
     };
   });
 
@@ -28,14 +28,9 @@ export const BalanceBadge = ({ color, label, weight }: { color?: TextColor; labe
           borderWidth: THICK_BORDER_WIDTH,
         }}
       >
-        <AnimatedText
-          align="center"
-          color={color || 'labelQuaternary'}
-          size="13pt"
-          text={label}
-          style={labelTextStyle}
-          weight={weight || 'bold'}
-        />
+        <AnimatedText align="center" color={color || 'labelQuaternary'} size="13pt" style={labelTextStyle} weight={weight || 'bold'}>
+          {label}
+        </AnimatedText>
       </Box>
     </Bleed>
   );

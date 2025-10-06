@@ -1,25 +1,27 @@
-import * as i18n from '@/languages';
-import React, { useCallback, useMemo } from 'react';
-import { Keyboard, Share } from 'react-native';
-import { MenuActionConfig } from 'react-native-ios-context-menu';
-import ContextMenuButton from '@/components/native-context-menu/contextMenu';
-import { useClipboard, useContacts, useWallets, useWatchWallet } from '@/hooks';
-import { useNavigation } from '@/navigation';
-import { RAINBOW_PROFILES_BASE_URL } from '@/references';
-import Routes from '@/navigation/routesNames';
-import { ethereumUtils, isENSNFTRecord } from '@/utils';
-import { address as formatAddress } from '@/utils/abbreviations';
-import { Network } from '@/networks/types';
-import { ContactAvatar, showDeleteContactActionSheet } from '@/components/contacts';
-import { Bleed, Box, Inline, Stack, Text } from '@/design-system';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { addressHashedColorIndex, addressHashedEmoji } from '@/utils/profileUtils';
-import ImageAvatar from '@/components/contacts/ImageAvatar';
-import { IS_ANDROID, IS_IOS } from '@/env';
-import { useTheme } from '@/theme';
-import LinearGradient from 'react-native-linear-gradient';
 import { ButtonPressAnimation } from '@/components/animations';
+import { ContactAvatar, showDeleteContactActionSheet } from '@/components/contacts';
+import ImageAvatar from '@/components/contacts/ImageAvatar';
+import ContextMenuButton from '@/components/native-context-menu/contextMenu';
+import { Bleed, Box, Inline, Stack, Text } from '@/design-system';
+import { IS_ANDROID, IS_IOS } from '@/env';
+import { useClipboard, useContacts, useWatchWallet } from '@/hooks';
+import * as i18n from '@/languages';
+import { useNavigation } from '@/navigation';
+import Routes from '@/navigation/routesNames';
+import { RAINBOW_PROFILES_BASE_URL } from '@/references';
+import { ChainId } from '@/state/backendNetworks/types';
+import { useTheme } from '@/theme';
+import { ethereumUtils, isENSNFTRecord, isLowerCaseMatch } from '@/utils';
+import { address as formatAddress } from '@/utils/abbreviations';
+import { addressHashedColorIndex, addressHashedEmoji } from '@/utils/profileUtils';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { noop } from 'lodash';
+import React, { memo, useCallback, useMemo } from 'react';
+import { Keyboard, Share } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
+import { useSelectedWallet } from '@/state/wallets/walletsStore';
+import { switchWallet } from '@/state/wallets/switchWallet';
+import { getNumberFormatter } from '@/helpers/intl';
 
 const ACTIONS = {
   ADD_CONTACT: 'add-contact',
@@ -30,7 +32,7 @@ const ACTIONS = {
   SHARE: 'share',
 };
 
-export const LeaderboardRow = ({
+export const LeaderboardRow = memo(function LeaderboardRow({
   address,
   ens,
   avatarURL,
@@ -42,18 +44,17 @@ export const LeaderboardRow = ({
   avatarURL?: string;
   points: number;
   rank: number;
-}) => {
-  const { switchToWalletWithAddress, selectedWallet } = useWallets();
+}) {
+  const selectedWallet = useSelectedWallet();
   const { isWatching } = useWatchWallet({ address });
   const { colors } = useTheme();
   const { navigate } = useNavigation();
   const { setClipboard } = useClipboard();
   const { contacts, onRemoveContact } = useContacts();
   const isSelectedWallet = useMemo(() => {
-    const visibleWallet = selectedWallet.addresses.find((wallet: { visible: boolean }) => wallet.visible);
-    ``;
-    return visibleWallet.address.toLowerCase() === address?.toLowerCase();
-  }, [selectedWallet.addresses, address]);
+    const visibleWallet = selectedWallet?.addresses?.find(wallet => wallet.visible);
+    return isLowerCaseMatch(visibleWallet?.address || '', address);
+  }, [selectedWallet?.addresses, address]);
 
   const contact = address ? contacts[address.toLowerCase()] : undefined;
 
@@ -61,14 +62,18 @@ export const LeaderboardRow = ({
 
   const menuItems = useMemo(() => {
     return [
-      isWatching && {
-        actionKey: ACTIONS.OPEN_WALLET,
-        actionTitle: i18n.t(i18n.l.profiles.details.open_wallet),
-        icon: {
-          iconType: 'SYSTEM',
-          iconValue: 'iphone.and.arrow.forward',
-        },
-      },
+      ...(isWatching
+        ? [
+            {
+              actionKey: ACTIONS.OPEN_WALLET,
+              actionTitle: i18n.t(i18n.l.profiles.details.open_wallet),
+              icon: {
+                iconType: 'SYSTEM',
+                iconValue: 'iphone.and.arrow.forward',
+              },
+            },
+          ]
+        : []),
       {
         actionKey: ACTIONS.COPY_ADDRESS,
         actionTitle: i18n.t(i18n.l.profiles.details.copy_address),
@@ -111,7 +116,7 @@ export const LeaderboardRow = ({
           iconValue: 'square.and.arrow.up',
         },
       },
-    ].filter(Boolean) as MenuActionConfig[];
+    ];
   }, [isWatching, formattedAddress, contact]);
 
   const handlePressMenuItem = useCallback(
@@ -119,7 +124,7 @@ export const LeaderboardRow = ({
     async ({ nativeEvent: { actionKey } }) => {
       if (actionKey === ACTIONS.OPEN_WALLET) {
         if (!isSelectedWallet) {
-          switchToWalletWithAddress(address);
+          switchWallet(address);
         }
         navigate(Routes.WALLET_SCREEN);
       }
@@ -127,7 +132,7 @@ export const LeaderboardRow = ({
         setClipboard(address);
       }
       if (address && actionKey === ACTIONS.ETHERSCAN) {
-        ethereumUtils.openAddressInBlockExplorer(address, Network.mainnet);
+        ethereumUtils.openAddressInBlockExplorer({ address: address, chainId: ChainId.mainnet });
       }
       if (actionKey === ACTIONS.ADD_CONTACT) {
         navigate(Routes.MODAL_SCREEN, {
@@ -152,7 +157,7 @@ export const LeaderboardRow = ({
         Share.share(IS_ANDROID ? { message: shareLink } : { url: shareLink });
       }
     },
-    [address, contact, ens, isSelectedWallet, navigate, onRemoveContact, setClipboard, switchToWalletWithAddress]
+    [address, contact, ens, isSelectedWallet, navigate, onRemoveContact, setClipboard]
   );
 
   const menuConfig = useMemo(() => ({ menuItems, ...(IS_IOS && { menuTitle: '' }) }), [menuItems]);
@@ -177,7 +182,7 @@ export const LeaderboardRow = ({
       break;
   }
 
-  const formattedPoints = points.toLocaleString('en-US');
+  const formattedPoints = getNumberFormatter('en-US').format(points);
 
   return (
     <ContextMenuButton
@@ -253,4 +258,4 @@ export const LeaderboardRow = ({
       </Box>
     </ContextMenuButton>
   );
-};
+});
